@@ -116,7 +116,7 @@ const addSampleData = () => {
             dates.push(date.toISOString().split('T')[0]);
         }
 
-        const students = db.prepare('SELECT id, class_id FROM students WHERE student_type = "regular"').all();
+        const students = db.prepare('SELECT id, class_id FROM students WHERE student_type = ?').all('regular');
         const statuses = ['O', 'O', 'O', 'X', '/'];
         
         students.forEach(student => {
