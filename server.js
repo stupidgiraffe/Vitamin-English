@@ -64,10 +64,9 @@ app.use((err, req, res, next) => {
     const timestamp = new Date().toISOString();
     console.error(`[${timestamp}] Error:`, err.stack);
     
-    // Log additional request details in production
+    // Log request details in production (excluding sensitive data)
     if (process.env.NODE_ENV === 'production') {
         console.error(`Request: ${req.method} ${req.path}`);
-        console.error(`Body:`, req.body);
     }
     
     res.status(500).json({ error: 'Something went wrong!' });
