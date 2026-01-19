@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    role TEXT DEFAULT 'teacher',
+    role TEXT NOT NULL CHECK(role IN ('admin', 'teacher')),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS students (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     class_id INTEGER,
-    student_type TEXT DEFAULT 'regular',
+    student_type TEXT DEFAULT 'regular' CHECK(student_type IN ('regular', 'trial')),
     color_code TEXT DEFAULT '',
     active INTEGER DEFAULT 1,
     notes TEXT,
@@ -39,10 +39,10 @@ CREATE TABLE IF NOT EXISTS attendance (
     student_id INTEGER NOT NULL,
     class_id INTEGER NOT NULL,
     date TEXT NOT NULL,
-    status TEXT DEFAULT '',
+    status TEXT DEFAULT '' CHECK(status IN ('O', 'X', '/', '')),
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(student_id, class_id, date),
+    UNIQUE(student_id, date),
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (class_id) REFERENCES classes(id)
 );
