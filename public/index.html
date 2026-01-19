@@ -45,10 +45,13 @@
                 <button class="nav-item active" data-page="dashboard">Dashboard</button>
                 <button class="nav-item" data-page="attendance">Attendance</button>
                 <button class="nav-item" data-page="reports">Lesson Reports</button>
+                <button class="nav-item" data-page="students-profile">Students</button>
+                <button class="nav-item" data-page="database">Database</button>
                 <button class="nav-item" data-page="admin">Admin</button>
             </div>
             <div class="nav-user">
                 <span id="user-name"></span>
+                <button id="profile-btn" class="btn btn-secondary">⚙️ Profile</button>
                 <button id="logout-btn" class="btn btn-secondary">Logout</button>
             </div>
         </nav>
@@ -70,6 +73,13 @@
                             <button class="btn btn-primary" onclick="navigateToPage('reports')">📝 Add Lesson Report</button>
                             <button class="btn btn-primary" onclick="navigateToPage('admin')">⚙️ Manage Data</button>
                         </div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>Make-up Lessons</h3>
+                        <div id="makeup-lessons-dashboard">
+                            <p class="info-text">Loading make-up lessons...</p>
+                        </div>
+                        <button class="btn btn-primary btn-small" onclick="showMakeupLessonForm()">+ Schedule Make-up Lesson</button>
                     </div>
                     <div class="dashboard-card">
                         <h3>Recent Activity</h3>
@@ -176,6 +186,86 @@
                 <div id="reports-list-container">
                     <h3>Recent Reports</h3>
                     <div id="reports-list"></div>
+                </div>
+            </div>
+
+            <!-- Student Profiles Page -->
+            <div id="students-profile-page" class="page">
+                <h2>Student Profiles</h2>
+                <div class="controls">
+                    <input type="text" id="student-search" class="form-control" placeholder="Search students...">
+                    <select id="student-class-filter" class="form-control">
+                        <option value="">All Classes</option>
+                    </select>
+                </div>
+                <div id="students-profile-list" class="students-grid"></div>
+            </div>
+
+            <!-- Database Viewer Page -->
+            <div id="database-page" class="page">
+                <h2>Database Viewer</h2>
+                <div class="controls">
+                    <select id="db-table-select" class="form-control">
+                        <option value="students">Students</option>
+                        <option value="classes">Classes</option>
+                        <option value="attendance">Attendance</option>
+                        <option value="lesson_reports">Lesson Reports</option>
+                        <option value="users">Users</option>
+                    </select>
+                    <button id="db-load-btn" class="btn btn-primary">Load Data</button>
+                    <button id="db-export-btn" class="btn btn-secondary">Export CSV</button>
+                </div>
+                <div id="db-viewer-container" class="db-viewer">
+                    <p class="info-text">Select a table and click Load Data</p>
+                </div>
+            </div>
+
+            <!-- Profile/Settings Page -->
+            <div id="profile-page" class="page">
+                <h2>Profile Settings</h2>
+                <div class="profile-container">
+                    <div class="profile-card">
+                        <h3>User Information</h3>
+                        <p><strong>Username:</strong> <span id="profile-username"></span></p>
+                        <p><strong>Full Name:</strong> <span id="profile-fullname"></span></p>
+                        <p><strong>Role:</strong> <span id="profile-role"></span></p>
+                    </div>
+                    
+                    <div class="profile-card">
+                        <h3>Change Password</h3>
+                        <form id="change-password-form">
+                            <div class="form-group">
+                                <label>Current Password *</label>
+                                <input type="password" id="current-password" required class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>New Password *</label>
+                                <input type="password" id="new-password" required class="form-control" minlength="6">
+                            </div>
+                            <div class="form-group">
+                                <label>Confirm New Password *</label>
+                                <input type="password" id="confirm-password" required class="form-control" minlength="6">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Update Password</button>
+                            <div id="password-message" class="message"></div>
+                        </form>
+                    </div>
+
+                    <div class="profile-card">
+                        <h3>Change Username</h3>
+                        <form id="change-username-form">
+                            <div class="form-group">
+                                <label>New Username *</label>
+                                <input type="text" id="new-username" required class="form-control" minlength="3">
+                            </div>
+                            <div class="form-group">
+                                <label>Confirm Password *</label>
+                                <input type="password" id="username-password" required class="form-control">
+                            </div>
+                            <button type="submit" class="btn btn-primary">Update Username</button>
+                            <div id="username-message" class="message"></div>
+                        </form>
+                    </div>
                 </div>
             </div>
 

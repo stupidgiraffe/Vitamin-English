@@ -201,24 +201,68 @@ To restore:
 ### Important: Before deploying to production
 
 1. **Change default passwords** - Update or remove the sample users
-2. **Set a strong session secret** - Modify the secret in `server.js`
-3. **Configure HTTPS** - Use a reverse proxy like nginx
+2. **Set a strong session secret** - Use the `SESSION_SECRET` environment variable
+3. **Configure HTTPS** - Use a reverse proxy like nginx or deploy on platforms with automatic HTTPS
 4. **Set proper file permissions** - Restrict access to `database/school.db`
 5. **Regular backups** - Set up automated database backups
 
-### Simple Deployment
+### Deploy to Railway (Recommended)
+
+Railway provides a simple one-click deployment with automatic HTTPS and persistent storage.
+
+#### Quick Deploy
+
+1. **Fork this repository** to your GitHub account
+
+2. **Create a Railway account** at [railway.app](https://railway.app)
+
+3. **Deploy from GitHub**:
+   - Click "New Project" in Railway
+   - Select "Deploy from GitHub repo"
+   - Choose your forked repository
+   - Railway will auto-detect the configuration from `railway.json`
+
+4. **Set environment variables** in Railway dashboard:
+   ```
+   SESSION_SECRET=your-strong-random-secret-key
+   NODE_ENV=production
+   ```
+
+5. **Access your app**:
+   - Railway will provide a public URL (e.g., `your-app.up.railway.app`)
+   - The health check endpoint will be available at `/health`
+
+#### Database Persistence on Railway
+
+Railway automatically persists the SQLite database file (`database/school.db`):
+- The database is stored in the project volume
+- Data persists across deployments
+- **Important**: To backup your database, use Railway's volume backup feature
+
+#### Database Backup Instructions
+
+**Manual Backup:**
+1. Connect to your Railway service via CLI: `railway run bash`
+2. Copy the database: `cp database/school.db /tmp/backup.db`
+3. Download the backup file from the Railway dashboard
+
+**Automated Backups:**
+- Enable Railway's volume snapshots feature
+- Configure daily snapshots in the Railway project settings
+- Snapshots are stored for 7 days by default
+
+### Deploy to Other Platforms
 
 The application can be deployed on any platform that supports Node.js:
 - Heroku
 - DigitalOcean
 - AWS
-- Railway
 - Render
 
 Basic deployment steps:
 1. Upload all files to your server
 2. Run `npm install --production`
-3. Set environment variables (PORT, etc.)
+3. Set environment variables (see `.env.example`)
 4. Run `npm start`
 
 ## Troubleshooting

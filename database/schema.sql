@@ -71,3 +71,22 @@ CREATE INDEX IF NOT EXISTS idx_attendance_class ON attendance(class_id);
 CREATE INDEX IF NOT EXISTS idx_reports_date ON lesson_reports(date);
 CREATE INDEX IF NOT EXISTS idx_reports_class ON lesson_reports(class_id);
 CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
+
+-- Make-up lessons table
+CREATE TABLE IF NOT EXISTS makeup_lessons (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL,
+    class_id INTEGER NOT NULL,
+    scheduled_date TEXT NOT NULL,
+    scheduled_time TEXT,
+    reason TEXT,
+    status TEXT DEFAULT 'scheduled',
+    notes TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES students(id),
+    FOREIGN KEY (class_id) REFERENCES classes(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_makeup_date ON makeup_lessons(scheduled_date);
+CREATE INDEX IF NOT EXISTS idx_makeup_student ON makeup_lessons(student_id);
+CREATE INDEX IF NOT EXISTS idx_makeup_status ON makeup_lessons(status);

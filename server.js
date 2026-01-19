@@ -16,12 +16,13 @@ app.use(express.static('public'));
 
 // Session configuration
 app.use(session({
-    secret: 'vitamin-english-secret-key-change-in-production',
+    secret: process.env.SESSION_SECRET || 'vitamin-english-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
     cookie: { 
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        httpOnly: true
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production'
     }
 }));
 
@@ -40,6 +41,8 @@ const studentRoutes = require('./routes/students');
 const classRoutes = require('./routes/classes');
 const attendanceRoutes = require('./routes/attendance');
 const reportRoutes = require('./routes/reports');
+const databaseRoutes = require('./routes/database');
+const makeupRoutes = require('./routes/makeup');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -47,6 +50,13 @@ app.use('/api/students', requireAuth, studentRoutes);
 app.use('/api/classes', requireAuth, classRoutes);
 app.use('/api/attendance', requireAuth, attendanceRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
+app.use('/api/database', requireAuth, databaseRoutes);
+app.use('/api/makeup', requireAuth, makeupRoutes);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
 
 // Root route
 app.get('/', (req, res) => {
@@ -55,7 +65,14 @@ app.get('/', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] Error:`, err.stack);
+    
+    // Log request details in production (excluding sensitive data)
+    if (process.env.NODE_ENV === 'production') {
+        console.error(`Request: ${req.method} ${req.path}`);
+    }
+    
     res.status(500).json({ error: 'Something went wrong!' });
 });
 
