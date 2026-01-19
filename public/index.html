@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vitamin English - School Management</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="screen active">
+        <div class="login-container">
+            <div class="login-box">
+                <h1>🍊 Vitamin English</h1>
+                <h2>School Management System</h2>
+                <form id="login-form">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" required autofocus>
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-large">Login</button>
+                    <div id="login-error" class="error-message"></div>
+                </form>
+                <div class="login-info">
+                    <p><strong>Demo Credentials:</strong></p>
+                    <p>Admin: admin / admin123</p>
+                    <p>Teacher: sarah / teacher123</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application -->
+    <div id="app-screen" class="screen">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>🍊 Vitamin English</h1>
+            </div>
+            <div class="nav-menu">
+                <button class="nav-item active" data-page="dashboard">Dashboard</button>
+                <button class="nav-item" data-page="attendance">Attendance</button>
+                <button class="nav-item" data-page="reports">Lesson Reports</button>
+                <button class="nav-item" data-page="admin">Admin</button>
+            </div>
+            <div class="nav-user">
+                <span id="user-name"></span>
+                <button id="logout-btn" class="btn btn-secondary">Logout</button>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="container">
+            <!-- Dashboard Page -->
+            <div id="dashboard-page" class="page active">
+                <h2>Dashboard</h2>
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <h3>Today's Classes</h3>
+                        <div id="today-classes"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>Quick Actions</h3>
+                        <div class="quick-actions">
+                            <button class="btn btn-primary" onclick="navigateToPage('attendance')">📊 Mark Attendance</button>
+                            <button class="btn btn-primary" onclick="navigateToPage('reports')">📝 Add Lesson Report</button>
+                            <button class="btn btn-primary" onclick="navigateToPage('admin')">⚙️ Manage Data</button>
+                        </div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>Recent Activity</h3>
+                        <div id="recent-activity"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Page -->
+            <div id="attendance-page" class="page">
+                <h2>Attendance Management</h2>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Class:</label>
+                        <select id="attendance-class-select" class="form-control"></select>
+                    </div>
+                    <div class="control-group">
+                        <label>Start Date:</label>
+                        <input type="date" id="attendance-start-date" class="form-control">
+                    </div>
+                    <div class="control-group">
+                        <label>End Date:</label>
+                        <input type="date" id="attendance-end-date" class="form-control">
+                    </div>
+                    <button id="load-attendance-btn" class="btn btn-primary">Load Attendance</button>
+                    <button id="export-attendance-btn" class="btn btn-secondary">Export CSV</button>
+                </div>
+
+                <div id="attendance-container" class="attendance-sheet">
+                    <p class="info-text">Select a class and date range to view attendance</p>
+                </div>
+            </div>
+
+            <!-- Lesson Reports Page -->
+            <div id="reports-page" class="page">
+                <h2>Teacher Lesson Reports</h2>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Class:</label>
+                        <select id="reports-class-select" class="form-control"></select>
+                    </div>
+                    <div class="control-group">
+                        <label>Date:</label>
+                        <input type="date" id="report-date" class="form-control">
+                    </div>
+                    <button id="load-report-btn" class="btn btn-primary">Load Report</button>
+                    <button id="new-report-btn" class="btn btn-success">New Report</button>
+                </div>
+
+                <div id="report-form-container" style="display: none;">
+                    <form id="report-form" class="report-form">
+                        <input type="hidden" id="report-id">
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Date *</label>
+                                <input type="date" id="report-form-date" required class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>Teacher *</label>
+                                <select id="report-teacher" required class="form-control"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>Class *</label>
+                                <select id="report-class" required class="form-control"></select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Target/Topic</label>
+                            <textarea id="report-target" rows="2" class="form-control"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>New Vocabulary/Phrases</label>
+                            <textarea id="report-vocabulary" rows="3" class="form-control"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Mistakes (specific)</label>
+                            <textarea id="report-mistakes" rows="3" class="form-control"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Strengths (specific)</label>
+                            <textarea id="report-strengths" rows="3" class="form-control"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Comments/Homework</label>
+                            <textarea id="report-comments" rows="3" class="form-control"></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">Save Report</button>
+                            <button type="button" id="cancel-report-btn" class="btn btn-secondary">Cancel</button>
+                            <button type="button" id="delete-report-btn" class="btn btn-danger" style="display: none;">Delete</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div id="reports-list-container">
+                    <h3>Recent Reports</h3>
+                    <div id="reports-list"></div>
+                </div>
+            </div>
+
+            <!-- Admin Page -->
+            <div id="admin-page" class="page">
+                <h2>Administration</h2>
+                
+                <div class="admin-tabs">
+                    <button class="tab-btn active" data-tab="students">Students</button>
+                    <button class="tab-btn" data-tab="classes">Classes</button>
+                    <button class="tab-btn" data-tab="teachers">Teachers</button>
+                </div>
+
+                <!-- Students Tab -->
+                <div id="students-tab" class="tab-content active">
+                    <div class="tab-header">
+                        <h3>Manage Students</h3>
+                        <button id="add-student-btn" class="btn btn-success">+ Add Student</button>
+                    </div>
+                    <div id="students-list" class="data-table"></div>
+                </div>
+
+                <!-- Classes Tab -->
+                <div id="classes-tab" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Manage Classes</h3>
+                        <button id="add-class-btn" class="btn btn-success">+ Add Class</button>
+                    </div>
+                    <div id="classes-list" class="data-table"></div>
+                </div>
+
+                <!-- Teachers Tab -->
+                <div id="teachers-tab" class="tab-content">
+                    <div class="tab-header">
+                        <h3>Manage Teachers</h3>
+                        <button id="add-teacher-btn" class="btn btn-success">+ Add Teacher</button>
+                    </div>
+                    <div id="teachers-list" class="data-table"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for editing -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3 id="modal-title"></h3>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
