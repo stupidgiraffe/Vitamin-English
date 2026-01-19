@@ -285,7 +285,7 @@ router.delete('/teachers/:id', (req, res) => {
         const classes = db.prepare('SELECT COUNT(*) as count FROM classes WHERE teacher_id = ?').get(teacherId);
         if (classes.count > 0) {
             return res.status(400).json({ 
-                error: `Cannot delete teacher with ${classes.count} assigned class${classes.count > 1 ? 'es' : ''}. Please reassign or delete their classes first.` 
+                error: `Cannot delete teacher with ${classes.count} assigned class(es). Please reassign or delete their classes first.` 
             });
         }
         

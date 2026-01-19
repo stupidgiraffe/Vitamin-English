@@ -28,10 +28,9 @@ async function api(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ 
-            error: `Request failed: ${response.status} ${response.statusText}` 
-        }));
-        throw new Error(error.error || `Request failed: ${response.status} ${response.statusText}`);
+        const defaultError = `Request failed: ${response.status} ${response.statusText}`;
+        const error = await response.json().catch(() => ({ error: defaultError }));
+        throw new Error(error.error || defaultError);
     }
 
     return response.json();
