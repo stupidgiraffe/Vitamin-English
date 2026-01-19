@@ -57,4 +57,75 @@ router.get('/me', (req, res) => {
     }
 });
 
+// Change password
+router.post('/change-password', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    
+    try {
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const validPassword = bcrypt.compareSync(currentPassword, user.password_hash);
+        
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+        
+        const newPasswordHash = bcrypt.hashSync(newPassword, 10);
+        db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newPasswordHash, req.session.userId);
+        
+        res.json({ message: 'Password updated successfully' });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ error: 'Failed to update password' });
+    }
+});
+
+// Change username
+router.post('/change-username', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { newUsername, password } = req.body;
+    
+    try {
+        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+        
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        const validPassword = bcrypt.compareSync(password, user.password_hash);
+        
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Password is incorrect' });
+        }
+        
+        // Check if username already exists
+        const existingUser = db.prepare('SELECT * FROM users WHERE username = ? AND id != ?').get(newUsername, req.session.userId);
+        
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        
+        db.prepare('UPDATE users SET username = ? WHERE id = ?').run(newUsername, req.session.userId);
+        
+        // Update session
+        req.session.username = newUsername;
+        
+        res.json({ message: 'Username updated successfully', username: newUsername });
+    } catch (error) {
+        console.error('Change username error:', error);
+        res.status(500).json({ error: 'Failed to update username' });
+    }
+});
+
 module.exports = router;

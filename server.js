@@ -41,6 +41,8 @@ const studentRoutes = require('./routes/students');
 const classRoutes = require('./routes/classes');
 const attendanceRoutes = require('./routes/attendance');
 const reportRoutes = require('./routes/reports');
+const databaseRoutes = require('./routes/database');
+const makeupRoutes = require('./routes/makeup');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -48,6 +50,8 @@ app.use('/api/students', requireAuth, studentRoutes);
 app.use('/api/classes', requireAuth, classRoutes);
 app.use('/api/attendance', requireAuth, attendanceRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
+app.use('/api/database', requireAuth, databaseRoutes);
+app.use('/api/makeup', requireAuth, makeupRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

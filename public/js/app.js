@@ -864,3 +864,509 @@ document.getElementById('modal').addEventListener('click', (e) => {
         closeModal();
     }
 });
+
+// Profile Page Functions
+document.getElementById('profile-btn')?.addEventListener('click', () => {
+    navigateToPage('profile');
+    loadProfilePage();
+});
+
+async function loadProfilePage() {
+    if (!currentUser) return;
+    
+    document.getElementById('profile-username').textContent = currentUser.username;
+    document.getElementById('profile-fullname').textContent = currentUser.fullName;
+    document.getElementById('profile-role').textContent = currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1);
+}
+
+// Change Password
+document.getElementById('change-password-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const messageDiv = document.getElementById('password-message');
+    
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    
+    if (newPassword !== confirmPassword) {
+        messageDiv.textContent = 'New passwords do not match';
+        messageDiv.className = 'message error';
+        return;
+    }
+    
+    if (newPassword.length < 6) {
+        messageDiv.textContent = 'Password must be at least 6 characters';
+        messageDiv.className = 'message error';
+        return;
+    }
+    
+    try {
+        await api('/auth/change-password', {
+            method: 'POST',
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+        
+        messageDiv.textContent = 'Password updated successfully!';
+        messageDiv.className = 'message success';
+        
+        e.target.reset();
+        
+        setTimeout(() => {
+            messageDiv.style.display = 'none';
+        }, 3000);
+    } catch (error) {
+        messageDiv.textContent = error.message;
+        messageDiv.className = 'message error';
+    }
+});
+
+// Change Username
+document.getElementById('change-username-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const messageDiv = document.getElementById('username-message');
+    
+    const newUsername = document.getElementById('new-username').value;
+    const password = document.getElementById('username-password').value;
+    
+    if (newUsername.length < 3) {
+        messageDiv.textContent = 'Username must be at least 3 characters';
+        messageDiv.className = 'message error';
+        return;
+    }
+    
+    try {
+        const result = await api('/auth/change-username', {
+            method: 'POST',
+            body: JSON.stringify({ newUsername, password })
+        });
+        
+        currentUser.username = result.username;
+        messageDiv.textContent = 'Username updated successfully!';
+        messageDiv.className = 'message success';
+        
+        document.getElementById('profile-username').textContent = result.username;
+        e.target.reset();
+        
+        setTimeout(() => {
+            messageDiv.style.display = 'none';
+        }, 3000);
+    } catch (error) {
+        messageDiv.textContent = error.message;
+        messageDiv.className = 'message error';
+    }
+});
+
+// Database Viewer Functions
+document.getElementById('db-load-btn')?.addEventListener('click', loadDatabaseTable);
+document.getElementById('db-export-btn')?.addEventListener('click', exportDatabaseTable);
+
+async function loadDatabaseTable() {
+    const tableName = document.getElementById('db-table-select').value;
+    const container = document.getElementById('db-viewer-container');
+    
+    try {
+        container.innerHTML = '<p class="info-text">Loading...</p>';
+        const result = await api(`/database/table/${tableName}`);
+        
+        if (result.data.length === 0) {
+            container.innerHTML = '<p class="info-text">No data found</p>';
+            return;
+        }
+        
+        const columns = Object.keys(result.data[0]);
+        let html = '<table class="db-table"><thead><tr>';
+        
+        columns.forEach(col => {
+            html += `<th>${col}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+        
+        result.data.forEach(row => {
+            html += '<tr>';
+            columns.forEach(col => {
+                let value = row[col];
+                if (value === null) value = '<em>null</em>';
+                else if (typeof value === 'object') value = JSON.stringify(value);
+                html += `<td>${value}</td>`;
+            });
+            html += '</tr>';
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch (error) {
+        container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
+    }
+}
+
+function exportDatabaseTable() {
+    const tableName = document.getElementById('db-table-select').value;
+    const table = document.querySelector('.db-table');
+    
+    if (!table) {
+        alert('Please load data first');
+        return;
+    }
+    
+    let csv = '';
+    const rows = table.querySelectorAll('tr');
+    
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('th, td');
+        const rowData = Array.from(cells).map(cell => {
+            let text = cell.textContent.trim();
+            if (text.includes(',') || text.includes('"')) {
+                text = '"' + text.replace(/"/g, '""') + '"';
+            }
+            return text;
+        });
+        csv += rowData.join(',') + '\n';
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${tableName}_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+}
+
+// Student Profiles Functions
+let allStudentsForProfile = [];
+
+async function loadStudentProfiles() {
+    try {
+        allStudentsForProfile = await api('/students');
+        renderStudentProfiles();
+    } catch (error) {
+        console.error('Error loading student profiles:', error);
+    }
+}
+
+function renderStudentProfiles(filteredStudents = null) {
+    const container = document.getElementById('students-profile-list');
+    const studentsToRender = filteredStudents || allStudentsForProfile;
+    
+    if (studentsToRender.length === 0) {
+        container.innerHTML = '<p class="info-text">No students found</p>';
+        return;
+    }
+    
+    let html = '';
+    studentsToRender.forEach(student => {
+        const typeClass = student.student_type === 'trial' ? 'trial' : 'regular';
+        const typeName = student.student_type === 'trial' ? 'Trial' : 'Regular';
+        
+        html += `
+            <div class="student-card" onclick="showStudentDetail(${student.id})">
+                <span class="student-type-badge ${typeClass}">${typeName}</span>
+                <h3>${student.name}</h3>
+                <div class="student-info">
+                    ${student.class_name || 'No class assigned'}
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+}
+
+document.getElementById('student-search')?.addEventListener('input', (e) => {
+    const searchTerm = e.target.value.toLowerCase();
+    const classFilter = document.getElementById('student-class-filter').value;
+    
+    let filtered = allStudentsForProfile.filter(s => 
+        s.name.toLowerCase().includes(searchTerm)
+    );
+    
+    if (classFilter) {
+        filtered = filtered.filter(s => s.class_id == classFilter);
+    }
+    
+    renderStudentProfiles(filtered);
+});
+
+document.getElementById('student-class-filter')?.addEventListener('change', (e) => {
+    const classFilter = e.target.value;
+    const searchTerm = document.getElementById('student-search').value.toLowerCase();
+    
+    let filtered = allStudentsForProfile;
+    
+    if (searchTerm) {
+        filtered = filtered.filter(s => s.name.toLowerCase().includes(searchTerm));
+    }
+    
+    if (classFilter) {
+        filtered = filtered.filter(s => s.class_id == classFilter);
+    }
+    
+    renderStudentProfiles(filtered);
+});
+
+async function showStudentDetail(studentId) {
+    try {
+        const data = await api(`/students/${studentId}/details`);
+        const { student, attendance, reports, stats } = data;
+        
+        let attendanceListHtml = '';
+        if (attendance.length > 0) {
+            attendance.forEach(a => {
+                const statusText = a.status === 'O' ? 'Present' : a.status === 'X' ? 'Absent' : a.status === '/' ? 'Partial' : 'Unknown';
+                const statusClass = a.status === 'O' ? 'present' : a.status === 'X' ? 'absent' : a.status === '/' ? 'partial' : '';
+                attendanceListHtml += `
+                    <div class="attendance-item">
+                        <span class="date">${new Date(a.date + 'T00:00:00').toLocaleDateString()}</span>
+                        <span class="status ${statusClass}">${statusText}</span>
+                        ${a.notes ? `<div style="font-size: 0.85rem; color: #6c757d; margin-top: 0.25rem;">${a.notes}</div>` : ''}
+                    </div>
+                `;
+            });
+        } else {
+            attendanceListHtml = '<p class="info-text">No attendance records</p>';
+        }
+        
+        let reportsListHtml = '';
+        if (reports.length > 0) {
+            reports.forEach(r => {
+                reportsListHtml += `
+                    <div class="report-item">
+                        <strong>${new Date(r.date + 'T00:00:00').toLocaleDateString()}</strong> - ${r.teacher_name}
+                        <div style="font-size: 0.85rem; color: #6c757d; margin-top: 0.25rem;">
+                            ${r.target_topic || 'No topic specified'}
+                        </div>
+                    </div>
+                `;
+            });
+        } else {
+            reportsListHtml = '<p class="info-text">No lesson reports</p>';
+        }
+        
+        const attendanceRate = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+        
+        const content = `
+            <div class="student-detail">
+                <div class="detail-section">
+                    <h4>Student Information</h4>
+                    <p><strong>Name:</strong> ${student.name}</p>
+                    <p><strong>Class:</strong> ${student.class_name || 'Not assigned'}</p>
+                    <p><strong>Type:</strong> ${student.student_type === 'trial' ? 'Trial/Make-up' : 'Regular'}</p>
+                    ${student.notes ? `<p><strong>Notes:</strong> ${student.notes}</p>` : ''}
+                </div>
+                
+                <div class="detail-section">
+                    <h4>Attendance Statistics</h4>
+                    <div class="attendance-summary">
+                        <div class="stat-box">
+                            <div class="stat-value">${stats.total || 0}</div>
+                            <div class="stat-label">Total</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${stats.present || 0}</div>
+                            <div class="stat-label">Present</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${stats.absent || 0}</div>
+                            <div class="stat-label">Absent</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-value">${attendanceRate}%</div>
+                            <div class="stat-label">Rate</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4>Recent Attendance (Last 30 Days)</h4>
+                    <div class="attendance-list">
+                        ${attendanceListHtml}
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4>Class Lesson Reports (Last 10)</h4>
+                    <div class="reports-list">
+                        ${reportsListHtml}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        showModal(`${student.name} - Profile`, content);
+    } catch (error) {
+        alert('Error loading student details: ' + error.message);
+    }
+}
+
+// Make-up Lessons Functions
+async function loadMakeupLessons() {
+    try {
+        const lessons = await api('/makeup/upcoming');
+        const container = document.getElementById('makeup-lessons-dashboard');
+        
+        if (lessons.length === 0) {
+            container.innerHTML = '<p class="info-text">No upcoming make-up lessons</p>';
+            return;
+        }
+        
+        let html = '';
+        lessons.forEach(lesson => {
+            html += `
+                <div class="makeup-lesson-item">
+                    <h4>${lesson.student_name}</h4>
+                    <div class="lesson-info">📅 ${new Date(lesson.scheduled_date + 'T00:00:00').toLocaleDateString()}</div>
+                    <div class="lesson-info">🏫 ${lesson.class_name}</div>
+                    ${lesson.scheduled_time ? `<div class="lesson-info">🕐 ${lesson.scheduled_time}</div>` : ''}
+                    ${lesson.reason ? `<div class="lesson-info">📝 ${lesson.reason}</div>` : ''}
+                    <div class="lesson-actions">
+                        <button class="btn btn-small btn-success" onclick="completeMakeupLesson(${lesson.id})">Complete</button>
+                        <button class="btn btn-small btn-danger" onclick="cancelMakeupLesson(${lesson.id})">Cancel</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading makeup lessons:', error);
+        document.getElementById('makeup-lessons-dashboard').innerHTML = '<p class="info-text error">Error loading make-up lessons</p>';
+    }
+}
+
+async function showMakeupLessonForm() {
+    const content = `
+        <form id="makeup-lesson-form">
+            <div class="form-group">
+                <label>Student *</label>
+                <select id="makeup-student" required class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label>Class *</label>
+                <select id="makeup-class" required class="form-control"></select>
+            </div>
+            <div class="form-group">
+                <label>Scheduled Date *</label>
+                <input type="date" id="makeup-date" required class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Scheduled Time</label>
+                <input type="time" id="makeup-time" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Reason</label>
+                <textarea id="makeup-reason" rows="2" class="form-control"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Notes</label>
+                <textarea id="makeup-notes" rows="2" class="form-control"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Schedule Make-up Lesson</button>
+        </form>
+    `;
+    
+    showModal('Schedule Make-up Lesson', content);
+    
+    // Populate dropdowns
+    const studentSelect = document.getElementById('makeup-student');
+    const classSelect = document.getElementById('makeup-class');
+    
+    students.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.id;
+        option.textContent = s.name;
+        studentSelect.appendChild(option);
+    });
+    
+    classes.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.id;
+        option.textContent = c.name;
+        classSelect.appendChild(option);
+    });
+    
+    document.getElementById('makeup-lesson-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const data = {
+            student_id: document.getElementById('makeup-student').value,
+            class_id: document.getElementById('makeup-class').value,
+            scheduled_date: document.getElementById('makeup-date').value,
+            scheduled_time: document.getElementById('makeup-time').value,
+            reason: document.getElementById('makeup-reason').value,
+            notes: document.getElementById('makeup-notes').value
+        };
+        
+        try {
+            await api('/makeup', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+            
+            closeModal();
+            loadMakeupLessons();
+            alert('Make-up lesson scheduled successfully!');
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    });
+}
+
+async function completeMakeupLesson(id) {
+    if (!confirm('Mark this make-up lesson as completed?')) return;
+    
+    try {
+        await api(`/makeup/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'completed' })
+        });
+        
+        loadMakeupLessons();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function cancelMakeupLesson(id) {
+    if (!confirm('Cancel this make-up lesson?')) return;
+    
+    try {
+        await api(`/makeup/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ status: 'cancelled' })
+        });
+        
+        loadMakeupLessons();
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+// Update loadDashboard to include makeup lessons
+const originalLoadDashboard = loadDashboard;
+loadDashboard = async function() {
+    await originalLoadDashboard();
+    await loadMakeupLessons();
+};
+
+// Update navigateToPage to handle new pages
+const originalNavigateToPage = navigateToPage;
+navigateToPage = function(page) {
+    originalNavigateToPage(page);
+    
+    if (page === 'students-profile') {
+        loadStudentProfiles();
+        // Populate class filter
+        const classFilter = document.getElementById('student-class-filter');
+        classFilter.innerHTML = '<option value="">All Classes</option>';
+        classes.forEach(c => {
+            const option = document.createElement('option');
+            option.value = c.id;
+            option.textContent = c.name;
+            classFilter.appendChild(option);
+        });
+    } else if (page === 'database') {
+        // Database page loaded on demand
+    } else if (page === 'profile') {
+        loadProfilePage();
+    }
+};
