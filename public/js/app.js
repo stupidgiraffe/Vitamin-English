@@ -28,8 +28,10 @@ async function api(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(error.error || 'Request failed');
+        const error = await response.json().catch(() => ({ 
+            error: `Request failed: ${response.status} ${response.statusText}` 
+        }));
+        throw new Error(error.error || `Request failed: ${response.status} ${response.statusText}`);
     }
 
     return response.json();

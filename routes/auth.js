@@ -245,7 +245,9 @@ router.delete('/teachers/:id', (req, res) => {
         // Check if teacher has any classes
         const classes = db.prepare('SELECT COUNT(*) as count FROM classes WHERE teacher_id = ?').get(req.params.id);
         if (classes.count > 0) {
-            return res.status(400).json({ error: 'Cannot delete teacher with assigned classes' });
+            return res.status(400).json({ 
+                error: `Cannot delete teacher with ${classes.count} assigned class${classes.count > 1 ? 'es' : ''}. Please reassign or delete their classes first.` 
+            });
         }
         
         const result = db.prepare('DELETE FROM users WHERE id = ? AND role = ?').run(req.params.id, 'teacher');
