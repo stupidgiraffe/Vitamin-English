@@ -55,38 +55,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
         // CRITICAL: Load initial data BEFORE showing dashboard
         try {
             console.log('Loading initial data...');
-            
-            // Load classes
-            const classesResponse = await fetch('/api/classes', {
-                credentials: 'include'
-            });
-            
-            if (!classesResponse.ok) {
-                throw new Error('Failed to load classes');
-            }
-            
-            const classesData = await classesResponse.json();
-            console.log('Classes loaded:', classesData);
-            
-            // Load students
-            const studentsResponse = await fetch('/api/students', {
-                credentials: 'include'
-            });
-            
-            if (!studentsResponse.ok) {
-                throw new Error('Failed to load students');
-            }
-            
-            const studentsData = await studentsResponse.json();
-            console.log('Students loaded:', studentsData);
-            
-            // If we got here, data loaded successfully
+            await loadInitialData();
             console.log('✅ All initial data loaded successfully');
             
             document.getElementById('login-screen').classList.remove('active');
             document.getElementById('app-screen').classList.add('active');
             
-            await loadInitialData();
             loadDashboard();
             
         } catch (dataError) {

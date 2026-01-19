@@ -130,8 +130,9 @@ const addSampleData = () => {
         
         console.log('✅ Attendance records created');
 
-        // Add sample lesson reports
+        // Add sample lesson reports for all classes
         dates.slice(0, 3).forEach(date => {
+            // Reports for class1 (Beginner A)
             db.prepare(`
                 INSERT INTO lesson_reports (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -144,6 +145,36 @@ const addSampleData = () => {
                 'pronunciation of "th"',
                 'good listening skills',
                 'Students are progressing well'
+            );
+            
+            // Reports for class2 (Intermediate B)
+            db.prepare(`
+                INSERT INTO lesson_reports (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                class2.lastInsertRowid,
+                teacher2.lastInsertRowid,
+                date,
+                'Present Simple Tense',
+                'go, goes, do, does',
+                'Confusion with 3rd person -s',
+                'Good pronunciation',
+                'Practice worksheet assigned'
+            );
+            
+            // Reports for class3 (Advanced C)
+            db.prepare(`
+                INSERT INTO lesson_reports (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                class3.lastInsertRowid,
+                teacher1.lastInsertRowid,
+                date,
+                'Past Perfect Tense',
+                'had done, had been, had gone',
+                'Mixing past simple and past perfect',
+                'Excellent comprehension',
+                'Reading assignment for next class'
             );
         });
         

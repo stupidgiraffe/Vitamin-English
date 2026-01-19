@@ -3,6 +3,7 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const db = require('./database/init');
 
 const app = express();
@@ -75,7 +76,6 @@ app.post('/api/reset-database', requireAuth, (req, res) => {
     }
     
     try {
-        const fs = require('fs');
         const dbPath = path.join(__dirname, 'database', 'school.db');
         
         // Delete existing database
