@@ -247,17 +247,22 @@ router.put('/teachers/:id', (req, res) => {
         if (password) {
             // Update with new password
             const passwordHash = bcrypt.hashSync(password, 10);
-            db.prepare('UPDATE users SET username = ?, full_name = ?, password_hash = ? WHERE id = ?').run(
-                username, full_name, passwordHash, teacherId
+            db.prepare('UPDATE users SET username = ?, full_name = ?, password_hash = ? WHERE id = ? AND role = ?').run(
+                username, full_name, passwordHash, teacherId, 'teacher'
             );
         } else {
             // Update without changing password
-            db.prepare('UPDATE users SET username = ?, full_name = ? WHERE id = ?').run(
-                username, full_name, teacherId
+            db.prepare('UPDATE users SET username = ?, full_name = ? WHERE id = ? AND role = ?').run(
+                username, full_name, teacherId, 'teacher'
             );
         }
         
-        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ?').get(teacherId);
+        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ? AND role = ?').get(teacherId, 'teacher');
+        
+        if (!teacher) {
+            return res.status(404).json({ error: 'Teacher not found' });
+        }
+        
         res.json(teacher);
     } catch (error) {
         console.error('Error updating teacher:', error);
