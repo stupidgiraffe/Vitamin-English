@@ -3,6 +3,7 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const db = require('./database/init');
 
 const app = express();
@@ -17,6 +18,12 @@ app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
+// Request logging middleware
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    next();
+});
 
 // Session configuration
 app.use(session({
@@ -62,6 +69,33 @@ app.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// TESTING ONLY - Database reset endpoint (admin only)
+app.post('/api/reset-database', requireAuth, (req, res) => {
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin only' });
+    }
+    
+    try {
+        const dbPath = path.join(__dirname, 'database', 'school.db');
+        
+        // Delete existing database
+        if (fs.existsSync(dbPath)) {
+            fs.unlinkSync(dbPath);
+            console.log('🗑️  Old database deleted');
+        }
+        
+        // Reinitialize
+        delete require.cache[require.resolve('./database/init')];
+        require('./database/init');
+        
+        console.log('✅ Database reset complete');
+        res.json({ message: 'Database reset successfully' });
+    } catch (error) {
+        console.error('Error resetting database:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -70,14 +104,14 @@ app.get('/', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
     const timestamp = new Date().toISOString();
-    console.error(`[${timestamp}] Error:`, err.stack);
+    console.error(`❌ ERROR [${timestamp}]:`, err.stack);
     
     // Log request details in production (excluding sensitive data)
     if (process.env.NODE_ENV === 'production') {
         console.error(`Request: ${req.method} ${req.path}`);
     }
     
-    res.status(500).json({ error: 'Something went wrong!' });
+    res.status(500).json({ error: 'Something went wrong!', message: err.message });
 });
 
 // Start server

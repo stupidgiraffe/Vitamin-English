@@ -51,12 +51,30 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
         currentUser = user;
         document.getElementById('user-name').textContent = user.fullName;
-        document.getElementById('login-screen').classList.remove('active');
-        document.getElementById('app-screen').classList.add('active');
         
-        await loadInitialData();
-        loadDashboard();
+        // CRITICAL: Load initial data BEFORE showing dashboard
+        try {
+            console.log('Loading initial data...');
+            await loadInitialData();
+            console.log('✅ All initial data loaded successfully');
+            
+            document.getElementById('login-screen').classList.remove('active');
+            document.getElementById('app-screen').classList.add('active');
+            
+            loadDashboard();
+            
+        } catch (dataError) {
+            console.error('Error loading initial data:', dataError);
+            errorDiv.textContent = 'Failed to load initial data: ' + dataError.message + '\n\nThis usually means the database is empty. Please check the server logs.';
+            // Logout if data loading fails
+            await fetch('/api/auth/logout', { 
+                method: 'POST', 
+                credentials: 'include' 
+            });
+            currentUser = null;
+        }
     } catch (error) {
+        console.error('Login error:', error);
         errorDiv.textContent = error.message;
     }
 });
