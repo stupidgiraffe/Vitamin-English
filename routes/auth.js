@@ -248,7 +248,12 @@ router.delete('/teachers/:id', (req, res) => {
             return res.status(400).json({ error: 'Cannot delete teacher with assigned classes' });
         }
         
-        db.prepare('DELETE FROM users WHERE id = ? AND role = ?').run(req.params.id, 'teacher');
+        const result = db.prepare('DELETE FROM users WHERE id = ? AND role = ?').run(req.params.id, 'teacher');
+        
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Teacher not found' });
+        }
+        
         res.json({ message: 'Teacher deleted successfully' });
     } catch (error) {
         console.error('Error deleting teacher:', error);

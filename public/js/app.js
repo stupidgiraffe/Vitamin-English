@@ -930,7 +930,6 @@ document.getElementById('add-teacher-btn').addEventListener('click', () => {
             });
 
             closeModal();
-            await loadInitialData();
             await loadTeachersList();
             alert('Teacher added successfully!');
         } catch (error) {
@@ -998,7 +997,6 @@ async function editTeacher(id) {
                 });
 
                 closeModal();
-                await loadInitialData();
                 await loadTeachersList();
                 alert('Teacher updated successfully!');
             } catch (error) {
@@ -1015,7 +1013,6 @@ async function deleteTeacher(id) {
     
     try {
         await api(`/auth/teachers/${id}`, { method: 'DELETE' });
-        await loadInitialData();
         await loadTeachersList();
         alert('Teacher deleted successfully!');
     } catch (error) {
