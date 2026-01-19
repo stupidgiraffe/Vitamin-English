@@ -134,6 +134,10 @@ router.get('/teachers', (req, res) => {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
     try {
         const teachers = db.prepare('SELECT id, username, full_name, role FROM users WHERE role = ? ORDER BY full_name').all('teacher');
         res.json(teachers);

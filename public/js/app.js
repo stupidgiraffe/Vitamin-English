@@ -4,6 +4,18 @@ let classes = [];
 let students = [];
 let teachers = [];
 
+// HTML escaping helper to prevent XSS
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text ? String(text).replace(/[&<>"']/g, m => map[m]) : '';
+}
+
 // API Helper
 async function api(endpoint, options = {}) {
     const response = await fetch(`/api${endpoint}`, {
@@ -856,8 +868,8 @@ async function loadTeachersList() {
         teachersData.forEach(teacher => {
             html += `
                 <tr>
-                    <td>${teacher.username}</td>
-                    <td>${teacher.full_name}</td>
+                    <td>${escapeHtml(teacher.username)}</td>
+                    <td>${escapeHtml(teacher.full_name)}</td>
                     <td class="action-buttons">
                         <button class="btn btn-primary btn-small" onclick="editTeacher(${teacher.id})">Edit</button>
                         <button class="btn btn-danger btn-small" onclick="deleteTeacher(${teacher.id})">Delete</button>
@@ -941,11 +953,11 @@ async function editTeacher(id) {
             <form id="edit-teacher-form">
                 <div class="form-group">
                     <label>Username *</label>
-                    <input type="text" id="edit-teacher-username" value="${teacher.username}" required class="form-control">
+                    <input type="text" id="edit-teacher-username" value="${escapeHtml(teacher.username)}" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Full Name *</label>
-                    <input type="text" id="edit-teacher-fullname" value="${teacher.full_name}" required class="form-control">
+                    <input type="text" id="edit-teacher-fullname" value="${escapeHtml(teacher.full_name)}" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label>New Password (leave blank to keep current)</label>
