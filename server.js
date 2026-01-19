@@ -9,7 +9,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000', // Specific origin for dev, configurable for production
+    credentials: true
+};
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));

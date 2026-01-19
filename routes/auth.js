@@ -128,4 +128,183 @@ router.post('/change-username', (req, res) => {
     }
 });
 
+// Get all teachers (for admin)
+router.get('/teachers', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    try {
+        const teachers = db.prepare('SELECT id, username, full_name, role FROM users WHERE role = ? ORDER BY full_name').all('teacher');
+        res.json(teachers);
+    } catch (error) {
+        console.error('Error fetching teachers:', error);
+        res.status(500).json({ error: 'Failed to fetch teachers' });
+    }
+});
+
+// Get a single teacher by ID (admin only)
+router.get('/teachers/:id', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    try {
+        const teacherId = parseInt(req.params.id, 10);
+        if (isNaN(teacherId)) {
+            return res.status(400).json({ error: 'Invalid teacher ID' });
+        }
+        
+        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ? AND role = ?').get(teacherId, 'teacher');
+        
+        if (!teacher) {
+            return res.status(404).json({ error: 'Teacher not found' });
+        }
+        
+        res.json(teacher);
+    } catch (error) {
+        console.error('Error fetching teacher:', error);
+        res.status(500).json({ error: 'Failed to fetch teacher' });
+    }
+});
+
+// Create a new teacher (admin only)
+router.post('/teachers', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { username, password, full_name } = req.body;
+    
+    if (!username || !password || !full_name) {
+        return res.status(400).json({ error: 'All fields required (username, password, full_name)' });
+    }
+    
+    try {
+        // Check if username already exists
+        const existingUser = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        
+        const passwordHash = bcrypt.hashSync(password, 10);
+        const result = db.prepare('INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)').run(
+            username, passwordHash, full_name, 'teacher'
+        );
+        
+        res.status(201).json({ 
+            id: result.lastInsertRowid, 
+            username, 
+            full_name, 
+            role: 'teacher' 
+        });
+    } catch (error) {
+        console.error('Error creating teacher:', error);
+        res.status(500).json({ error: 'Failed to create teacher' });
+    }
+});
+
+// Update a teacher (admin only)
+router.put('/teachers/:id', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { username, full_name, password } = req.body;
+    
+    if (!username || !full_name) {
+        return res.status(400).json({ error: 'Username and full name are required' });
+    }
+    
+    try {
+        const teacherId = parseInt(req.params.id, 10);
+        if (isNaN(teacherId)) {
+            return res.status(400).json({ error: 'Invalid teacher ID' });
+        }
+        
+        // Check if username already exists for another user
+        const existingUser = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, teacherId);
+        if (existingUser) {
+            return res.status(400).json({ error: 'Username already exists' });
+        }
+        
+        if (password) {
+            // Update with new password
+            const passwordHash = bcrypt.hashSync(password, 10);
+            db.prepare('UPDATE users SET username = ?, full_name = ?, password_hash = ? WHERE id = ? AND role = ?').run(
+                username, full_name, passwordHash, teacherId, 'teacher'
+            );
+        } else {
+            // Update without changing password
+            db.prepare('UPDATE users SET username = ?, full_name = ? WHERE id = ? AND role = ?').run(
+                username, full_name, teacherId, 'teacher'
+            );
+        }
+        
+        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ? AND role = ?').get(teacherId, 'teacher');
+        
+        if (!teacher) {
+            return res.status(404).json({ error: 'Teacher not found' });
+        }
+        
+        res.json(teacher);
+    } catch (error) {
+        console.error('Error updating teacher:', error);
+        res.status(500).json({ error: 'Failed to update teacher' });
+    }
+});
+
+// Delete a teacher (admin only)
+router.delete('/teachers/:id', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    try {
+        const teacherId = parseInt(req.params.id, 10);
+        if (isNaN(teacherId)) {
+            return res.status(400).json({ error: 'Invalid teacher ID' });
+        }
+        
+        // Check if teacher has any classes
+        const classes = db.prepare('SELECT COUNT(*) as count FROM classes WHERE teacher_id = ?').get(teacherId);
+        if (classes.count > 0) {
+            return res.status(400).json({ 
+                error: `Cannot delete teacher with ${classes.count} assigned class(es). Please reassign or delete their classes first.` 
+            });
+        }
+        
+        const result = db.prepare('DELETE FROM users WHERE id = ? AND role = ?').run(teacherId, 'teacher');
+        
+        if (result.changes === 0) {
+            return res.status(404).json({ error: 'Teacher not found' });
+        }
+        
+        res.json({ message: 'Teacher deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting teacher:', error);
+        res.status(500).json({ error: 'Failed to delete teacher' });
+    }
+});
+
 module.exports = router;
