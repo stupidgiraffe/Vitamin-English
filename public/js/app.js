@@ -942,13 +942,7 @@ document.getElementById('add-teacher-btn').addEventListener('click', () => {
 
 async function editTeacher(id) {
     try {
-        const teachersData = await api('/auth/teachers');
-        const teacher = teachersData.find(t => t.id === id);
-        
-        if (!teacher) {
-            alert('Teacher not found');
-            return;
-        }
+        const teacher = await api(`/auth/teachers/${id}`);
         
         showModal('Edit Teacher', `
             <form id="edit-teacher-form">

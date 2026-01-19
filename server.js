@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN || true, // In production, set CORS_ORIGIN environment variable
+    origin: process.env.CORS_ORIGIN || 'http://localhost:3000', // Specific origin for dev, configurable for production
     credentials: true
 };
 app.use(cors(corsOptions));

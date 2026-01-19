@@ -147,6 +147,35 @@ router.get('/teachers', (req, res) => {
     }
 });
 
+// Get a single teacher by ID (admin only)
+router.get('/teachers/:id', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    if (req.session.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    try {
+        const teacherId = parseInt(req.params.id, 10);
+        if (isNaN(teacherId)) {
+            return res.status(400).json({ error: 'Invalid teacher ID' });
+        }
+        
+        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ? AND role = ?').get(teacherId, 'teacher');
+        
+        if (!teacher) {
+            return res.status(404).json({ error: 'Teacher not found' });
+        }
+        
+        res.json(teacher);
+    } catch (error) {
+        console.error('Error fetching teacher:', error);
+        res.status(500).json({ error: 'Failed to fetch teacher' });
+    }
+});
+
 // Create a new teacher (admin only)
 router.post('/teachers', (req, res) => {
     if (!req.session.userId) {
@@ -204,8 +233,13 @@ router.put('/teachers/:id', (req, res) => {
     }
     
     try {
+        const teacherId = parseInt(req.params.id, 10);
+        if (isNaN(teacherId)) {
+            return res.status(400).json({ error: 'Invalid teacher ID' });
+        }
+        
         // Check if username already exists for another user
-        const existingUser = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, req.params.id);
+        const existingUser = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, teacherId);
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
@@ -214,16 +248,16 @@ router.put('/teachers/:id', (req, res) => {
             // Update with new password
             const passwordHash = bcrypt.hashSync(password, 10);
             db.prepare('UPDATE users SET username = ?, full_name = ?, password_hash = ? WHERE id = ?').run(
-                username, full_name, passwordHash, req.params.id
+                username, full_name, passwordHash, teacherId
             );
         } else {
             // Update without changing password
             db.prepare('UPDATE users SET username = ?, full_name = ? WHERE id = ?').run(
-                username, full_name, req.params.id
+                username, full_name, teacherId
             );
         }
         
-        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ?').get(req.params.id);
+        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ?').get(teacherId);
         res.json(teacher);
     } catch (error) {
         console.error('Error updating teacher:', error);
@@ -242,15 +276,20 @@ router.delete('/teachers/:id', (req, res) => {
     }
     
     try {
+        const teacherId = parseInt(req.params.id, 10);
+        if (isNaN(teacherId)) {
+            return res.status(400).json({ error: 'Invalid teacher ID' });
+        }
+        
         // Check if teacher has any classes
-        const classes = db.prepare('SELECT COUNT(*) as count FROM classes WHERE teacher_id = ?').get(req.params.id);
+        const classes = db.prepare('SELECT COUNT(*) as count FROM classes WHERE teacher_id = ?').get(teacherId);
         if (classes.count > 0) {
             return res.status(400).json({ 
                 error: `Cannot delete teacher with ${classes.count} assigned class${classes.count > 1 ? 'es' : ''}. Please reassign or delete their classes first.` 
             });
         }
         
-        const result = db.prepare('DELETE FROM users WHERE id = ? AND role = ?').run(req.params.id, 'teacher');
+        const result = db.prepare('DELETE FROM users WHERE id = ? AND role = ?').run(teacherId, 'teacher');
         
         if (result.changes === 0) {
             return res.status(404).json({ error: 'Teacher not found' });
