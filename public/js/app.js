@@ -8,6 +8,7 @@ let teachers = [];
 async function api(endpoint, options = {}) {
     const response = await fetch(`/api${endpoint}`, {
         ...options,
+        credentials: 'include',
         headers: {
             'Content-Type': 'application/json',
             ...options.headers
@@ -15,7 +16,7 @@ async function api(endpoint, options = {}) {
     });
 
     if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
         throw new Error(error.error || 'Request failed');
     }
 
@@ -62,22 +63,12 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 // Load initial data
 async function loadInitialData() {
     try {
-        [classes, students, teachers] = await Promise.all([
+        [classes, students] = await Promise.all([
             api('/classes'),
-            api('/students'),
-            api('/auth/me').then(() => api('/classes')).then(c => {
-                // Get teachers from users endpoint
-                return fetch('/api/auth/me').then(r => r.json()).then(() => {
-                    // For now, we'll extract teachers from classes
-                    return c.filter(cls => cls.teacher_id).map(cls => ({
-                        id: cls.teacher_id,
-                        full_name: cls.teacher_name
-                    }));
-                });
-            })
+            api('/students')
         ]);
 
-        // Get unique teachers
+        // Get unique teachers from classes
         const teacherMap = new Map();
         classes.forEach(cls => {
             if (cls.teacher_id && cls.teacher_name) {
@@ -90,6 +81,7 @@ async function loadInitialData() {
         populateTeacherSelects();
     } catch (error) {
         console.error('Error loading initial data:', error);
+        alert('Failed to load initial data. Please try logging in again.');
     }
 }
 
@@ -529,6 +521,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 async function loadAdminData() {
     await loadStudentsList();
     await loadClassesList();
+    await loadTeachersList();
 }
 
 async function loadStudentsList() {
@@ -844,6 +837,177 @@ async function deleteClass(id) {
         await loadClassesList();
     } catch (error) {
         alert('Error deleting class: ' + error.message);
+    }
+}
+
+// Teacher Management
+async function loadTeachersList() {
+    try {
+        const teachersData = await api('/auth/teachers');
+        const container = document.getElementById('teachers-list');
+        
+        if (teachersData.length === 0) {
+            container.innerHTML = '<p class="info-text">No teachers found</p>';
+            return;
+        }
+
+        let html = '<table><thead><tr><th>Username</th><th>Full Name</th><th>Actions</th></tr></thead><tbody>';
+        
+        teachersData.forEach(teacher => {
+            html += `
+                <tr>
+                    <td>${teacher.username}</td>
+                    <td>${teacher.full_name}</td>
+                    <td class="action-buttons">
+                        <button class="btn btn-primary btn-small" onclick="editTeacher(${teacher.id})">Edit</button>
+                        <button class="btn btn-danger btn-small" onclick="deleteTeacher(${teacher.id})">Delete</button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Error loading teachers:', error);
+    }
+}
+
+document.getElementById('add-teacher-btn').addEventListener('click', () => {
+    showModal('Add Teacher', `
+        <form id="teacher-form">
+            <div class="form-group">
+                <label>Username *</label>
+                <input type="text" id="teacher-username" required class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Full Name *</label>
+                <input type="text" id="teacher-fullname" required class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Password *</label>
+                <input type="password" id="teacher-password" required class="form-control" minlength="6">
+            </div>
+            <div class="form-group">
+                <label>Confirm Password *</label>
+                <input type="password" id="teacher-password-confirm" required class="form-control" minlength="6">
+            </div>
+            <button type="submit" class="btn btn-primary">Add Teacher</button>
+        </form>
+    `);
+
+    document.getElementById('teacher-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const password = document.getElementById('teacher-password').value;
+        const confirmPassword = document.getElementById('teacher-password-confirm').value;
+        
+        if (password !== confirmPassword) {
+            alert('Passwords do not match');
+            return;
+        }
+        
+        try {
+            await api('/auth/teachers', {
+                method: 'POST',
+                body: JSON.stringify({
+                    username: document.getElementById('teacher-username').value,
+                    full_name: document.getElementById('teacher-fullname').value,
+                    password: password
+                })
+            });
+
+            closeModal();
+            await loadInitialData();
+            await loadTeachersList();
+            alert('Teacher added successfully!');
+        } catch (error) {
+            alert('Error adding teacher: ' + error.message);
+        }
+    });
+});
+
+async function editTeacher(id) {
+    try {
+        const teachersData = await api('/auth/teachers');
+        const teacher = teachersData.find(t => t.id === id);
+        
+        if (!teacher) {
+            alert('Teacher not found');
+            return;
+        }
+        
+        showModal('Edit Teacher', `
+            <form id="edit-teacher-form">
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input type="text" id="edit-teacher-username" value="${teacher.username}" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="edit-teacher-fullname" value="${teacher.full_name}" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>New Password (leave blank to keep current)</label>
+                    <input type="password" id="edit-teacher-password" class="form-control" minlength="6">
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" id="edit-teacher-password-confirm" class="form-control" minlength="6">
+                </div>
+                <button type="submit" class="btn btn-primary">Update Teacher</button>
+            </form>
+        `);
+
+        document.getElementById('edit-teacher-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const password = document.getElementById('edit-teacher-password').value;
+            const confirmPassword = document.getElementById('edit-teacher-password-confirm').value;
+            
+            if (password && password !== confirmPassword) {
+                alert('Passwords do not match');
+                return;
+            }
+            
+            try {
+                const updateData = {
+                    username: document.getElementById('edit-teacher-username').value,
+                    full_name: document.getElementById('edit-teacher-fullname').value
+                };
+                
+                if (password) {
+                    updateData.password = password;
+                }
+                
+                await api(`/auth/teachers/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(updateData)
+                });
+
+                closeModal();
+                await loadInitialData();
+                await loadTeachersList();
+                alert('Teacher updated successfully!');
+            } catch (error) {
+                alert('Error updating teacher: ' + error.message);
+            }
+        });
+    } catch (error) {
+        alert('Error loading teacher: ' + error.message);
+    }
+}
+
+async function deleteTeacher(id) {
+    if (!confirm('Are you sure you want to delete this teacher?')) return;
+    
+    try {
+        await api(`/auth/teachers/${id}`, { method: 'DELETE' });
+        await loadInitialData();
+        await loadTeachersList();
+        alert('Teacher deleted successfully!');
+    } catch (error) {
+        alert('Error deleting teacher: ' + error.message);
     }
 }
 
