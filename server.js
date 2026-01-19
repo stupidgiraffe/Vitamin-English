@@ -16,12 +16,13 @@ app.use(express.static('public'));
 
 // Session configuration
 app.use(session({
-    secret: 'vitamin-english-secret-key-change-in-production',
+    secret: process.env.SESSION_SECRET || 'vitamin-english-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
     cookie: { 
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        httpOnly: true
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production'
     }
 }));
 
@@ -48,6 +49,11 @@ app.use('/api/classes', requireAuth, classRoutes);
 app.use('/api/attendance', requireAuth, attendanceRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
 // Root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -55,7 +61,15 @@ app.get('/', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-    console.error(err.stack);
+    const timestamp = new Date().toISOString();
+    console.error(`[${timestamp}] Error:`, err.stack);
+    
+    // Log additional request details in production
+    if (process.env.NODE_ENV === 'production') {
+        console.error(`Request: ${req.method} ${req.path}`);
+        console.error(`Body:`, req.body);
+    }
+    
     res.status(500).json({ error: 'Something went wrong!' });
 });
 

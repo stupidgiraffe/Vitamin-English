@@ -344,10 +344,14 @@ body {
 }
 
 .student-type-header {
-    background: #f8f9fa !important;
-    color: #333 !important;
+    background: #e9ecef !important;
+    color: #495057 !important;
     font-weight: bold;
     text-align: left !important;
+    font-size: 1.05em;
+    padding: 12px 16px !important;
+    border-top: 2px solid #dee2e6;
+    border-bottom: 2px solid #dee2e6;
 }
 
 .student-row-yellow {
@@ -359,7 +363,7 @@ body {
 }
 
 .student-row-trial {
-    background: #f0f0f0;
+    background: #e6f3ff; /* Blue background for trial students */
 }
 
 /* Report Form */
