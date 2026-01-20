@@ -10,9 +10,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-// Simplified CORS - allow all origins in development
+// CORS configuration - allow all origins for now, but can be restricted via environment variable
 const corsOptions = {
-    origin: true, // Allow all origins for now
+    origin: process.env.CORS_ORIGIN || true, // Specific origin in production, all origins in development
     credentials: true
 };
 app.use(cors(corsOptions));
@@ -94,7 +94,11 @@ app.get('/api/debug/database-status', requireAuth, (req, res) => {
             }
         });
     } catch (error) {
-        res.status(500).json({ error: error.message, stack: error.stack });
+        console.error('Debug endpoint error:', error);
+        res.status(500).json({ 
+            error: error.message,
+            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+        });
     }
 });
 
