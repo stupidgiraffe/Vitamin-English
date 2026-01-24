@@ -4,12 +4,19 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 
 const dbPath = path.join(__dirname, 'school.db');
+
+// Check if database exists
+const dbExists = fs.existsSync(dbPath);
+console.log(`📊 Database file ${dbExists ? 'EXISTS' : 'DOES NOT EXIST'} at: ${dbPath}`);
+
 const db = new Database(dbPath);
 
 // Initialize database with schema
 const initDatabase = () => {
     try {
-        const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        console.log(`📄 Reading schema from: ${schemaPath}`);
+        const schema = fs.readFileSync(schemaPath, 'utf8');
         db.exec(schema);
         console.log('✅ Database schema initialized successfully');
     } catch (error) {
@@ -18,14 +25,39 @@ const initDatabase = () => {
     }
 };
 
-// CRITICAL: Add sample data - MUST RUN ON FIRST START
+// Force add sample data EVERY TIME if database is empty
 const addSampleData = () => {
     try {
-        // Check if data already exists
-        const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+        // Check if data exists
+        let userCount;
+        try {
+            userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+        } catch (e) {
+            console.log('⚠️  Users table does not exist, will create schema');
+            initDatabase();
+            userCount = { count: 0 };
+        }
+        
         if (userCount.count > 0) {
-            console.log('ℹ️  Sample data already exists, skipping initialization');
-            return;
+            console.log(`ℹ️  Sample data already exists (${userCount.count} users found)`);
+            
+            // VERIFY classes and students exist too
+            const classCount = db.prepare('SELECT COUNT(*) as count FROM classes').get();
+            const studentCount = db.prepare('SELECT COUNT(*) as count FROM students').get();
+            
+            console.log(`ℹ️  Current data: ${userCount.count} users, ${classCount.count} classes, ${studentCount.count} students`);
+            
+            if (classCount.count === 0 || studentCount.count === 0) {
+                console.log('⚠️  Missing classes or students! Recreating sample data...');
+                // Clear all data and start fresh
+                db.prepare('DELETE FROM attendance').run();
+                db.prepare('DELETE FROM lesson_reports').run();
+                db.prepare('DELETE FROM students').run();
+                db.prepare('DELETE FROM classes').run();
+                db.prepare('DELETE FROM users').run();
+            } else {
+                return; // Data is good, exit
+            }
         }
 
         console.log('🔄 Creating sample data...');
@@ -35,21 +67,19 @@ const addSampleData = () => {
         db.prepare('INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)').run(
             'admin', adminHash, 'Admin User', 'admin'
         );
-        console.log('✅ Admin user created');
+        console.log('✅ Admin user created (username: admin, password: admin123)');
 
-        // Add teacher: sarah (password: teacher123)
+        // Add teachers
         const teacherHash = bcrypt.hashSync('teacher123', 10);
         const teacher1 = db.prepare('INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)').run(
             'sarah', teacherHash, 'Sarah Johnson', 'teacher'
         );
-        
-        // Add teacher: mike (password: teacher123)
         const teacher2 = db.prepare('INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)').run(
             'mike', teacherHash, 'Mike Chen', 'teacher'
         );
-        console.log('✅ Teachers created');
+        console.log('✅ Teachers created (username: sarah/mike, password: teacher123)');
 
-        // Add 3 classes
+        // Add classes
         const class1 = db.prepare('INSERT INTO classes (name, teacher_id, schedule, color) VALUES (?, ?, ?, ?)').run(
             'Beginner A', teacher1.lastInsertRowid, 'Mon/Wed 10:00-11:30', '#4A90E2'
         );
@@ -59,7 +89,7 @@ const addSampleData = () => {
         const class3 = db.prepare('INSERT INTO classes (name, teacher_id, schedule, color) VALUES (?, ?, ?, ?)').run(
             'Advanced C', teacher1.lastInsertRowid, 'Wed/Fri 16:00-17:30', '#6BCF7A'
         );
-        console.log('✅ Classes created');
+        console.log(`✅ Classes created (IDs: ${class1.lastInsertRowid}, ${class2.lastInsertRowid}, ${class3.lastInsertRowid})`);
 
         // Add regular students for Class 1 (Beginner A)
         const regularStudents1 = [
@@ -105,7 +135,8 @@ const addSampleData = () => {
             );
         });
         
-        console.log('✅ Students created');
+        const finalStudentCount = db.prepare('SELECT COUNT(*) as count FROM students').get();
+        console.log(`✅ Students created (total: ${finalStudentCount.count})`);
 
         // Add sample attendance for the past 7 days
         const today = new Date();
@@ -183,17 +214,24 @@ const addSampleData = () => {
         
     } catch (error) {
         console.error('❌❌❌ CRITICAL ERROR creating sample data:', error);
+        console.error('Error stack:', error.stack);
         throw error;
     }
 };
 
-// CRITICAL: Initialize database and add sample data on module load
+// Initialize on module load
+console.log('🚀 Starting database initialization...');
 try {
-    initDatabase();
+    if (!dbExists) {
+        console.log('📊 Database does not exist, creating fresh database...');
+        initDatabase();
+    }
     addSampleData();
+    console.log('🎉 Database initialization complete!');
 } catch (error) {
     console.error('❌ FATAL: Database initialization failed:', error);
-    process.exit(1);
+    console.error('Error stack:', error.stack);
+    // Don't exit - let the app start and show better errors
 }
 
 module.exports = db;

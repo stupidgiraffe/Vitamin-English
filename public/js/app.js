@@ -94,10 +94,44 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 // Load initial data
 async function loadInitialData() {
     try {
-        [classes, students] = await Promise.all([
-            api('/classes'),
-            api('/students')
-        ]);
+        console.log('🔄 Loading classes...');
+        const classesResponse = await fetch('/api/classes', {
+            credentials: 'include'
+        });
+        
+        console.log('Classes response status:', classesResponse.status);
+        
+        if (!classesResponse.ok) {
+            const errorText = await classesResponse.text();
+            console.error('Classes error response:', errorText);
+            throw new Error(`Failed to load classes (${classesResponse.status}): ${errorText}`);
+        }
+        
+        const classesData = await classesResponse.json();
+        console.log('✅ Classes loaded:', classesData.length, 'classes');
+        
+        if (classesData.length === 0) {
+            console.warn('⚠️  WARNING: No classes found in database!');
+        }
+        
+        console.log('🔄 Loading students...');
+        const studentsResponse = await fetch('/api/students', {
+            credentials: 'include'
+        });
+        
+        console.log('Students response status:', studentsResponse.status);
+        
+        if (!studentsResponse.ok) {
+            const errorText = await studentsResponse.text();
+            console.error('Students error response:', errorText);
+            throw new Error(`Failed to load students (${studentsResponse.status}): ${errorText}`);
+        }
+        
+        const studentsData = await studentsResponse.json();
+        console.log('✅ Students loaded:', studentsData.length, 'students');
+        
+        classes = classesData;
+        students = studentsData;
 
         // Get unique teachers from classes
         const teacherMap = new Map();
@@ -111,8 +145,9 @@ async function loadInitialData() {
         populateClassSelects();
         populateTeacherSelects();
     } catch (error) {
-        console.error('Error loading initial data:', error);
-        alert('Failed to load initial data. Please try logging in again.');
+        console.error('❌ Error loading initial data:', error);
+        alert('Failed to load initial data. Error: ' + error.message + '\n\nPlease check the browser console and server logs for details.');
+        throw error;
     }
 }
 

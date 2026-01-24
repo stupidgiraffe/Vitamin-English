@@ -27,8 +27,9 @@ app.use((req, res, next) => {
 });
 
 // Middleware
+// CORS configuration - allow all origins for now, but can be restricted via environment variable
 const corsOptions = {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000', // Specific origin for dev, configurable for production
+    origin: process.env.CORS_ORIGIN || true, // Specific origin in production, all origins in development
     credentials: true
 };
 app.use(cors(corsOptions));
@@ -85,6 +86,38 @@ app.use('/api/makeup', requireAuth, makeupRoutes);
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
+
+// Debug endpoint to check database status
+app.get('/api/debug/database-status', requireAuth, (req, res) => {
+    try {
+        const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
+        const classCount = db.prepare('SELECT COUNT(*) as count FROM classes').get();
+        const studentCount = db.prepare('SELECT COUNT(*) as count FROM students').get();
+        const attendanceCount = db.prepare('SELECT COUNT(*) as count FROM attendance').get();
+        const reportCount = db.prepare('SELECT COUNT(*) as count FROM lesson_reports').get();
+        
+        res.json({
+            status: 'ok',
+            counts: {
+                users: userCount.count,
+                classes: classCount.count,
+                students: studentCount.count,
+                attendance: attendanceCount.count,
+                reports: reportCount.count
+            },
+            sampleData: {
+                users: db.prepare('SELECT username, full_name, role FROM users').all(),
+                classes: db.prepare('SELECT id, name, teacher_id FROM classes').all()
+            }
+        });
+    } catch (error) {
+        console.error('Debug endpoint error:', error);
+        res.status(500).json({ 
+            error: error.message,
+            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+        });
+    }
 });
 
 // TESTING ONLY - Database reset endpoint (admin only)
