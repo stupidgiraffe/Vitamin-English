@@ -1509,16 +1509,7 @@ document.getElementById('student-class-filter')?.addEventListener('change', (e) 
 async function showStudentDetail(studentId) {
     try {
         const data = await api(`/students/${studentId}/details`);
-        const { student, attendance, reports, stats } = data;
-        
-        // Fetch makeup lessons for this student
-        let makeupLessons = [];
-        try {
-            const allMakeup = await api('/makeup');
-            makeupLessons = allMakeup.filter(m => m.student_id === studentId);
-        } catch (error) {
-            console.error('Error loading makeup lessons:', error);
-        }
+        const { student, attendance, reports, stats, makeupLessons } = data;
         
         let attendanceListHtml = '';
         if (attendance.length > 0) {
@@ -1554,7 +1545,7 @@ async function showStudentDetail(studentId) {
         }
         
         let makeupListHtml = '';
-        if (makeupLessons.length > 0) {
+        if (makeupLessons && makeupLessons.length > 0) {
             makeupLessons.forEach(m => {
                 const statusClass = m.status === 'completed' ? 'present' : m.status === 'cancelled' ? 'absent' : 'partial';
                 makeupListHtml += `
