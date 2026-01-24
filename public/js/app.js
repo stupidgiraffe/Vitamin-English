@@ -633,7 +633,7 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                 <label>Class</label>
                 <select id="student-class" class="form-control">
                     <option value="">Unassigned</option>
-                    ${classes.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                    ${classes.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
                 </select>
             </div>
             <div class="form-group">
@@ -651,6 +651,30 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                     <option value="blue">Blue</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="student-email" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="student-phone" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Parent Name</label>
+                <input type="text" id="student-parent-name" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Parent Phone</label>
+                <input type="tel" id="student-parent-phone" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Parent Email</label>
+                <input type="email" id="student-parent-email" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Enrollment Date</label>
+                <input type="date" id="student-enrollment-date" class="form-control">
+            </div>
             <button type="submit" class="btn btn-primary">Add Student</button>
         </form>
     `);
@@ -665,7 +689,13 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                     name: document.getElementById('student-name').value,
                     class_id: document.getElementById('student-class').value || null,
                     student_type: document.getElementById('student-type').value,
-                    color_code: document.getElementById('student-color').value
+                    color_code: document.getElementById('student-color').value,
+                    email: document.getElementById('student-email').value || null,
+                    phone: document.getElementById('student-phone').value || null,
+                    parent_name: document.getElementById('student-parent-name').value || null,
+                    parent_phone: document.getElementById('student-parent-phone').value || null,
+                    parent_email: document.getElementById('student-parent-email').value || null,
+                    enrollment_date: document.getElementById('student-enrollment-date').value || null
                 })
             });
 
@@ -686,13 +716,13 @@ async function editStudent(id) {
             <form id="edit-student-form">
                 <div class="form-group">
                     <label>Name *</label>
-                    <input type="text" id="edit-student-name" value="${student.name}" required class="form-control">
+                    <input type="text" id="edit-student-name" value="${escapeHtml(student.name)}" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Class</label>
                     <select id="edit-student-class" class="form-control">
                         <option value="">Unassigned</option>
-                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -710,6 +740,30 @@ async function editStudent(id) {
                         <option value="blue" ${student.color_code === 'blue' ? 'selected' : ''}>Blue</option>
                     </select>
                 </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="edit-student-email" value="${escapeHtml(student.email || '')}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="edit-student-phone" value="${escapeHtml(student.phone || '')}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Parent Name</label>
+                    <input type="text" id="edit-student-parent-name" value="${escapeHtml(student.parent_name || '')}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Parent Phone</label>
+                    <input type="tel" id="edit-student-parent-phone" value="${escapeHtml(student.parent_phone || '')}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Parent Email</label>
+                    <input type="email" id="edit-student-parent-email" value="${escapeHtml(student.parent_email || '')}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Enrollment Date</label>
+                    <input type="date" id="edit-student-enrollment-date" value="${student.enrollment_date || ''}" class="form-control">
+                </div>
                 <button type="submit" class="btn btn-primary">Update Student</button>
             </form>
         `);
@@ -725,6 +779,12 @@ async function editStudent(id) {
                         class_id: document.getElementById('edit-student-class').value || null,
                         student_type: document.getElementById('edit-student-type').value,
                         color_code: document.getElementById('edit-student-color').value,
+                        email: document.getElementById('edit-student-email').value || null,
+                        phone: document.getElementById('edit-student-phone').value || null,
+                        parent_name: document.getElementById('edit-student-parent-name').value || null,
+                        parent_phone: document.getElementById('edit-student-parent-phone').value || null,
+                        parent_email: document.getElementById('edit-student-parent-email').value || null,
+                        enrollment_date: document.getElementById('edit-student-enrollment-date').value || null,
                         active: 1
                     })
                 });
@@ -1145,6 +1205,158 @@ document.getElementById('change-username-form')?.addEventListener('submit', asyn
 // Database Viewer Functions
 document.getElementById('db-load-btn')?.addEventListener('click', loadDatabaseTable);
 document.getElementById('db-export-btn')?.addEventListener('click', exportDatabaseTable);
+document.getElementById('db-search-btn')?.addEventListener('click', searchDatabase);
+
+async function searchDatabase() {
+    const query = document.getElementById('db-search-input').value.trim();
+    const type = document.getElementById('db-search-type').value;
+    const startDate = document.getElementById('db-search-start-date').value;
+    const endDate = document.getElementById('db-search-end-date').value;
+    const container = document.getElementById('db-viewer-container');
+    
+    if (!query) {
+        alert('Please enter a search query');
+        return;
+    }
+    
+    try {
+        container.innerHTML = '<p class="info-text">Searching...</p>';
+        
+        const params = new URLSearchParams({ query });
+        if (type) params.append('type', type);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        const results = await api(`/database/search?${params.toString()}`);
+        
+        if (!results || Object.keys(results).length === 0) {
+            container.innerHTML = '<p class="info-text">No results found</p>';
+            return;
+        }
+        
+        let html = '<div class="search-results">';
+        
+        // Display results grouped by type
+        if (results.students && results.students.length > 0) {
+            html += `<h3>Students (${results.students.length})</h3>`;
+            html += '<table class="db-table"><thead><tr>';
+            const studentCols = Object.keys(results.students[0]);
+            studentCols.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            results.students.forEach(row => {
+                html += '<tr>';
+                studentCols.forEach(col => {
+                    let value = row[col];
+                    if (value === null) value = '<em>null</em>';
+                    else if (typeof value === 'object') value = JSON.stringify(value);
+                    html += `<td>${escapeHtml(String(value))}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table><br>';
+        }
+        
+        if (results.teachers && results.teachers.length > 0) {
+            html += `<h3>Teachers (${results.teachers.length})</h3>`;
+            html += '<table class="db-table"><thead><tr>';
+            const teacherCols = Object.keys(results.teachers[0]);
+            teacherCols.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            results.teachers.forEach(row => {
+                html += '<tr>';
+                teacherCols.forEach(col => {
+                    let value = row[col];
+                    if (value === null) value = '<em>null</em>';
+                    else if (typeof value === 'object') value = JSON.stringify(value);
+                    html += `<td>${escapeHtml(String(value))}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table><br>';
+        }
+        
+        if (results.classes && results.classes.length > 0) {
+            html += `<h3>Classes (${results.classes.length})</h3>`;
+            html += '<table class="db-table"><thead><tr>';
+            const classCols = Object.keys(results.classes[0]);
+            classCols.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            results.classes.forEach(row => {
+                html += '<tr>';
+                classCols.forEach(col => {
+                    let value = row[col];
+                    if (value === null) value = '<em>null</em>';
+                    else if (typeof value === 'object') value = JSON.stringify(value);
+                    html += `<td>${escapeHtml(String(value))}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table><br>';
+        }
+        
+        if (results.attendance && results.attendance.length > 0) {
+            html += `<h3>Attendance (${results.attendance.length})</h3>`;
+            html += '<table class="db-table"><thead><tr>';
+            const attendanceCols = Object.keys(results.attendance[0]);
+            attendanceCols.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            results.attendance.forEach(row => {
+                html += '<tr>';
+                attendanceCols.forEach(col => {
+                    let value = row[col];
+                    if (value === null) value = '<em>null</em>';
+                    else if (typeof value === 'object') value = JSON.stringify(value);
+                    html += `<td>${escapeHtml(String(value))}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table><br>';
+        }
+        
+        if (results.reports && results.reports.length > 0) {
+            html += `<h3>Lesson Reports (${results.reports.length})</h3>`;
+            html += '<table class="db-table"><thead><tr>';
+            const reportCols = Object.keys(results.reports[0]);
+            reportCols.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            results.reports.forEach(row => {
+                html += '<tr>';
+                reportCols.forEach(col => {
+                    let value = row[col];
+                    if (value === null) value = '<em>null</em>';
+                    else if (typeof value === 'object') value = JSON.stringify(value);
+                    html += `<td>${escapeHtml(String(value))}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table><br>';
+        }
+        
+        if (results.makeup_lessons && results.makeup_lessons.length > 0) {
+            html += `<h3>Make-up Lessons (${results.makeup_lessons.length})</h3>`;
+            html += '<table class="db-table"><thead><tr>';
+            const makeupCols = Object.keys(results.makeup_lessons[0]);
+            makeupCols.forEach(col => html += `<th>${col}</th>`);
+            html += '</tr></thead><tbody>';
+            results.makeup_lessons.forEach(row => {
+                html += '<tr>';
+                makeupCols.forEach(col => {
+                    let value = row[col];
+                    if (value === null) value = '<em>null</em>';
+                    else if (typeof value === 'object') value = JSON.stringify(value);
+                    html += `<td>${escapeHtml(String(value))}</td>`;
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table><br>';
+        }
+        
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
+    }
+}
 
 async function loadDatabaseTable() {
     const tableName = document.getElementById('db-table-select').value;
@@ -1243,13 +1455,17 @@ function renderStudentProfiles(filteredStudents = null) {
     studentsToRender.forEach(student => {
         const typeClass = student.student_type === 'trial' ? 'trial' : 'regular';
         const typeName = student.student_type === 'trial' ? 'Trial' : 'Regular';
+        const enrollmentDate = student.enrollment_date ? new Date(student.enrollment_date + 'T00:00:00').toLocaleDateString() : 'N/A';
         
         html += `
             <div class="student-card" onclick="showStudentDetail(${student.id})">
                 <span class="student-type-badge ${typeClass}">${typeName}</span>
-                <h3>${student.name}</h3>
+                <h3>${escapeHtml(student.name)}</h3>
                 <div class="student-info">
-                    ${student.class_name || 'No class assigned'}
+                    ${escapeHtml(student.class_name) || 'No class assigned'}
+                </div>
+                <div class="student-info" style="font-size: 0.85rem; color: #6c757d; margin-top: 5px;">
+                    Enrolled: ${enrollmentDate}
                 </div>
             </div>
         `;
@@ -1295,16 +1511,25 @@ async function showStudentDetail(studentId) {
         const data = await api(`/students/${studentId}/details`);
         const { student, attendance, reports, stats } = data;
         
+        // Fetch makeup lessons for this student
+        let makeupLessons = [];
+        try {
+            const allMakeup = await api('/makeup');
+            makeupLessons = allMakeup.filter(m => m.student_id === studentId);
+        } catch (error) {
+            console.error('Error loading makeup lessons:', error);
+        }
+        
         let attendanceListHtml = '';
         if (attendance.length > 0) {
-            attendance.forEach(a => {
+            attendance.slice(0, 20).forEach(a => {
                 const statusText = a.status === 'O' ? 'Present' : a.status === 'X' ? 'Absent' : a.status === '/' ? 'Partial' : 'Unknown';
                 const statusClass = a.status === 'O' ? 'present' : a.status === 'X' ? 'absent' : a.status === '/' ? 'partial' : '';
                 attendanceListHtml += `
                     <div class="attendance-item">
                         <span class="date">${new Date(a.date + 'T00:00:00').toLocaleDateString()}</span>
                         <span class="status ${statusClass}">${statusText}</span>
-                        ${a.notes ? `<div style="font-size: 0.85rem; color: #6c757d; margin-top: 0.25rem;">${a.notes}</div>` : ''}
+                        ${a.notes ? `<div style="font-size: 0.85rem; color: #6c757d; margin-top: 0.25rem;">${escapeHtml(a.notes)}</div>` : ''}
                     </div>
                 `;
             });
@@ -1314,12 +1539,12 @@ async function showStudentDetail(studentId) {
         
         let reportsListHtml = '';
         if (reports.length > 0) {
-            reports.forEach(r => {
+            reports.slice(0, 5).forEach(r => {
                 reportsListHtml += `
                     <div class="report-item">
-                        <strong>${new Date(r.date + 'T00:00:00').toLocaleDateString()}</strong> - ${r.teacher_name}
+                        <strong>${new Date(r.date + 'T00:00:00').toLocaleDateString()}</strong> - ${escapeHtml(r.teacher_name)}
                         <div style="font-size: 0.85rem; color: #6c757d; margin-top: 0.25rem;">
-                            ${r.target_topic || 'No topic specified'}
+                            ${escapeHtml(r.target_topic) || 'No topic specified'}
                         </div>
                     </div>
                 `;
@@ -1328,17 +1553,46 @@ async function showStudentDetail(studentId) {
             reportsListHtml = '<p class="info-text">No lesson reports</p>';
         }
         
+        let makeupListHtml = '';
+        if (makeupLessons.length > 0) {
+            makeupLessons.forEach(m => {
+                const statusClass = m.status === 'completed' ? 'present' : m.status === 'cancelled' ? 'absent' : 'partial';
+                makeupListHtml += `
+                    <div class="makeup-item">
+                        <span class="date">${new Date(m.scheduled_date + 'T00:00:00').toLocaleDateString()}</span>
+                        <span class="status ${statusClass}">${m.status}</span>
+                        ${m.reason ? `<div style="font-size: 0.85rem; color: #6c757d; margin-top: 0.25rem;">${escapeHtml(m.reason)}</div>` : ''}
+                    </div>
+                `;
+            });
+        } else {
+            makeupListHtml = '<p class="info-text">No makeup lessons</p>';
+        }
+        
         const attendanceRate = stats.total > 0 ? Math.round((stats.present / stats.total) * 100) : 0;
+        const partialRate = stats.total > 0 ? Math.round((stats.partial / stats.total) * 100) : 0;
         
         const content = `
             <div class="student-detail">
                 <div class="detail-section">
                     <h4>Student Information</h4>
-                    <p><strong>Name:</strong> ${student.name}</p>
-                    <p><strong>Class:</strong> ${student.class_name || 'Not assigned'}</p>
+                    <p><strong>Name:</strong> ${escapeHtml(student.name)}</p>
+                    <p><strong>Class:</strong> ${escapeHtml(student.class_name) || 'Not assigned'}</p>
                     <p><strong>Type:</strong> ${student.student_type === 'trial' ? 'Trial/Make-up' : 'Regular'}</p>
-                    ${student.notes ? `<p><strong>Notes:</strong> ${student.notes}</p>` : ''}
+                    ${student.email ? `<p><strong>Email:</strong> ${escapeHtml(student.email)}</p>` : ''}
+                    ${student.phone ? `<p><strong>Phone:</strong> ${escapeHtml(student.phone)}</p>` : ''}
+                    ${student.enrollment_date ? `<p><strong>Enrolled:</strong> ${new Date(student.enrollment_date + 'T00:00:00').toLocaleDateString()}</p>` : ''}
+                    ${student.notes ? `<p><strong>Notes:</strong> ${escapeHtml(student.notes)}</p>` : ''}
                 </div>
+                
+                ${student.parent_name || student.parent_phone || student.parent_email ? `
+                <div class="detail-section">
+                    <h4>Parent/Guardian Information</h4>
+                    ${student.parent_name ? `<p><strong>Name:</strong> ${escapeHtml(student.parent_name)}</p>` : ''}
+                    ${student.parent_phone ? `<p><strong>Phone:</strong> ${escapeHtml(student.parent_phone)}</p>` : ''}
+                    ${student.parent_email ? `<p><strong>Email:</strong> ${escapeHtml(student.parent_email)}</p>` : ''}
+                </div>
+                ` : ''}
                 
                 <div class="detail-section">
                     <h4>Attendance Statistics</h4>
@@ -1356,6 +1610,10 @@ async function showStudentDetail(studentId) {
                             <div class="stat-label">Absent</div>
                         </div>
                         <div class="stat-box">
+                            <div class="stat-value">${stats.partial || 0}</div>
+                            <div class="stat-label">Partial</div>
+                        </div>
+                        <div class="stat-box">
                             <div class="stat-value">${attendanceRate}%</div>
                             <div class="stat-label">Rate</div>
                         </div>
@@ -1363,24 +1621,217 @@ async function showStudentDetail(studentId) {
                 </div>
                 
                 <div class="detail-section">
-                    <h4>Recent Attendance (Last 30 Days)</h4>
+                    <h4>Recent Attendance (Last 20)</h4>
                     <div class="attendance-list">
                         ${attendanceListHtml}
                     </div>
                 </div>
                 
                 <div class="detail-section">
-                    <h4>Class Lesson Reports (Last 10)</h4>
+                    <h4>Recent Class Reports (Last 5)</h4>
                     <div class="reports-list">
                         ${reportsListHtml}
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h4>Make-up Lessons</h4>
+                    <div class="makeup-list">
+                        ${makeupListHtml}
                     </div>
                 </div>
             </div>
         `;
         
-        showModal(`${student.name} - Profile`, content);
+        showModal(`${escapeHtml(student.name)} - Profile`, content);
     } catch (error) {
         alert('Error loading student details: ' + error.message);
+    }
+}
+
+// Make-up Lessons Page Functions
+async function loadMakeupPage() {
+    // Populate student filter
+    const studentFilter = document.getElementById('makeup-student-filter');
+    studentFilter.innerHTML = '<option value="">All Students</option>';
+    students.forEach(s => {
+        const option = document.createElement('option');
+        option.value = s.id;
+        option.textContent = s.name;
+        studentFilter.appendChild(option);
+    });
+}
+
+document.getElementById('filter-makeup-btn')?.addEventListener('click', async () => {
+    const status = document.getElementById('makeup-status-filter').value;
+    const studentId = document.getElementById('makeup-student-filter').value;
+    const startDate = document.getElementById('makeup-start-date').value;
+    const endDate = document.getElementById('makeup-end-date').value;
+    
+    try {
+        let url = '/makeup';
+        const params = new URLSearchParams();
+        if (status) params.append('status', status);
+        if (studentId) params.append('student_id', studentId);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        
+        if (params.toString()) {
+            url += '?' + params.toString();
+        }
+        
+        const lessons = await api(url);
+        renderMakeupLessonsTable(lessons);
+    } catch (error) {
+        document.getElementById('makeup-lessons-container').innerHTML = 
+            `<p class="info-text error">Error: ${error.message}</p>`;
+    }
+});
+
+document.getElementById('new-makeup-btn')?.addEventListener('click', () => {
+    showMakeupLessonForm();
+});
+
+function renderMakeupLessonsTable(lessons) {
+    const container = document.getElementById('makeup-lessons-container');
+    
+    if (lessons.length === 0) {
+        container.innerHTML = '<p class="info-text">No make-up lessons found</p>';
+        return;
+    }
+    
+    let html = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Class</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    lessons.forEach(lesson => {
+        const statusClass = lesson.status === 'completed' ? 'present' : lesson.status === 'cancelled' ? 'absent' : 'partial';
+        html += `
+            <tr>
+                <td>${escapeHtml(lesson.student_name)}</td>
+                <td>${escapeHtml(lesson.class_name)}</td>
+                <td>${new Date(lesson.scheduled_date + 'T00:00:00').toLocaleDateString()}</td>
+                <td>${lesson.scheduled_time || 'N/A'}</td>
+                <td>${escapeHtml(lesson.reason) || '-'}</td>
+                <td><span class="status ${statusClass}">${lesson.status}</span></td>
+                <td class="action-buttons">
+                    ${lesson.status === 'scheduled' ? `
+                        <button class="btn btn-small btn-primary" onclick="editMakeupLesson(${lesson.id})">Edit</button>
+                        <button class="btn btn-small btn-success" onclick="completeMakeupLesson(${lesson.id})">Complete</button>
+                        <button class="btn btn-small btn-danger" onclick="cancelMakeupLesson(${lesson.id})">Cancel</button>
+                    ` : `
+                        <button class="btn btn-small btn-primary" onclick="editMakeupLesson(${lesson.id})">Edit</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteMakeupLesson(${lesson.id})">Delete</button>
+                    `}
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
+
+async function editMakeupLesson(id) {
+    try {
+        const lesson = await api(`/makeup/${id}`);
+        
+        const content = `
+            <form id="edit-makeup-lesson-form">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select id="edit-makeup-student" required class="form-control">
+                        ${students.map(s => `<option value="${s.id}" ${s.id === lesson.student_id ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Class *</label>
+                    <select id="edit-makeup-class" required class="form-control">
+                        ${classes.map(c => `<option value="${c.id}" ${c.id === lesson.class_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Scheduled Date *</label>
+                    <input type="date" id="edit-makeup-date" value="${lesson.scheduled_date}" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Scheduled Time</label>
+                    <input type="time" id="edit-makeup-time" value="${lesson.scheduled_time || ''}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Reason</label>
+                    <textarea id="edit-makeup-reason" rows="2" class="form-control">${escapeHtml(lesson.reason || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="edit-makeup-notes" rows="2" class="form-control">${escapeHtml(lesson.notes || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="edit-makeup-status" class="form-control">
+                        <option value="scheduled" ${lesson.status === 'scheduled' ? 'selected' : ''}>Scheduled</option>
+                        <option value="completed" ${lesson.status === 'completed' ? 'selected' : ''}>Completed</option>
+                        <option value="cancelled" ${lesson.status === 'cancelled' ? 'selected' : ''}>Cancelled</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary">Update Make-up Lesson</button>
+            </form>
+        `;
+        
+        showModal('Edit Make-up Lesson', content);
+        
+        document.getElementById('edit-makeup-lesson-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                student_id: document.getElementById('edit-makeup-student').value,
+                class_id: document.getElementById('edit-makeup-class').value,
+                scheduled_date: document.getElementById('edit-makeup-date').value,
+                scheduled_time: document.getElementById('edit-makeup-time').value,
+                reason: document.getElementById('edit-makeup-reason').value,
+                notes: document.getElementById('edit-makeup-notes').value,
+                status: document.getElementById('edit-makeup-status').value
+            };
+            
+            try {
+                await api(`/makeup/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+                
+                closeModal();
+                document.getElementById('filter-makeup-btn').click();
+                alert('Make-up lesson updated successfully!');
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+    } catch (error) {
+        alert('Error loading makeup lesson: ' + error.message);
+    }
+}
+
+async function deleteMakeupLesson(id) {
+    if (!confirm('Are you sure you want to delete this make-up lesson?')) return;
+    
+    try {
+        await api(`/makeup/${id}`, { method: 'DELETE' });
+        document.getElementById('filter-makeup-btn').click();
+        alert('Make-up lesson deleted successfully!');
+    } catch (error) {
+        alert('Error: ' + error.message);
     }
 }
 
@@ -1507,6 +1958,12 @@ async function completeMakeupLesson(id) {
         });
         
         loadMakeupLessons();
+        // Refresh makeup page if we're on it
+        const makeupPage = document.getElementById('makeup-page');
+        if (makeupPage && makeupPage.classList.contains('active')) {
+            const filterBtn = document.getElementById('filter-makeup-btn');
+            if (filterBtn) filterBtn.click();
+        }
     } catch (error) {
         alert('Error: ' + error.message);
     }
@@ -1522,6 +1979,12 @@ async function cancelMakeupLesson(id) {
         });
         
         loadMakeupLessons();
+        // Refresh makeup page if we're on it
+        const makeupPage = document.getElementById('makeup-page');
+        if (makeupPage && makeupPage.classList.contains('active')) {
+            const filterBtn = document.getElementById('filter-makeup-btn');
+            if (filterBtn) filterBtn.click();
+        }
     } catch (error) {
         alert('Error: ' + error.message);
     }
@@ -1550,6 +2013,8 @@ navigateToPage = function(page) {
             option.textContent = c.name;
             classFilter.appendChild(option);
         });
+    } else if (page === 'makeup') {
+        loadMakeupPage();
     } else if (page === 'database') {
         // Database page loaded on demand
     } else if (page === 'profile') {

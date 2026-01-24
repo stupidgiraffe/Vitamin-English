@@ -46,6 +46,7 @@
                 <button class="nav-item" data-page="attendance">Attendance</button>
                 <button class="nav-item" data-page="reports">Lesson Reports</button>
                 <button class="nav-item" data-page="students-profile">Students</button>
+                <button class="nav-item" data-page="makeup">Make-up Lessons</button>
                 <button class="nav-item" data-page="database">Database</button>
                 <button class="nav-item" data-page="admin">Admin</button>
             </div>
@@ -201,22 +202,90 @@
                 <div id="students-profile-list" class="students-grid"></div>
             </div>
 
+            <!-- Make-up Lessons Page -->
+            <div id="makeup-page" class="page">
+                <h2>Make-up Lessons</h2>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Status:</label>
+                        <select id="makeup-status-filter" class="form-control">
+                            <option value="">All Status</option>
+                            <option value="scheduled">Scheduled</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Student:</label>
+                        <select id="makeup-student-filter" class="form-control">
+                            <option value="">All Students</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Start Date:</label>
+                        <input type="date" id="makeup-start-date" class="form-control">
+                    </div>
+                    <div class="control-group">
+                        <label>End Date:</label>
+                        <input type="date" id="makeup-end-date" class="form-control">
+                    </div>
+                    <button id="filter-makeup-btn" class="btn btn-primary">Filter</button>
+                    <button id="new-makeup-btn" class="btn btn-success">+ Schedule Make-up Lesson</button>
+                </div>
+
+                <div id="makeup-lessons-container" class="data-table">
+                    <p class="info-text">Click "Filter" to load make-up lessons or use filters to search</p>
+                </div>
+            </div>
+
             <!-- Database Viewer Page -->
             <div id="database-page" class="page">
                 <h2>Database Viewer</h2>
+                
                 <div class="controls">
+                    <div class="control-group">
+                        <label>Search:</label>
+                        <input type="text" id="db-search-input" class="form-control" placeholder="Search across all records...">
+                    </div>
+                    <div class="control-group">
+                        <label>Type:</label>
+                        <select id="db-search-type" class="form-control">
+                            <option value="">All Types</option>
+                            <option value="students">Students</option>
+                            <option value="teachers">Teachers</option>
+                            <option value="classes">Classes</option>
+                            <option value="attendance">Attendance</option>
+                            <option value="reports">Reports</option>
+                            <option value="makeup_lessons">Make-up Lessons</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Start Date:</label>
+                        <input type="date" id="db-search-start-date" class="form-control">
+                    </div>
+                    <div class="control-group">
+                        <label>End Date:</label>
+                        <input type="date" id="db-search-end-date" class="form-control">
+                    </div>
+                    <button id="db-search-btn" class="btn btn-primary">Search</button>
+                </div>
+
+                <div class="controls" style="margin-top: 10px;">
                     <select id="db-table-select" class="form-control">
                         <option value="students">Students</option>
                         <option value="classes">Classes</option>
                         <option value="attendance">Attendance</option>
                         <option value="lesson_reports">Lesson Reports</option>
+                        <option value="makeup_lessons">Make-up Lessons</option>
                         <option value="users">Users</option>
                     </select>
                     <button id="db-load-btn" class="btn btn-primary">Load Data</button>
                     <button id="db-export-btn" class="btn btn-secondary">Export CSV</button>
                 </div>
+
                 <div id="db-viewer-container" class="db-viewer">
-                    <p class="info-text">Select a table and click Load Data</p>
+                    <p class="info-text">Use search above or select a table and click Load Data</p>
                 </div>
             </div>
 
