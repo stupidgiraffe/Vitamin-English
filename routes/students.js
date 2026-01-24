@@ -64,23 +64,23 @@ router.get('/:id/details', (req, res) => {
             return res.status(404).json({ error: 'Student not found' });
         }
         
-        // Get attendance records (last 30 days)
+        // Get attendance records (last 60 days)
         const attendance = db.prepare(`
             SELECT date, status, notes 
             FROM attendance 
             WHERE student_id = ? 
             ORDER BY date DESC 
-            LIMIT 30
+            LIMIT 60
         `).all(req.params.id);
         
-        // Get lesson reports for the student's class (last 10)
+        // Get lesson reports for the student's class (last 20)
         const reports = db.prepare(`
             SELECT lr.*, u.full_name as teacher_name 
             FROM lesson_reports lr 
             LEFT JOIN users u ON lr.teacher_id = u.id 
             WHERE lr.class_id = ? 
             ORDER BY lr.date DESC 
-            LIMIT 10
+            LIMIT 20
         `).all(student.class_id);
         
         // Calculate attendance stats
@@ -94,11 +94,22 @@ router.get('/:id/details', (req, res) => {
             WHERE student_id = ?
         `).get(req.params.id);
         
+        // Get makeup lessons for this student
+        const makeupLessons = db.prepare(`
+            SELECT ml.*, c.name as class_name 
+            FROM makeup_lessons ml 
+            LEFT JOIN classes c ON ml.class_id = c.id 
+            WHERE ml.student_id = ? 
+            ORDER BY ml.scheduled_date DESC 
+            LIMIT 10
+        `).all(req.params.id);
+        
         res.json({
             student,
             attendance,
             reports,
-            stats
+            stats,
+            makeupLessons
         });
     } catch (error) {
         console.error('Error fetching student details:', error);
@@ -109,16 +120,34 @@ router.get('/:id/details', (req, res) => {
 // Create a new student
 router.post('/', (req, res) => {
     try {
-        const { name, class_id, student_type, color_code, notes } = req.body;
+        const { 
+            name, class_id, student_type, color_code, notes,
+            email, phone, parent_name, parent_phone, parent_email, enrollment_date 
+        } = req.body;
         
         if (!name) {
             return res.status(400).json({ error: 'Name is required' });
         }
         
         const result = db.prepare(`
-            INSERT INTO students (name, class_id, student_type, color_code, notes) 
-            VALUES (?, ?, ?, ?, ?)
-        `).run(name, class_id || null, student_type || 'regular', color_code || '', notes || '');
+            INSERT INTO students (
+                name, class_id, student_type, color_code, notes,
+                email, phone, parent_name, parent_phone, parent_email, enrollment_date
+            ) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            name, 
+            class_id || null, 
+            student_type || 'regular', 
+            color_code || '', 
+            notes || '',
+            email || '',
+            phone || '',
+            parent_name || '',
+            parent_phone || '',
+            parent_email || '',
+            enrollment_date || new Date().toISOString().split('T')[0]
+        );
         
         const student = db.prepare('SELECT * FROM students WHERE id = ?').get(result.lastInsertRowid);
         res.status(201).json(student);
@@ -131,11 +160,15 @@ router.post('/', (req, res) => {
 // Update a student
 router.put('/:id', (req, res) => {
     try {
-        const { name, class_id, student_type, color_code, notes, active } = req.body;
+        const { 
+            name, class_id, student_type, color_code, notes, active,
+            email, phone, parent_name, parent_phone, parent_email, enrollment_date
+        } = req.body;
         
         db.prepare(`
             UPDATE students 
-            SET name = ?, class_id = ?, student_type = ?, color_code = ?, notes = ?, active = ?
+            SET name = ?, class_id = ?, student_type = ?, color_code = ?, notes = ?, active = ?,
+                email = ?, phone = ?, parent_name = ?, parent_phone = ?, parent_email = ?, enrollment_date = ?
             WHERE id = ?
         `).run(
             name, 
@@ -144,6 +177,12 @@ router.put('/:id', (req, res) => {
             color_code || '', 
             notes || '', 
             active !== undefined ? active : 1,
+            email || '',
+            phone || '',
+            parent_name || '',
+            parent_phone || '',
+            parent_email || '',
+            enrollment_date || '',
             req.params.id
         );
         

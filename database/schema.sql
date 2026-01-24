@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS students (
     color_code TEXT DEFAULT '',
     active INTEGER DEFAULT 1,
     notes TEXT,
+    email TEXT,
+    phone TEXT,
+    parent_name TEXT,
+    parent_phone TEXT,
+    parent_email TEXT,
+    enrollment_date TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (class_id) REFERENCES classes(id)
 );

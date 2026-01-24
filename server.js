@@ -9,14 +9,31 @@ const db = require('./database/init');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Security headers middleware
+app.use((req, res, next) => {
+    // Prevent clickjacking
+    res.setHeader('X-Frame-Options', 'DENY');
+    // Prevent MIME type sniffing
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    // Enable XSS protection
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    // Referrer policy
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    // Content Security Policy
+    if (process.env.NODE_ENV === 'production') {
+        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    next();
+});
+
 // Middleware
 const corsOptions = {
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000', // Specific origin for dev, configurable for production
     credentials: true
 };
 app.use(cors(corsOptions));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json({ limit: '2mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
 app.use(express.static('public'));
 
 // Request logging middleware
@@ -33,7 +50,8 @@ app.use(session({
     cookie: { 
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production'
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
     }
 }));
 

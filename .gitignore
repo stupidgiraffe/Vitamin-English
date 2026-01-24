@@ -5,3 +5,8 @@ npm-debug.log*
 .env
 database/school.db
 sessions/
+screenshots/
+/tmp
+*.swp
+*.swo
+.vercel

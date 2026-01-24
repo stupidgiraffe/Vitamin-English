@@ -6,11 +6,14 @@ A beautiful, modern web application for managing student attendance and teacher 
 
 - 📊 **Digital Attendance Tracking** - Replace paper sheets with an intuitive spreadsheet-like interface
 - 📝 **Lesson Reports** - Complete digital forms for tracking lesson details, vocabulary, mistakes, and homework
-- 👥 **Student Management** - Add, edit, and organize students with color-coding support
+- 👥 **Enhanced Student Profiles** - Comprehensive student information including contact details, parent info, attendance history, and makeup lessons
 - 📚 **Class Management** - Manage classes, teachers, and schedules
-- 📈 **Dashboard** - Quick overview of today's classes and recent activity
+- 🔄 **Make-up Lessons Management** - Dedicated section for scheduling and tracking makeup lessons
+- 🔍 **Advanced Database Search** - Cross-reference search across students, teachers, classes, attendance, and reports
+- 📈 **Dashboard** - Quick overview of today's classes, makeup lessons, and recent activity
 - 💾 **Data Export** - Export attendance and reports to CSV/Excel
-- 🔐 **Secure Authentication** - Password-protected access for staff members
+- 🔐 **Secure Authentication** - Password-protected access with production-grade security headers
+- 🛡️ **Production-Ready** - Security headers, input validation, error handling, and deployment configs
 
 ## Technology Stack
 
@@ -90,10 +93,49 @@ A beautiful, modern web application for managing student attendance and teacher 
 
 1. Navigate to the **Admin** page
 2. Use the tabs to manage:
-   - **Students**: Add, edit, or delete students; assign to classes
+   - **Students**: Add, edit, or delete students with comprehensive information:
+     - Basic info (name, class, type)
+     - Contact information (email, phone)
+     - Parent/guardian information (name, phone, email)
+     - Enrollment date
+     - Notes
    - **Classes**: Add, edit, or delete classes; assign teachers
-   - **Teachers**: View and manage teacher information
+   - **Teachers**: Add, edit, or delete teacher accounts
 3. All changes are immediately saved to the database
+
+### Student Profiles
+
+1. Navigate to the **Students** page
+2. Search for students by name or filter by class
+3. Click on a student card to view detailed profile including:
+   - Contact and parent information
+   - Attendance statistics and history
+   - Recent class reports
+   - Scheduled makeup lessons
+4. Edit student information directly from the profile view
+
+### Make-up Lessons
+
+1. Navigate to the **Make-up Lessons** page
+2. View all scheduled, completed, and cancelled makeup lessons
+3. Filter by:
+   - Status (scheduled, completed, cancelled)
+   - Student name
+   - Date range
+4. Schedule new makeup lessons with student, class, date, time, and reason
+5. Edit, complete, or cancel existing makeup lessons
+6. All makeup lessons are linked to student profiles
+
+### Database Viewer & Search
+
+1. Navigate to the **Database** page
+2. Use the table selector to view data from different tables
+3. **Advanced Search**:
+   - Enter search terms to find records across all tables
+   - Filter by type (students, teachers, classes, attendance, reports, makeup lessons)
+   - Apply date range filters for time-sensitive data
+   - Results are grouped by type with counts
+4. Export any table or search results to CSV
 
 ## Project Structure
 
@@ -201,14 +243,76 @@ To restore:
 ### Important: Before deploying to production
 
 1. **Change default passwords** - Update or remove the sample users
-2. **Set a strong session secret** - Use the `SESSION_SECRET` environment variable
+2. **Set a strong session secret** - Use the `SESSION_SECRET` environment variable (minimum 32 characters)
 3. **Configure HTTPS** - Use a reverse proxy like nginx or deploy on platforms with automatic HTTPS
 4. **Set proper file permissions** - Restrict access to `database/school.db`
 5. **Regular backups** - Set up automated database backups
+6. **Update CORS origin** - Set `CORS_ORIGIN` to your production domain
 
-### Deploy to Railway (Recommended)
+### Deploy to Vercel (Recommended for New Deployments)
+
+Vercel provides seamless deployment with automatic HTTPS, zero-config, and excellent performance.
+
+#### Quick Deploy to Vercel
+
+1. **Install Vercel CLI** (optional):
+   ```bash
+   npm install -g vercel
+   ```
+
+2. **Fork this repository** to your GitHub account
+
+3. **Deploy via Vercel Dashboard**:
+   - Go to [vercel.com](https://vercel.com) and sign in with GitHub
+   - Click "Add New Project"
+   - Import your forked repository
+   - Vercel will automatically detect the Node.js configuration
+   - Click "Deploy"
+
+4. **Or deploy via CLI**:
+   ```bash
+   vercel
+   ```
+   Follow the prompts to link your project
+
+5. **Set environment variables** in Vercel dashboard (Settings → Environment Variables):
+   ```
+   SESSION_SECRET=your-strong-random-secret-key-min-32-chars
+   NODE_ENV=production
+   CORS_ORIGIN=https://your-app.vercel.app
+   ```
+
+6. **Important: Database Persistence on Vercel**
+   
+   ⚠️ **Note**: Vercel's serverless functions are stateless, so SQLite database changes won't persist between deployments. For Vercel deployment, you should either:
+   
+   **Option A: Use Vercel Postgres (Recommended for Production)**
+   - Add Vercel Postgres to your project
+   - Update the database connection to use PostgreSQL instead of SQLite
+   - This provides a persistent, production-grade database
+   
+   **Option B: Keep using Railway for Production Database**
+   - Keep your existing Railway deployment as the production instance (as requested)
+   - Use Vercel deployment as a preview/staging environment
+   - Both can run simultaneously
+
+7. **Access your app**:
+   - Vercel provides a URL like `your-app.vercel.app`
+   - Custom domains can be configured in project settings
+   - The health check endpoint will be available at `/health`
+
+#### Custom Domain Setup (Vercel)
+
+1. Go to Project Settings → Domains
+2. Add your custom domain (e.g., `school.yourdomain.com`)
+3. Configure DNS records as instructed by Vercel
+4. SSL certificate is automatically provisioned
+
+### Deploy to Railway (Current Production - Leave As-Is)
 
 Railway provides a simple one-click deployment with automatic HTTPS and persistent storage.
+
+**Note**: As requested, your existing Railway deployment should remain untouched as a preview for stakeholders.
 
 #### Quick Deploy
 
@@ -226,6 +330,7 @@ Railway provides a simple one-click deployment with automatic HTTPS and persiste
    ```
    SESSION_SECRET=your-strong-random-secret-key
    NODE_ENV=production
+   CORS_ORIGIN=https://your-app.up.railway.app
    ```
 
 5. **Access your app**:
@@ -264,6 +369,19 @@ Basic deployment steps:
 2. Run `npm install --production`
 3. Set environment variables (see `.env.example`)
 4. Run `npm start`
+
+### Post-Deployment Checklist
+
+After deploying to any platform:
+
+- [ ] Verify health endpoint works: `https://your-domain.com/health`
+- [ ] Test login with default credentials
+- [ ] **Immediately change default passwords** for admin and teacher accounts
+- [ ] Test all major features (attendance, reports, students, database search, makeup lessons)
+- [ ] Set up automated database backups
+- [ ] Configure monitoring/alerting
+- [ ] Test mobile responsiveness
+- [ ] Update CORS_ORIGIN to match your production domain
 
 ## Troubleshooting
 
