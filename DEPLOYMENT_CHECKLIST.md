@@ -12,12 +12,21 @@
 
 ### 1. Database Migration (Existing Installations Only)
 
-For existing databases, run the migration:
+For existing databases, run the migration **ONLY ONCE**:
 ```bash
 sqlite3 database/school.db < database/migrations/001_add_student_contact_fields.sql
 ```
 
-**Note**: Fresh installations already have the updated schema.
+**Important Notes:**
+- Only run this migration once. Running it multiple times will cause errors.
+- If migration fails (e.g., columns already exist), it's safe to skip.
+- Fresh installations already have the updated schema and don't need this migration.
+
+To verify if migration is needed:
+```bash
+sqlite3 database/school.db "PRAGMA table_info(students);" | grep email
+```
+If this returns a result, the migration has already been applied.
 
 ### 2. Deploy Code
 
@@ -94,10 +103,11 @@ If issues occur:
 3. Restart server
 4. If database migration was applied, create backup first then manually remove columns if needed
 
-## Known Issues
+## Known Issues & Considerations
 
-- Rate limiting not implemented on new endpoints (security consideration for production)
-- Large request size limit (10MB) - may want to reduce
+- **Rate Limiting**: Not implemented on new search endpoints. For high-traffic production environments, consider adding rate limiting middleware (e.g., `express-rate-limit`)
+- **Database Migration**: The migration script (001_add_student_contact_fields.sql) will fail if run multiple times. Only run once per database. For fresh installations, no migration is needed.
+- **Request Size Limit**: Set to 2MB, which should be sufficient for typical use cases
 
 ## Support
 

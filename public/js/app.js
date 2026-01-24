@@ -1841,11 +1841,11 @@ async function loadMakeupLessons() {
         lessons.forEach(lesson => {
             html += `
                 <div class="makeup-lesson-item">
-                    <h4>${lesson.student_name}</h4>
+                    <h4>${escapeHtml(lesson.student_name)}</h4>
                     <div class="lesson-info">📅 ${new Date(lesson.scheduled_date + 'T00:00:00').toLocaleDateString()}</div>
-                    <div class="lesson-info">🏫 ${lesson.class_name}</div>
-                    ${lesson.scheduled_time ? `<div class="lesson-info">🕐 ${lesson.scheduled_time}</div>` : ''}
-                    ${lesson.reason ? `<div class="lesson-info">📝 ${lesson.reason}</div>` : ''}
+                    <div class="lesson-info">🏫 ${escapeHtml(lesson.class_name)}</div>
+                    ${lesson.scheduled_time ? `<div class="lesson-info">🕐 ${escapeHtml(lesson.scheduled_time)}</div>` : ''}
+                    ${lesson.reason ? `<div class="lesson-info">📝 ${escapeHtml(lesson.reason)}</div>` : ''}
                     <div class="lesson-actions">
                         <button class="btn btn-small btn-success" onclick="completeMakeupLesson(${lesson.id})">Complete</button>
                         <button class="btn btn-small btn-danger" onclick="cancelMakeupLesson(${lesson.id})">Cancel</button>

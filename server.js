@@ -32,8 +32,8 @@ const corsOptions = {
     credentials: true
 };
 app.use(cors(corsOptions));
-app.use(bodyParser.json({ limit: '10mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
+app.use(bodyParser.json({ limit: '2mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
 app.use(express.static('public'));
 
 // Request logging middleware
