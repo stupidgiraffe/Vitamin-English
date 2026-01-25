@@ -27,6 +27,22 @@ app.use((req, res, next) => {
     next();
 });
 
+// Ensure cookies are sent in responses (for Vercel serverless environment)
+app.use((req, res, next) => {
+    if (process.env.NODE_ENV === 'production') {
+        res.header('Access-Control-Allow-Credentials', 'true');
+        // Use configured CORS origin or default to same origin
+        const allowedOrigin = process.env.CORS_ORIGIN;
+        if (allowedOrigin && allowedOrigin !== 'true') {
+            res.header('Access-Control-Allow-Origin', allowedOrigin);
+        } else if (req.headers.origin) {
+            // In development or when CORS_ORIGIN is 'true', allow request origin
+            res.header('Access-Control-Allow-Origin', req.headers.origin);
+        }
+    }
+    next();
+});
+
 // Middleware
 // CORS configuration - allow all origins for now, but can be restricted via environment variable
 const corsOptions = {
@@ -51,12 +67,16 @@ const sessionConfig = {
     secret: process.env.SESSION_SECRET || 'vitamin-english-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
+    name: 'vitamin_session', // Explicit cookie name
     cookie: { 
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
-    }
+        sameSite: 'lax', // Use 'lax' for Vercel serverless environment compatibility
+        path: '/',
+        domain: process.env.COOKIE_DOMAIN || undefined // Allow override via env var
+    },
+    proxy: process.env.NODE_ENV === 'production' // Trust proxy in production (Vercel)
 };
 
 // Use PostgreSQL session store in production (Vercel)
@@ -72,6 +92,21 @@ if (process.env.DATABASE_URL) {
 }
 
 app.use(session(sessionConfig));
+
+// Session debugging middleware (conditional on DEBUG_SESSIONS env var)
+if (process.env.DEBUG_SESSIONS === 'true') {
+    app.use((req, res, next) => {
+        console.log('📍 Session Debug:', {
+            path: req.path,
+            method: req.method,
+            sessionID: req.sessionID,
+            hasSession: !!req.session,
+            userId: req.session?.userId,
+            cookieHeader: req.headers.cookie ? 'present' : 'missing'
+        });
+        next();
+    });
+}
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {
