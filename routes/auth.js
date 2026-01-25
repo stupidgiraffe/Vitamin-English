@@ -3,23 +3,34 @@ const bcrypt = require('bcrypt');
 const router = express.Router();
 const pool = require('../database/init');
 
+// Default admin credentials for debug endpoints
+const DEFAULT_ADMIN_PASSWORD = 'admin123';
+
 // Login
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
+    
+    console.log(`🔐 Login attempt for username: ${username}`);
     
     try {
         const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         const user = result.rows[0];
         
         if (!user) {
+            console.log(`❌ User not found: ${username}`);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+        
+        console.log(`✅ User found: ${username} (ID: ${user.id}, Role: ${user.role})`);
         
         const validPassword = bcrypt.compareSync(password, user.password_hash);
         
         if (!validPassword) {
+            console.log(`❌ Password mismatch for user: ${username}`);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+        
+        console.log(`✅ Login successful for user: ${username}`);
         
         req.session.userId = user.id;
         req.session.username = user.username;
@@ -33,7 +44,7 @@ router.post('/login', async (req, res) => {
             role: user.role
         });
     } catch (error) {
-        console.error('Login error:', error);
+        console.error('❌ Login error:', error);
         res.status(500).json({ error: 'Login failed' });
     }
 });
@@ -308,6 +319,69 @@ router.delete('/teachers/:id', async (req, res) => {
     } catch (error) {
         console.error('Error deleting teacher:', error);
         res.status(500).json({ error: 'Failed to delete teacher' });
+    }
+});
+
+// Debug endpoint - Check if default users exist (remove in production)
+// Note: This endpoint is restricted to development/staging environments
+// WARNING: Not rate-limited - intended for debugging only, not for production use
+router.get('/debug/users', async (req, res) => {
+    // Restrict to non-production environments
+    if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEBUG_ENDPOINTS) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    
+    try {
+        const result = await pool.query('SELECT id, username, full_name, role, created_at FROM users ORDER BY id');
+        const users = result.rows;
+        
+        res.json({
+            count: users.length,
+            users: users,
+            message: users.length === 0 ? 'No users found - initialization may have failed' : 'Users found'
+        });
+    } catch (error) {
+        console.error('Debug users error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Emergency endpoint - Manually create admin user (remove after fixing)
+// Note: This endpoint is restricted to development/staging environments
+// WARNING: Not rate-limited - intended for debugging only, not for production use
+router.post('/debug/create-admin', async (req, res) => {
+    // Restrict to non-production environments
+    if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEBUG_ENDPOINTS) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    
+    try {
+        // Check if admin exists
+        const check = await pool.query('SELECT * FROM users WHERE username = $1', ['admin']);
+        
+        if (check.rows.length > 0) {
+            // Admin exists - delete and recreate
+            await pool.query('DELETE FROM users WHERE username = $1', ['admin']);
+        }
+        
+        // Create admin with correct password
+        const adminHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
+        const result = await pool.query(
+            'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, full_name, role',
+            ['admin', adminHash, 'Admin User', 'admin']
+        );
+        
+        // Test the password immediately
+        const testPassword = bcrypt.compareSync(DEFAULT_ADMIN_PASSWORD, adminHash);
+        
+        res.json({
+            message: 'Admin user created successfully',
+            user: result.rows[0],
+            passwordTest: testPassword ? 'Password hash verified ✅' : 'Password hash FAILED ❌'
+        });
+    } catch (error) {
+        console.error('Create admin error:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
