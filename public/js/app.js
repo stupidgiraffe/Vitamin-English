@@ -2278,7 +2278,10 @@ const originalShowModal = showModal;
 showModal = function(title, content) {
     originalShowModal(title, content);
     // Initialize date pickers after modal content is loaded
-    setTimeout(() => {
-        initializeDateTimePickers();
-    }, 100);
+    // Use requestAnimationFrame for reliable DOM ready detection
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            initializeDateTimePickers();
+        });
+    });
 };

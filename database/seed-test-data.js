@@ -46,9 +46,11 @@ async function seedTestData() {
         
         for (let i = 0; i < studentNames.length; i++) {
             const classId = createdClasses[i % createdClasses.length].id;
+            // Generate valid phone number with proper padding
+            const phoneNumber = `555-${String(1000 + i).slice(-4)}`;
             await pool.query(
                 'INSERT INTO students (name, class_id, parent_name, parent_phone, active) VALUES ($1, $2, $3, $4, true)',
-                [studentNames[i], classId, `Parent of ${studentNames[i].split(' ')[0]}`, `555-010${i.toString().padStart(2, '0')}`]
+                [studentNames[i], classId, `Parent of ${studentNames[i].split(' ')[0]}`, phoneNumber]
             );
         }
         console.log(`✅ Created ${studentNames.length} students`);
