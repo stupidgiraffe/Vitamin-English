@@ -31,9 +31,13 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
     if (process.env.NODE_ENV === 'production') {
         res.header('Access-Control-Allow-Credentials', 'true');
-        const origin = req.headers.origin;
-        if (origin) {
-            res.header('Access-Control-Allow-Origin', origin);
+        // Use configured CORS origin or default to same origin
+        const allowedOrigin = process.env.CORS_ORIGIN;
+        if (allowedOrigin && allowedOrigin !== 'true') {
+            res.header('Access-Control-Allow-Origin', allowedOrigin);
+        } else if (req.headers.origin) {
+            // In development or when CORS_ORIGIN is 'true', allow request origin
+            res.header('Access-Control-Allow-Origin', req.headers.origin);
         }
     }
     next();
@@ -68,7 +72,7 @@ const sessionConfig = {
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: process.env.NODE_ENV === 'production' ? 'lax' : 'lax', // Changed from 'strict' to 'lax' for Vercel compatibility
+        sameSite: 'lax', // Use 'lax' for Vercel serverless environment compatibility
         path: '/',
         domain: process.env.COOKIE_DOMAIN || undefined // Allow override via env var
     },
