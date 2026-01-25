@@ -62,7 +62,18 @@ router.get('/:id/students', async (req, res) => {
 
 // Helper function for random colors
 function getRandomColor() {
-    const colors = ['#4285f4', '#ea4335', '#fbbc04', '#34a853', '#ff6d00', '#46bdc6'];
+    const colors = [
+        '#4285f4', // Google Blue
+        '#ea4335', // Google Red
+        '#fbbc04', // Google Yellow
+        '#34a853', // Google Green
+        '#ff6d00', // Orange
+        '#46bdc6', // Teal
+        '#9c27b0', // Purple
+        '#e91e63', // Pink
+        '#00bcd4', // Cyan
+        '#8bc34a'  // Light Green
+    ];
     return colors[Math.floor(Math.random() * colors.length)];
 }
 

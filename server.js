@@ -7,6 +7,7 @@ const fs = require('fs');
 const pool = require('./database/init');
 const { initializeDatabase } = require('./database/init-postgres');
 const { seedTestData } = require('./database/seed-test-data');
+const { sanitizeInput } = require('./middleware/sanitize');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -53,6 +54,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(bodyParser.json({ limit: '2mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
+app.use(sanitizeInput); // Input sanitization
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Request logging middleware
@@ -127,6 +129,7 @@ const reportRoutes = require('./routes/reports');
 const databaseRoutes = require('./routes/database');
 const makeupRoutes = require('./routes/makeup');
 const pdfRoutes = require('./routes/pdf');
+const adminRoutes = require('./routes/admin');
 
 // Initialize database with default users
 // Note: Errors are caught and logged but don't stop the server
@@ -152,6 +155,7 @@ app.use('/api/reports', requireAuth, reportRoutes);
 app.use('/api/database', requireAuth, databaseRoutes);
 app.use('/api/makeup', requireAuth, makeupRoutes);
 app.use('/api/pdf', requireAuth, pdfRoutes);
+app.use('/api/admin', requireAuth, adminRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
