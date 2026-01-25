@@ -48,8 +48,9 @@ router.post('/student-attendance/:studentId', checkR2Config, async (req, res) =>
         // Generate PDF
         const pdfBuffer = await generateStudentAttendancePDF(student, attendanceRecords);
         
-        // Upload to R2
-        const fileName = `student_attendance_${student.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+        // Upload to R2 - sanitize filename
+        const sanitizedName = student.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName = `student_attendance_${sanitizedName}_${new Date().toISOString().split('T')[0]}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             type: 'student_attendance',
             studentId: studentId.toString(),
@@ -138,8 +139,9 @@ router.post('/class-attendance/:classId', checkR2Config, async (req, res) => {
         // Generate PDF
         const pdfBuffer = await generateClassAttendancePDF(classData, students, attendanceRecords, date);
         
-        // Upload to R2
-        const fileName = `class_attendance_${classData.name.replace(/\s+/g, '_')}_${date}.pdf`;
+        // Upload to R2 - sanitize filename
+        const sanitizedClassName = classData.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName = `class_attendance_${sanitizedClassName}_${date}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             type: 'class_attendance',
             classId: classId.toString(),
@@ -215,8 +217,9 @@ router.post('/lesson-report/:reportId', checkR2Config, async (req, res) => {
         // Generate PDF
         const pdfBuffer = await generateLessonReportPDF(report, classData);
         
-        // Upload to R2
-        const fileName = `lesson_report_${report.class_name.replace(/\s+/g, '_')}_${report.date}.pdf`;
+        // Upload to R2 - sanitize filename
+        const sanitizedClassName = report.class_name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName = `lesson_report_${sanitizedClassName}_${report.date}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             type: 'lesson_report',
             reportId: reportId.toString(),

@@ -23,7 +23,7 @@ const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'vitamin-english-pdfs';
 async function uploadPDF(pdfBuffer, fileName, metadata = {}) {
     try {
         // Generate a unique key with timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const timestamp = Date.now(); // Use Unix timestamp for better sorting
         const key = `pdfs/${timestamp}_${fileName}`;
         
         const command = new PutObjectCommand({
@@ -39,13 +39,11 @@ async function uploadPDF(pdfBuffer, fileName, metadata = {}) {
         
         await r2Client.send(command);
         
-        // Construct the public URL (if bucket is public) or generate signed URL
-        const publicUrl = `${process.env.R2_ENDPOINT}/${BUCKET_NAME}/${key}`;
-        
+        // Return key only, not a public URL (use signed URLs for security)
         return {
             success: true,
             key: key,
-            url: publicUrl,
+            url: '', // Placeholder - use getDownloadUrl() for actual access
             fileName: fileName,
             size: pdfBuffer.length
         };

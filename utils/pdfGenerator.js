@@ -13,7 +13,7 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
             const doc = new PDFDocument({ margin: 50 });
             const buffers = [];
             
-            doc.on('data', buffers.push.bind(buffers));
+            doc.on('data', (chunk) => buffers.push(chunk));
             doc.on('end', () => {
                 const pdfBuffer = Buffer.concat(buffers);
                 resolve(pdfBuffer);
@@ -160,7 +160,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
             const doc = new PDFDocument({ margin: 50, size: 'A4', layout: 'landscape' });
             const buffers = [];
             
-            doc.on('data', buffers.push.bind(buffers));
+            doc.on('data', (chunk) => buffers.push(chunk));
             doc.on('end', () => {
                 const pdfBuffer = Buffer.concat(buffers);
                 resolve(pdfBuffer);
@@ -281,7 +281,7 @@ async function generateLessonReportPDF(reportData, classData) {
             const doc = new PDFDocument({ margin: 50 });
             const buffers = [];
             
-            doc.on('data', buffers.push.bind(buffers));
+            doc.on('data', (chunk) => buffers.push(chunk));
             doc.on('end', () => {
                 const pdfBuffer = Buffer.concat(buffers);
                 resolve(pdfBuffer);
