@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database/init');
+const pool = require('../database/init');
 
 // Get lesson reports
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const { classId, teacherId, startDate, endDate } = req.query;
         
@@ -15,30 +15,36 @@ router.get('/', (req, res) => {
             WHERE 1=1
         `;
         const params = [];
+        let paramIndex = 1;
         
         if (classId) {
-            query += ' AND r.class_id = ?';
+            query += ` AND r.class_id = $${paramIndex}`;
             params.push(classId);
+            paramIndex++;
         }
         
         if (teacherId) {
-            query += ' AND r.teacher_id = ?';
+            query += ` AND r.teacher_id = $${paramIndex}`;
             params.push(teacherId);
+            paramIndex++;
         }
         
         if (startDate) {
-            query += ' AND r.date >= ?';
+            query += ` AND r.date >= $${paramIndex}`;
             params.push(startDate);
+            paramIndex++;
         }
         
         if (endDate) {
-            query += ' AND r.date <= ?';
+            query += ` AND r.date <= $${paramIndex}`;
             params.push(endDate);
+            paramIndex++;
         }
         
         query += ' ORDER BY r.date DESC';
         
-        const reports = db.prepare(query).all(...params);
+        const result = await pool.query(query, params);
+        const reports = result.rows;
         res.json(reports);
     } catch (error) {
         console.error('Error fetching reports:', error);
@@ -47,15 +53,16 @@ router.get('/', (req, res) => {
 });
 
 // Get a single report
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
-        const report = db.prepare(`
+        const result = await pool.query(`
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
             FROM lesson_reports r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id
-            WHERE r.id = ?
-        `).get(req.params.id);
+            WHERE r.id = $1
+        `, [req.params.id]);
+        const report = result.rows[0];
         
         if (!report) {
             return res.status(404).json({ error: 'Report not found' });
@@ -69,15 +76,16 @@ router.get('/:id', (req, res) => {
 });
 
 // Get report by class and date
-router.get('/by-date/:classId/:date', (req, res) => {
+router.get('/by-date/:classId/:date', async (req, res) => {
     try {
-        const report = db.prepare(`
+        const result = await pool.query(`
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
             FROM lesson_reports r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id
-            WHERE r.class_id = ? AND r.date = ?
-        `).get(req.params.classId, req.params.date);
+            WHERE r.class_id = $1 AND r.date = $2
+        `, [req.params.classId, req.params.date]);
+        const report = result.rows[0];
         
         res.json(report || null);
     } catch (error) {
@@ -87,7 +95,7 @@ router.get('/by-date/:classId/:date', (req, res) => {
 });
 
 // Create a new report
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
         
@@ -96,21 +104,24 @@ router.post('/', (req, res) => {
         }
         
         // Check if report already exists
-        const existing = db.prepare(`
+        const existingResult = await pool.query(`
             SELECT id FROM lesson_reports 
-            WHERE class_id = ? AND date = ?
-        `).get(class_id, date);
+            WHERE class_id = $1 AND date = $2
+        `, [class_id, date]);
+        const existing = existingResult.rows[0];
         
         if (existing) {
             return res.status(400).json({ error: 'Report for this class and date already exists' });
         }
         
-        const result = db.prepare(`
+        const result = await pool.query(`
             INSERT INTO lesson_reports (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(class_id, teacher_id, date, target_topic || '', vocabulary || '', mistakes || '', strengths || '', comments || '');
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
+        `, [class_id, teacher_id, date, target_topic || '', vocabulary || '', mistakes || '', strengths || '', comments || '']);
         
-        const report = db.prepare('SELECT * FROM lesson_reports WHERE id = ?').get(result.lastInsertRowid);
+        const reportResult = await pool.query('SELECT * FROM lesson_reports WHERE id = $1', [result.rows[0].id]);
+        const report = reportResult.rows[0];
         res.status(201).json(report);
     } catch (error) {
         console.error('Error creating report:', error);
@@ -119,15 +130,15 @@ router.post('/', (req, res) => {
 });
 
 // Update a report
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
         const { teacher_id, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
         
-        db.prepare(`
+        await pool.query(`
             UPDATE lesson_reports 
-            SET teacher_id = ?, target_topic = ?, vocabulary = ?, mistakes = ?, strengths = ?, comments = ?
-            WHERE id = ?
-        `).run(
+            SET teacher_id = $1, target_topic = $2, vocabulary = $3, mistakes = $4, strengths = $5, comments = $6
+            WHERE id = $7
+        `, [
             teacher_id,
             target_topic || '',
             vocabulary || '',
@@ -135,9 +146,10 @@ router.put('/:id', (req, res) => {
             strengths || '',
             comments || '',
             req.params.id
-        );
+        ]);
         
-        const report = db.prepare('SELECT * FROM lesson_reports WHERE id = ?').get(req.params.id);
+        const result = await pool.query('SELECT * FROM lesson_reports WHERE id = $1', [req.params.id]);
+        const report = result.rows[0];
         res.json(report);
     } catch (error) {
         console.error('Error updating report:', error);
@@ -146,9 +158,9 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete a report
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        db.prepare('DELETE FROM lesson_reports WHERE id = ?').run(req.params.id);
+        await pool.query('DELETE FROM lesson_reports WHERE id = $1', [req.params.id]);
         res.json({ message: 'Report deleted successfully' });
     } catch (error) {
         console.error('Error deleting report:', error);

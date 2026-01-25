@@ -4,7 +4,7 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const db = require('./database/init');
+const pool = require('./database/init');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -73,6 +73,7 @@ const attendanceRoutes = require('./routes/attendance');
 const reportRoutes = require('./routes/reports');
 const databaseRoutes = require('./routes/database');
 const makeupRoutes = require('./routes/makeup');
+const pdfRoutes = require('./routes/pdf');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -82,6 +83,7 @@ app.use('/api/attendance', requireAuth, attendanceRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
 app.use('/api/database', requireAuth, databaseRoutes);
 app.use('/api/makeup', requireAuth, makeupRoutes);
+app.use('/api/pdf', requireAuth, pdfRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -89,26 +91,29 @@ app.get('/health', (req, res) => {
 });
 
 // Debug endpoint to check database status
-app.get('/api/debug/database-status', requireAuth, (req, res) => {
+app.get('/api/debug/database-status', requireAuth, async (req, res) => {
     try {
-        const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get();
-        const classCount = db.prepare('SELECT COUNT(*) as count FROM classes').get();
-        const studentCount = db.prepare('SELECT COUNT(*) as count FROM students').get();
-        const attendanceCount = db.prepare('SELECT COUNT(*) as count FROM attendance').get();
-        const reportCount = db.prepare('SELECT COUNT(*) as count FROM lesson_reports').get();
+        const userCount = await pool.query('SELECT COUNT(*) as count FROM users');
+        const classCount = await pool.query('SELECT COUNT(*) as count FROM classes');
+        const studentCount = await pool.query('SELECT COUNT(*) as count FROM students');
+        const attendanceCount = await pool.query('SELECT COUNT(*) as count FROM attendance');
+        const reportCount = await pool.query('SELECT COUNT(*) as count FROM lesson_reports');
+        
+        const users = await pool.query('SELECT username, full_name, role FROM users');
+        const classes = await pool.query('SELECT id, name, teacher_id FROM classes');
         
         res.json({
             status: 'ok',
             counts: {
-                users: userCount.count,
-                classes: classCount.count,
-                students: studentCount.count,
-                attendance: attendanceCount.count,
-                reports: reportCount.count
+                users: parseInt(userCount.rows[0].count),
+                classes: parseInt(classCount.rows[0].count),
+                students: parseInt(studentCount.rows[0].count),
+                attendance: parseInt(attendanceCount.rows[0].count),
+                reports: parseInt(reportCount.rows[0].count)
             },
             sampleData: {
-                users: db.prepare('SELECT username, full_name, role FROM users').all(),
-                classes: db.prepare('SELECT id, name, teacher_id FROM classes').all()
+                users: users.rows,
+                classes: classes.rows
             }
         });
     } catch (error) {
@@ -120,32 +125,8 @@ app.get('/api/debug/database-status', requireAuth, (req, res) => {
     }
 });
 
-// TESTING ONLY - Database reset endpoint (admin only)
-app.post('/api/reset-database', requireAuth, (req, res) => {
-    if (req.session.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin only' });
-    }
-    
-    try {
-        const dbPath = path.join(__dirname, 'database', 'school.db');
-        
-        // Delete existing database
-        if (fs.existsSync(dbPath)) {
-            fs.unlinkSync(dbPath);
-            console.log('🗑️  Old database deleted');
-        }
-        
-        // Reinitialize
-        delete require.cache[require.resolve('./database/init')];
-        require('./database/init');
-        
-        console.log('✅ Database reset complete');
-        res.json({ message: 'Database reset successfully' });
-    } catch (error) {
-        console.error('Error resetting database:', error);
-        res.status(500).json({ error: error.message });
-    }
-});
+// Note: Database reset not available for PostgreSQL
+// To reset the database, use: DROP DATABASE and CREATE DATABASE on Neon/PostgreSQL
 
 // Root route
 app.get('/', (req, res) => {
@@ -165,12 +146,15 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Something went wrong!', message: err.message });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log('Login credentials:');
-    console.log('  Admin - username: admin, password: admin123');
-    console.log('  Teacher - username: sarah, password: teacher123');
-});
+// Start server (only in development, Vercel handles this in production)
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+        console.log('Login credentials:');
+        console.log('  Admin - username: admin, password: admin123');
+        console.log('  Teacher - username: sarah, password: teacher123');
+    });
+}
 
+// Export for Vercel serverless
 module.exports = app;
