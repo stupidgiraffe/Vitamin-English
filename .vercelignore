@@ -1,7 +1,7 @@
 node_modules
-.git
-.DS_Store
+.env
+*.db
+*.sqlite
 *.log
-database/school.db
-/tmp
-screenshots
+.DS_Store
+database/init-sqlite.js.bak

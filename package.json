@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "vercel-build": "echo 'No build step required'"
   },
   "keywords": ["attendance", "education", "school-management"],
   "author": "Vitamin English School",
@@ -19,7 +20,8 @@
     "@aws-sdk/client-s3": "^3.478.0",
     "@aws-sdk/s3-request-presigner": "^3.478.0",
     "body-parser": "^1.20.3",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "connect-pg-simple": "^9.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

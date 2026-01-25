@@ -36,7 +36,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(bodyParser.json({ limit: '2mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -44,8 +44,10 @@ app.use((req, res, next) => {
     next();
 });
 
-// Session configuration
-app.use(session({
+// Session configuration with PostgreSQL store for Vercel
+const pgSession = require('connect-pg-simple')(session);
+
+const sessionConfig = {
     secret: process.env.SESSION_SECRET || 'vitamin-english-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
@@ -55,7 +57,21 @@ app.use(session({
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
     }
-}));
+};
+
+// Use PostgreSQL session store in production (Vercel)
+if (process.env.DATABASE_URL) {
+    sessionConfig.store = new pgSession({
+        pool: pool,
+        tableName: 'session',
+        createTableIfMissing: true
+    });
+    console.log('✅ Using PostgreSQL session store');
+} else {
+    console.log('⚠️  Using memory session store (development only)');
+}
+
+app.use(session(sessionConfig));
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {
