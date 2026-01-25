@@ -62,7 +62,7 @@ const sessionConfig = {
 // Use PostgreSQL session store in production (Vercel)
 if (process.env.DATABASE_URL) {
     sessionConfig.store = new pgSession({
-        pool: pool,
+        pool,
         tableName: 'session',
         createTableIfMissing: true
     });
