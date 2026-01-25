@@ -1,17 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database/init');
+const pool = require('../database/init');
 
 // Get all classes
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
-        const classes = db.prepare(`
+        const result = await pool.query(`
             SELECT c.*, u.full_name as teacher_name 
             FROM classes c 
             LEFT JOIN users u ON c.teacher_id = u.id 
-            WHERE c.active = 1
+            WHERE c.active = true
             ORDER BY c.name
-        `).all();
+        `);
+        const classes = result.rows;
         
         res.json(classes);
     } catch (error) {
@@ -21,14 +22,15 @@ router.get('/', (req, res) => {
 });
 
 // Get a single class
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
     try {
-        const classInfo = db.prepare(`
+        const result = await pool.query(`
             SELECT c.*, u.full_name as teacher_name 
             FROM classes c 
             LEFT JOIN users u ON c.teacher_id = u.id 
-            WHERE c.id = ?
-        `).get(req.params.id);
+            WHERE c.id = $1
+        `, [req.params.id]);
+        const classInfo = result.rows[0];
         
         if (!classInfo) {
             return res.status(404).json({ error: 'Class not found' });
@@ -42,13 +44,14 @@ router.get('/:id', (req, res) => {
 });
 
 // Get students in a class
-router.get('/:id/students', (req, res) => {
+router.get('/:id/students', async (req, res) => {
     try {
-        const students = db.prepare(`
+        const result = await pool.query(`
             SELECT * FROM students 
-            WHERE class_id = ? AND active = 1
+            WHERE class_id = $1 AND active = true
             ORDER BY student_type, name
-        `).all(req.params.id);
+        `, [req.params.id]);
+        const students = result.rows;
         
         res.json(students);
     } catch (error) {
@@ -58,7 +61,7 @@ router.get('/:id/students', (req, res) => {
 });
 
 // Create a new class
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { name, teacher_id, schedule, color } = req.body;
         
@@ -66,12 +69,14 @@ router.post('/', (req, res) => {
             return res.status(400).json({ error: 'Name is required' });
         }
         
-        const result = db.prepare(`
+        const result = await pool.query(`
             INSERT INTO classes (name, teacher_id, schedule, color) 
-            VALUES (?, ?, ?, ?)
-        `).run(name, teacher_id || null, schedule || '', color || '#4A90E2');
+            VALUES ($1, $2, $3, $4)
+            RETURNING id
+        `, [name, teacher_id || null, schedule || '', color || '#4A90E2']);
         
-        const classInfo = db.prepare('SELECT * FROM classes WHERE id = ?').get(result.lastInsertRowid);
+        const classResult = await pool.query('SELECT * FROM classes WHERE id = $1', [result.rows[0].id]);
+        const classInfo = classResult.rows[0];
         res.status(201).json(classInfo);
     } catch (error) {
         console.error('Error creating class:', error);
@@ -80,24 +85,25 @@ router.post('/', (req, res) => {
 });
 
 // Update a class
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
         const { name, teacher_id, schedule, color, active } = req.body;
         
-        db.prepare(`
+        await pool.query(`
             UPDATE classes 
-            SET name = ?, teacher_id = ?, schedule = ?, color = ?, active = ?
-            WHERE id = ?
-        `).run(
+            SET name = $1, teacher_id = $2, schedule = $3, color = $4, active = $5
+            WHERE id = $6
+        `, [
             name, 
             teacher_id || null, 
             schedule || '', 
             color || '#4A90E2',
-            active !== undefined ? active : 1,
+            active !== undefined ? active : true,
             req.params.id
-        );
+        ]);
         
-        const classInfo = db.prepare('SELECT * FROM classes WHERE id = ?').get(req.params.id);
+        const result = await pool.query('SELECT * FROM classes WHERE id = $1', [req.params.id]);
+        const classInfo = result.rows[0];
         res.json(classInfo);
     } catch (error) {
         console.error('Error updating class:', error);
@@ -106,9 +112,9 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete a class (soft delete)
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        db.prepare('UPDATE classes SET active = 0 WHERE id = ?').run(req.params.id);
+        await pool.query('UPDATE classes SET active = false WHERE id = $1', [req.params.id]);
         res.json({ message: 'Class deleted successfully' });
     } catch (error) {
         console.error('Error deleting class:', error);

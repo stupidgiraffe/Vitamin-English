@@ -1,14 +1,15 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const router = express.Router();
-const db = require('../database/init');
+const pool = require('../database/init');
 
 // Login
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     
     try {
-        const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
         
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
@@ -58,7 +59,7 @@ router.get('/me', (req, res) => {
 });
 
 // Change password
-router.post('/change-password', (req, res) => {
+router.post('/change-password', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -66,7 +67,8 @@ router.post('/change-password', (req, res) => {
     const { currentPassword, newPassword } = req.body;
     
     try {
-        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+        const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.userId]);
+        const user = result.rows[0];
         
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -79,7 +81,7 @@ router.post('/change-password', (req, res) => {
         }
         
         const newPasswordHash = bcrypt.hashSync(newPassword, 10);
-        db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newPasswordHash, req.session.userId);
+        await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newPasswordHash, req.session.userId]);
         
         res.json({ message: 'Password updated successfully' });
     } catch (error) {
@@ -89,7 +91,7 @@ router.post('/change-password', (req, res) => {
 });
 
 // Change username
-router.post('/change-username', (req, res) => {
+router.post('/change-username', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -97,7 +99,8 @@ router.post('/change-username', (req, res) => {
     const { newUsername, password } = req.body;
     
     try {
-        const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.userId);
+        const result = await pool.query('SELECT * FROM users WHERE id = $1', [req.session.userId]);
+        const user = result.rows[0];
         
         if (!user) {
             return res.status(404).json({ error: 'User not found' });
@@ -110,13 +113,14 @@ router.post('/change-username', (req, res) => {
         }
         
         // Check if username already exists
-        const existingUser = db.prepare('SELECT * FROM users WHERE username = ? AND id != ?').get(newUsername, req.session.userId);
+        const existingResult = await pool.query('SELECT * FROM users WHERE username = $1 AND id != $2', [newUsername, req.session.userId]);
+        const existingUser = existingResult.rows[0];
         
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
         
-        db.prepare('UPDATE users SET username = ? WHERE id = ?').run(newUsername, req.session.userId);
+        await pool.query('UPDATE users SET username = $1 WHERE id = $2', [newUsername, req.session.userId]);
         
         // Update session
         req.session.username = newUsername;
@@ -129,7 +133,7 @@ router.post('/change-username', (req, res) => {
 });
 
 // Get all teachers (for admin)
-router.get('/teachers', (req, res) => {
+router.get('/teachers', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -139,7 +143,8 @@ router.get('/teachers', (req, res) => {
     }
     
     try {
-        const teachers = db.prepare('SELECT id, username, full_name, role FROM users WHERE role = ? ORDER BY full_name').all('teacher');
+        const result = await pool.query('SELECT id, username, full_name, role FROM users WHERE role = $1 ORDER BY full_name', ['teacher']);
+        const teachers = result.rows;
         res.json(teachers);
     } catch (error) {
         console.error('Error fetching teachers:', error);
@@ -148,7 +153,7 @@ router.get('/teachers', (req, res) => {
 });
 
 // Get a single teacher by ID (admin only)
-router.get('/teachers/:id', (req, res) => {
+router.get('/teachers/:id', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -163,7 +168,8 @@ router.get('/teachers/:id', (req, res) => {
             return res.status(400).json({ error: 'Invalid teacher ID' });
         }
         
-        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ? AND role = ?').get(teacherId, 'teacher');
+        const result = await pool.query('SELECT id, username, full_name, role FROM users WHERE id = $1 AND role = $2', [teacherId, 'teacher']);
+        const teacher = result.rows[0];
         
         if (!teacher) {
             return res.status(404).json({ error: 'Teacher not found' });
@@ -177,7 +183,7 @@ router.get('/teachers/:id', (req, res) => {
 });
 
 // Create a new teacher (admin only)
-router.post('/teachers', (req, res) => {
+router.post('/teachers', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -194,18 +200,17 @@ router.post('/teachers', (req, res) => {
     
     try {
         // Check if username already exists
-        const existingUser = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+        const existingResult = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+        const existingUser = existingResult.rows[0];
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
         
         const passwordHash = bcrypt.hashSync(password, 10);
-        const result = db.prepare('INSERT INTO users (username, password_hash, full_name, role) VALUES (?, ?, ?, ?)').run(
-            username, passwordHash, full_name, 'teacher'
-        );
+        const result = await pool.query('INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id', [username, passwordHash, full_name, 'teacher']);
         
         res.status(201).json({ 
-            id: result.lastInsertRowid, 
+            id: result.rows[0].id, 
             username, 
             full_name, 
             role: 'teacher' 
@@ -217,7 +222,7 @@ router.post('/teachers', (req, res) => {
 });
 
 // Update a teacher (admin only)
-router.put('/teachers/:id', (req, res) => {
+router.put('/teachers/:id', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -239,7 +244,8 @@ router.put('/teachers/:id', (req, res) => {
         }
         
         // Check if username already exists for another user
-        const existingUser = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, teacherId);
+        const existingResult = await pool.query('SELECT id FROM users WHERE username = $1 AND id != $2', [username, teacherId]);
+        const existingUser = existingResult.rows[0];
         if (existingUser) {
             return res.status(400).json({ error: 'Username already exists' });
         }
@@ -247,17 +253,14 @@ router.put('/teachers/:id', (req, res) => {
         if (password) {
             // Update with new password
             const passwordHash = bcrypt.hashSync(password, 10);
-            db.prepare('UPDATE users SET username = ?, full_name = ?, password_hash = ? WHERE id = ? AND role = ?').run(
-                username, full_name, passwordHash, teacherId, 'teacher'
-            );
+            await pool.query('UPDATE users SET username = $1, full_name = $2, password_hash = $3 WHERE id = $4 AND role = $5', [username, full_name, passwordHash, teacherId, 'teacher']);
         } else {
             // Update without changing password
-            db.prepare('UPDATE users SET username = ?, full_name = ? WHERE id = ? AND role = ?').run(
-                username, full_name, teacherId, 'teacher'
-            );
+            await pool.query('UPDATE users SET username = $1, full_name = $2 WHERE id = $3 AND role = $4', [username, full_name, teacherId, 'teacher']);
         }
         
-        const teacher = db.prepare('SELECT id, username, full_name, role FROM users WHERE id = ? AND role = ?').get(teacherId, 'teacher');
+        const result = await pool.query('SELECT id, username, full_name, role FROM users WHERE id = $1 AND role = $2', [teacherId, 'teacher']);
+        const teacher = result.rows[0];
         
         if (!teacher) {
             return res.status(404).json({ error: 'Teacher not found' });
@@ -271,7 +274,7 @@ router.put('/teachers/:id', (req, res) => {
 });
 
 // Delete a teacher (admin only)
-router.delete('/teachers/:id', (req, res) => {
+router.delete('/teachers/:id', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -287,16 +290,17 @@ router.delete('/teachers/:id', (req, res) => {
         }
         
         // Check if teacher has any classes
-        const classes = db.prepare('SELECT COUNT(*) as count FROM classes WHERE teacher_id = ?').get(teacherId);
-        if (classes.count > 0) {
+        const classesResult = await pool.query('SELECT COUNT(*) as count FROM classes WHERE teacher_id = $1', [teacherId]);
+        const classes = classesResult.rows[0];
+        if (parseInt(classes.count) > 0) {
             return res.status(400).json({ 
                 error: `Cannot delete teacher with ${classes.count} assigned class(es). Please reassign or delete their classes first.` 
             });
         }
         
-        const result = db.prepare('DELETE FROM users WHERE id = ? AND role = ?').run(teacherId, 'teacher');
+        const result = await pool.query('DELETE FROM users WHERE id = $1 AND role = $2', [teacherId, 'teacher']);
         
-        if (result.changes === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Teacher not found' });
         }
         

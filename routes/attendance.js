@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database/init');
+const pool = require('../database/init');
 
 // Get attendance records
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const { classId, studentId, startDate, endDate } = req.query;
         
@@ -15,30 +15,36 @@ router.get('/', (req, res) => {
             WHERE 1=1
         `;
         const params = [];
+        let paramIndex = 1;
         
         if (classId) {
-            query += ' AND a.class_id = ?';
+            query += ` AND a.class_id = $${paramIndex}`;
             params.push(classId);
+            paramIndex++;
         }
         
         if (studentId) {
-            query += ' AND a.student_id = ?';
+            query += ` AND a.student_id = $${paramIndex}`;
             params.push(studentId);
+            paramIndex++;
         }
         
         if (startDate) {
-            query += ' AND a.date >= ?';
+            query += ` AND a.date >= $${paramIndex}`;
             params.push(startDate);
+            paramIndex++;
         }
         
         if (endDate) {
-            query += ' AND a.date <= ?';
+            query += ` AND a.date <= $${paramIndex}`;
             params.push(endDate);
+            paramIndex++;
         }
         
         query += ' ORDER BY a.date, s.student_type, s.name';
         
-        const records = db.prepare(query).all(...params);
+        const result = await pool.query(query, params);
+        const records = result.rows;
         res.json(records);
     } catch (error) {
         console.error('Error fetching attendance:', error);
@@ -47,7 +53,7 @@ router.get('/', (req, res) => {
 });
 
 // Get attendance for a specific class and date range (matrix view)
-router.get('/matrix', (req, res) => {
+router.get('/matrix', async (req, res) => {
     try {
         const { classId, startDate, endDate } = req.query;
         
@@ -56,38 +62,52 @@ router.get('/matrix', (req, res) => {
         }
         
         // Get students in the class
-        const students = db.prepare(`
+        const studentsResult = await pool.query(`
             SELECT * FROM students 
-            WHERE class_id = ? AND active = 1
+            WHERE class_id = $1 AND active = true
             ORDER BY student_type, name
-        `).all(classId);
+        `, [classId]);
+        const students = studentsResult.rows;
         
         // Get dates
-        let dateQuery = 'SELECT DISTINCT date FROM attendance WHERE class_id = ?';
+        let dateQuery = 'SELECT DISTINCT date FROM attendance WHERE class_id = $1';
         const dateParams = [classId];
+        let paramIndex = 2;
         
         if (startDate) {
-            dateQuery += ' AND date >= ?';
+            dateQuery += ` AND date >= $${paramIndex}`;
             dateParams.push(startDate);
+            paramIndex++;
         }
         
         if (endDate) {
-            dateQuery += ' AND date <= ?';
+            dateQuery += ` AND date <= $${paramIndex}`;
             dateParams.push(endDate);
+            paramIndex++;
         }
         
         dateQuery += ' ORDER BY date';
         
-        const dates = db.prepare(dateQuery).all(...dateParams).map(row => row.date);
+        const datesResult = await pool.query(dateQuery, dateParams);
+        const dates = datesResult.rows.map(row => row.date);
         
         // Get attendance records
-        const attendanceRecords = db.prepare(`
+        let attendanceQuery = `
             SELECT student_id, date, status 
             FROM attendance 
-            WHERE class_id = ?
-            ${startDate ? 'AND date >= ?' : ''}
-            ${endDate ? 'AND date <= ?' : ''}
-        `).all(...dateParams);
+            WHERE class_id = $1
+        `;
+        paramIndex = 2;
+        if (startDate) {
+            attendanceQuery += ` AND date >= $${paramIndex}`;
+            paramIndex++;
+        }
+        if (endDate) {
+            attendanceQuery += ` AND date <= $${paramIndex}`;
+        }
+        
+        const attendanceResult = await pool.query(attendanceQuery, dateParams);
+        const attendanceRecords = attendanceResult.rows;
         
         // Create attendance matrix
         const attendanceMap = {};
@@ -108,7 +128,7 @@ router.get('/matrix', (req, res) => {
 });
 
 // Create or update attendance record
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { student_id, class_id, date, status, notes } = req.body;
         
@@ -117,27 +137,31 @@ router.post('/', (req, res) => {
         }
         
         // Try to update existing record first
-        const existing = db.prepare(`
+        const existingResult = await pool.query(`
             SELECT id FROM attendance 
-            WHERE student_id = ? AND class_id = ? AND date = ?
-        `).get(student_id, class_id, date);
+            WHERE student_id = $1 AND class_id = $2 AND date = $3
+        `, [student_id, class_id, date]);
+        const existing = existingResult.rows[0];
         
         if (existing) {
-            db.prepare(`
+            await pool.query(`
                 UPDATE attendance 
-                SET status = ?, notes = ?
-                WHERE id = ?
-            `).run(status || '', notes || '', existing.id);
+                SET status = $1, notes = $2
+                WHERE id = $3
+            `, [status || '', notes || '', existing.id]);
             
-            const record = db.prepare('SELECT * FROM attendance WHERE id = ?').get(existing.id);
+            const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [existing.id]);
+            const record = recordResult.rows[0];
             res.json(record);
         } else {
-            const result = db.prepare(`
+            const result = await pool.query(`
                 INSERT INTO attendance (student_id, class_id, date, status, notes) 
-                VALUES (?, ?, ?, ?, ?)
-            `).run(student_id, class_id, date, status || '', notes || '');
+                VALUES ($1, $2, $3, $4, $5)
+                RETURNING id
+            `, [student_id, class_id, date, status || '', notes || '']);
             
-            const record = db.prepare('SELECT * FROM attendance WHERE id = ?').get(result.lastInsertRowid);
+            const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [result.rows[0].id]);
+            const record = recordResult.rows[0];
             res.status(201).json(record);
         }
     } catch (error) {
@@ -147,17 +171,18 @@ router.post('/', (req, res) => {
 });
 
 // Update attendance record
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
         const { status, notes } = req.body;
         
-        db.prepare(`
+        await pool.query(`
             UPDATE attendance 
-            SET status = ?, notes = ?
-            WHERE id = ?
-        `).run(status || '', notes || '', req.params.id);
+            SET status = $1, notes = $2
+            WHERE id = $3
+        `, [status || '', notes || '', req.params.id]);
         
-        const record = db.prepare('SELECT * FROM attendance WHERE id = ?').get(req.params.id);
+        const result = await pool.query('SELECT * FROM attendance WHERE id = $1', [req.params.id]);
+        const record = result.rows[0];
         res.json(record);
     } catch (error) {
         console.error('Error updating attendance:', error);
@@ -166,9 +191,9 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete attendance record
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        db.prepare('DELETE FROM attendance WHERE id = ?').run(req.params.id);
+        await pool.query('DELETE FROM attendance WHERE id = $1', [req.params.id]);
         res.json({ message: 'Attendance record deleted successfully' });
     } catch (error) {
         console.error('Error deleting attendance:', error);
@@ -177,7 +202,7 @@ router.delete('/:id', (req, res) => {
 });
 
 // Bulk mark attendance
-router.post('/bulk', (req, res) => {
+router.post('/bulk', async (req, res) => {
     try {
         const { class_id, date, status } = req.body;
         
@@ -186,21 +211,20 @@ router.post('/bulk', (req, res) => {
         }
         
         // Get all students in the class
-        const students = db.prepare(`
+        const studentsResult = await pool.query(`
             SELECT id FROM students 
-            WHERE class_id = ? AND active = 1
-        `).all(class_id);
+            WHERE class_id = $1 AND active = true
+        `, [class_id]);
+        const students = studentsResult.rows;
         
-        const insertStmt = db.prepare(`
-            INSERT INTO attendance (student_id, class_id, date, status) 
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(student_id, class_id, date) 
-            DO UPDATE SET status = ?
-        `);
-        
-        students.forEach(student => {
-            insertStmt.run(student.id, class_id, date, status, status);
-        });
+        for (const student of students) {
+            await pool.query(`
+                INSERT INTO attendance (student_id, class_id, date, status) 
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (student_id, class_id, date) 
+                DO UPDATE SET status = $4
+            `, [student.id, class_id, date, status]);
+        }
         
         res.json({ message: 'Bulk attendance marked successfully' });
     } catch (error) {

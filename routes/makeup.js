@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database/init');
+const pool = require('../database/init');
 
 // Get all makeup lessons
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
     try {
         const { status, studentId } = req.query;
         let query = `
@@ -14,20 +14,24 @@ router.get('/', (req, res) => {
             WHERE 1=1
         `;
         const params = [];
+        let paramIndex = 1;
         
         if (status) {
-            query += ' AND ml.status = ?';
+            query += ` AND ml.status = $${paramIndex}`;
             params.push(status);
+            paramIndex++;
         }
         
         if (studentId) {
-            query += ' AND ml.student_id = ?';
+            query += ` AND ml.student_id = $${paramIndex}`;
             params.push(studentId);
+            paramIndex++;
         }
         
         query += ' ORDER BY ml.scheduled_date DESC, ml.scheduled_time';
         
-        const lessons = db.prepare(query).all(...params);
+        const result = await pool.query(query, params);
+        const lessons = result.rows;
         res.json(lessons);
     } catch (error) {
         console.error('Error fetching makeup lessons:', error);
@@ -36,18 +40,19 @@ router.get('/', (req, res) => {
 });
 
 // Get upcoming makeup lessons
-router.get('/upcoming', (req, res) => {
+router.get('/upcoming', async (req, res) => {
     try {
         const today = new Date().toISOString().split('T')[0];
-        const lessons = db.prepare(`
+        const result = await pool.query(`
             SELECT ml.*, s.name as student_name, c.name as class_name 
             FROM makeup_lessons ml 
             LEFT JOIN students s ON ml.student_id = s.id 
             LEFT JOIN classes c ON ml.class_id = c.id 
-            WHERE ml.scheduled_date >= ? AND ml.status = 'scheduled'
+            WHERE ml.scheduled_date >= $1 AND ml.status = 'scheduled'
             ORDER BY ml.scheduled_date, ml.scheduled_time
             LIMIT 10
-        `).all(today);
+        `, [today]);
+        const lessons = result.rows;
         
         res.json(lessons);
     } catch (error) {
@@ -57,7 +62,7 @@ router.get('/upcoming', (req, res) => {
 });
 
 // Create a new makeup lesson
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
     try {
         const { student_id, class_id, scheduled_date, scheduled_time, reason, notes } = req.body;
         
@@ -65,18 +70,20 @@ router.post('/', (req, res) => {
             return res.status(400).json({ error: 'Student, class, and date are required' });
         }
         
-        const result = db.prepare(`
+        const result = await pool.query(`
             INSERT INTO makeup_lessons (student_id, class_id, scheduled_date, scheduled_time, reason, notes, status) 
-            VALUES (?, ?, ?, ?, ?, ?, 'scheduled')
-        `).run(student_id, class_id, scheduled_date, scheduled_time || '', reason || '', notes || '');
+            VALUES ($1, $2, $3, $4, $5, $6, 'scheduled')
+            RETURNING id
+        `, [student_id, class_id, scheduled_date, scheduled_time || '', reason || '', notes || '']);
         
-        const lesson = db.prepare(`
+        const lessonResult = await pool.query(`
             SELECT ml.*, s.name as student_name, c.name as class_name 
             FROM makeup_lessons ml 
             LEFT JOIN students s ON ml.student_id = s.id 
             LEFT JOIN classes c ON ml.class_id = c.id 
-            WHERE ml.id = ?
-        `).get(result.lastInsertRowid);
+            WHERE ml.id = $1
+        `, [result.rows[0].id]);
+        const lesson = lessonResult.rows[0];
         
         res.status(201).json(lesson);
     } catch (error) {
@@ -86,30 +93,31 @@ router.post('/', (req, res) => {
 });
 
 // Update a makeup lesson
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
     try {
         const { scheduled_date, scheduled_time, reason, status, notes } = req.body;
         
-        db.prepare(`
+        await pool.query(`
             UPDATE makeup_lessons 
-            SET scheduled_date = ?, scheduled_time = ?, reason = ?, status = ?, notes = ?
-            WHERE id = ?
-        `).run(
+            SET scheduled_date = $1, scheduled_time = $2, reason = $3, status = $4, notes = $5
+            WHERE id = $6
+        `, [
             scheduled_date, 
             scheduled_time || '', 
             reason || '', 
             status || 'scheduled',
             notes || '',
             req.params.id
-        );
+        ]);
         
-        const lesson = db.prepare(`
+        const result = await pool.query(`
             SELECT ml.*, s.name as student_name, c.name as class_name 
             FROM makeup_lessons ml 
             LEFT JOIN students s ON ml.student_id = s.id 
             LEFT JOIN classes c ON ml.class_id = c.id 
-            WHERE ml.id = ?
-        `).get(req.params.id);
+            WHERE ml.id = $1
+        `, [req.params.id]);
+        const lesson = result.rows[0];
         
         res.json(lesson);
     } catch (error) {
@@ -119,9 +127,9 @@ router.put('/:id', (req, res) => {
 });
 
 // Delete a makeup lesson
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
     try {
-        db.prepare('DELETE FROM makeup_lessons WHERE id = ?').run(req.params.id);
+        await pool.query('DELETE FROM makeup_lessons WHERE id = $1', [req.params.id]);
         res.json({ message: 'Makeup lesson deleted successfully' });
     } catch (error) {
         console.error('Error deleting makeup lesson:', error);

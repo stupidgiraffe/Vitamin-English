@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../database/init');
+const pool = require('../database/init');
 
 // Get data from a specific table
-router.get('/table/:tableName', (req, res) => {
+router.get('/table/:tableName', async (req, res) => {
     const { tableName } = req.params;
     
     // Whitelist allowed tables
@@ -22,7 +22,7 @@ router.get('/table/:tableName', (req, res) => {
                     SELECT s.*, c.name as class_name 
                     FROM students s 
                     LEFT JOIN classes c ON s.class_id = c.id 
-                    WHERE s.active = 1
+                    WHERE s.active = true
                     ORDER BY s.name
                 `;
                 break;
@@ -31,7 +31,7 @@ router.get('/table/:tableName', (req, res) => {
                     SELECT c.*, u.full_name as teacher_name 
                     FROM classes c 
                     LEFT JOIN users u ON c.teacher_id = u.id 
-                    WHERE c.active = 1
+                    WHERE c.active = true
                     ORDER BY c.name
                 `;
                 break;
@@ -73,7 +73,8 @@ router.get('/table/:tableName', (req, res) => {
                 break;
         }
         
-        const data = db.prepare(query).all();
+        const result = await pool.query(query);
+        const data = result.rows;
         res.json({ table: tableName, data });
     } catch (error) {
         console.error('Database query error:', error);
@@ -82,7 +83,7 @@ router.get('/table/:tableName', (req, res) => {
 });
 
 // Advanced search across all records
-router.get('/search', (req, res) => {
+router.get('/search', async (req, res) => {
     try {
         const { query, type, startDate, endDate } = req.query;
         
@@ -102,40 +103,43 @@ router.get('/search', (req, res) => {
         
         // Search students if type is not specified or is 'students'
         if (!type || type === 'students') {
-            results.students = db.prepare(`
+            const studentsResult = await pool.query(`
                 SELECT s.*, c.name as class_name 
                 FROM students s 
                 LEFT JOIN classes c ON s.class_id = c.id 
-                WHERE s.active = 1 
-                AND (LOWER(s.name) LIKE ? OR LOWER(s.notes) LIKE ? OR LOWER(c.name) LIKE ?)
+                WHERE s.active = true 
+                AND (LOWER(s.name) LIKE $1 OR LOWER(s.notes) LIKE $1 OR LOWER(c.name) LIKE $1)
                 ORDER BY s.name
                 LIMIT 50
-            `).all(searchPattern, searchPattern, searchPattern);
+            `, [searchPattern]);
+            results.students = studentsResult.rows;
         }
         
         // Search teachers if type is not specified or is 'teachers'
         if (!type || type === 'teachers') {
-            results.teachers = db.prepare(`
+            const teachersResult = await pool.query(`
                 SELECT id, username, full_name, role, created_at 
                 FROM users 
                 WHERE role = 'teacher' 
-                AND (LOWER(username) LIKE ? OR LOWER(full_name) LIKE ?)
+                AND (LOWER(username) LIKE $1 OR LOWER(full_name) LIKE $1)
                 ORDER BY full_name
                 LIMIT 50
-            `).all(searchPattern, searchPattern);
+            `, [searchPattern]);
+            results.teachers = teachersResult.rows;
         }
         
         // Search classes if type is not specified or is 'classes'
         if (!type || type === 'classes') {
-            results.classes = db.prepare(`
+            const classesResult = await pool.query(`
                 SELECT c.*, u.full_name as teacher_name 
                 FROM classes c 
                 LEFT JOIN users u ON c.teacher_id = u.id 
-                WHERE c.active = 1 
-                AND (LOWER(c.name) LIKE ? OR LOWER(c.schedule) LIKE ? OR LOWER(u.full_name) LIKE ?)
+                WHERE c.active = true 
+                AND (LOWER(c.name) LIKE $1 OR LOWER(c.schedule) LIKE $1 OR LOWER(u.full_name) LIKE $1)
                 ORDER BY c.name
                 LIMIT 50
-            `).all(searchPattern, searchPattern, searchPattern);
+            `, [searchPattern]);
+            results.classes = classesResult.rows;
         }
         
         // Search attendance records with date filtering
@@ -145,21 +149,25 @@ router.get('/search', (req, res) => {
                 FROM attendance a 
                 LEFT JOIN students s ON a.student_id = s.id 
                 LEFT JOIN classes c ON a.class_id = c.id 
-                WHERE (LOWER(s.name) LIKE ? OR LOWER(c.name) LIKE ?)
+                WHERE (LOWER(s.name) LIKE $1 OR LOWER(c.name) LIKE $1)
             `;
-            const attendanceParams = [searchPattern, searchPattern];
+            const attendanceParams = [searchPattern];
+            let paramIndex = 2;
             
             if (startDate) {
-                attendanceQuery += ' AND a.date >= ?';
+                attendanceQuery += ` AND a.date >= $${paramIndex}`;
                 attendanceParams.push(startDate);
+                paramIndex++;
             }
             if (endDate) {
-                attendanceQuery += ' AND a.date <= ?';
+                attendanceQuery += ` AND a.date <= $${paramIndex}`;
                 attendanceParams.push(endDate);
+                paramIndex++;
             }
             
             attendanceQuery += ' ORDER BY a.date DESC LIMIT 100';
-            results.attendance = db.prepare(attendanceQuery).all(...attendanceParams);
+            const attendanceResult = await pool.query(attendanceQuery, attendanceParams);
+            results.attendance = attendanceResult.rows;
         }
         
         // Search lesson reports with date filtering
@@ -169,23 +177,27 @@ router.get('/search', (req, res) => {
                 FROM lesson_reports lr 
                 LEFT JOIN classes c ON lr.class_id = c.id 
                 LEFT JOIN users u ON lr.teacher_id = u.id 
-                WHERE (LOWER(c.name) LIKE ? OR LOWER(u.full_name) LIKE ? 
-                    OR LOWER(lr.target_topic) LIKE ? OR LOWER(lr.vocabulary) LIKE ? 
-                    OR LOWER(lr.comments) LIKE ?)
+                WHERE (LOWER(c.name) LIKE $1 OR LOWER(u.full_name) LIKE $1 
+                    OR LOWER(lr.target_topic) LIKE $1 OR LOWER(lr.vocabulary) LIKE $1 
+                    OR LOWER(lr.comments) LIKE $1)
             `;
-            const reportsParams = [searchPattern, searchPattern, searchPattern, searchPattern, searchPattern];
+            const reportsParams = [searchPattern];
+            let paramIndex = 2;
             
             if (startDate) {
-                reportsQuery += ' AND lr.date >= ?';
+                reportsQuery += ` AND lr.date >= $${paramIndex}`;
                 reportsParams.push(startDate);
+                paramIndex++;
             }
             if (endDate) {
-                reportsQuery += ' AND lr.date <= ?';
+                reportsQuery += ` AND lr.date <= $${paramIndex}`;
                 reportsParams.push(endDate);
+                paramIndex++;
             }
             
             reportsQuery += ' ORDER BY lr.date DESC LIMIT 50';
-            results.reports = db.prepare(reportsQuery).all(...reportsParams);
+            const reportsResult = await pool.query(reportsQuery, reportsParams);
+            results.reports = reportsResult.rows;
         }
         
         // Search makeup lessons
@@ -195,21 +207,25 @@ router.get('/search', (req, res) => {
                 FROM makeup_lessons ml 
                 LEFT JOIN students s ON ml.student_id = s.id 
                 LEFT JOIN classes c ON ml.class_id = c.id 
-                WHERE (LOWER(s.name) LIKE ? OR LOWER(c.name) LIKE ? OR LOWER(ml.reason) LIKE ?)
+                WHERE (LOWER(s.name) LIKE $1 OR LOWER(c.name) LIKE $1 OR LOWER(ml.reason) LIKE $1)
             `;
-            const makeupParams = [searchPattern, searchPattern, searchPattern];
+            const makeupParams = [searchPattern];
+            let paramIndex = 2;
             
             if (startDate) {
-                makeupQuery += ' AND ml.scheduled_date >= ?';
+                makeupQuery += ` AND ml.scheduled_date >= $${paramIndex}`;
                 makeupParams.push(startDate);
+                paramIndex++;
             }
             if (endDate) {
-                makeupQuery += ' AND ml.scheduled_date <= ?';
+                makeupQuery += ` AND ml.scheduled_date <= $${paramIndex}`;
                 makeupParams.push(endDate);
+                paramIndex++;
             }
             
             makeupQuery += ' ORDER BY ml.scheduled_date DESC LIMIT 50';
-            results.makeup_lessons = db.prepare(makeupQuery).all(...makeupParams);
+            const makeupResult = await pool.query(makeupQuery, makeupParams);
+            results.makeup_lessons = makeupResult.rows;
         }
         
         // Calculate total results
