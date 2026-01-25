@@ -3,6 +3,8 @@ const { Pool } = require('pg');
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: process.env.NODE_ENV === 'production' ? {
+        // rejectUnauthorized: false is required for services like Neon, Supabase, etc.
+        // These services use self-signed certificates or certificates not in Node's CA bundle
         rejectUnauthorized: false
     } : false
 });

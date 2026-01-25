@@ -17,20 +17,24 @@ async function initializeDatabase() {
         console.log('🔄 Initializing database with default users...');
         
         // Create admin user (username: admin, password: admin123)
+        // WARNING: Change this password immediately after first login in production!
         const adminHash = await bcrypt.hash('admin123', 10);
         await pool.query(
             'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
             ['admin', adminHash, 'Admin User', 'admin']
         );
         console.log('✅ Admin user created (username: admin, password: admin123)');
+        console.log('⚠️  WARNING: Change admin password immediately after first login!');
         
         // Create teacher user (username: sarah, password: teacher123)
+        // WARNING: Change this password immediately after first login in production!
         const teacherHash = await bcrypt.hash('teacher123', 10);
         await pool.query(
             'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
             ['sarah', teacherHash, 'Sarah Johnson', 'teacher']
         );
         console.log('✅ Teacher user created (username: sarah, password: teacher123)');
+        console.log('⚠️  WARNING: Change teacher password immediately after first login!');
         
         console.log('✅ Database initialization complete!');
         
