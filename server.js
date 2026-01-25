@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const pool = require('./database/init');
 const { initializeDatabase } = require('./database/init-postgres');
+const { seedTestData } = require('./database/seed-test-data');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -130,7 +131,15 @@ const pdfRoutes = require('./routes/pdf');
 // Initialize database with default users
 // Note: Errors are caught and logged but don't stop the server
 // This allows the app to start even if initialization fails (e.g., DB already has users)
-initializeDatabase().catch(err => {
+initializeDatabase().then(() => {
+    // Seed test data if enabled (useful for first deployment or testing)
+    if (process.env.SEED_TEST_DATA === 'true') {
+        console.log('🌱 SEED_TEST_DATA is enabled, seeding test data...');
+        seedTestData().catch(err => {
+            console.error('Failed to seed test data:', err);
+        });
+    }
+}).catch(err => {
     console.error('Failed to initialize database:', err);
 });
 

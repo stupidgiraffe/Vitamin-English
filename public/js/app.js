@@ -4,6 +4,70 @@ let classes = [];
 let students = [];
 let teachers = [];
 
+// Toast Notification System
+const Toast = {
+    container: null,
+    
+    init() {
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.className = 'toast-container';
+            document.body.appendChild(this.container);
+        }
+    },
+    
+    show(message, type = 'info', title = '', duration = 4000) {
+        this.init();
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icons = {
+            success: '✓',
+            error: '✕',
+            info: 'ℹ'
+        };
+        
+        const titles = {
+            success: title || 'Success',
+            error: title || 'Error',
+            info: title || 'Info'
+        };
+        
+        toast.innerHTML = `
+            <div class="toast-icon">${icons[type]}</div>
+            <div class="toast-content">
+                <div class="toast-title">${titles[type]}</div>
+                <div class="toast-message">${escapeHtml(message)}</div>
+            </div>
+            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+        `;
+        
+        this.container.appendChild(toast);
+        
+        if (duration > 0) {
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+        
+        return toast;
+    },
+    
+    success(message, title) {
+        return this.show(message, 'success', title);
+    },
+    
+    error(message, title) {
+        return this.show(message, 'error', title);
+    },
+    
+    info(message, title) {
+        return this.show(message, 'info', title);
+    }
+};
+
 // HTML escaping helper to prevent XSS
 function escapeHtml(text) {
     const map = {
@@ -18,22 +82,49 @@ function escapeHtml(text) {
 
 // API Helper
 async function api(endpoint, options = {}) {
-    const response = await fetch(`/api${endpoint}`, {
-        ...options,
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        }
-    });
-
-    if (!response.ok) {
-        const defaultError = `Request failed: ${response.status} ${response.statusText}`;
-        const error = await response.json().catch(() => ({ error: defaultError }));
-        throw new Error(error.error || defaultError);
+    // Show loading spinner on button if applicable
+    const button = document.activeElement;
+    if (button && button.tagName === 'BUTTON') {
+        button.classList.add('loading');
     }
+    
+    try {
+        const response = await fetch(`/api${endpoint}`, {
+            ...options,
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
 
-    return response.json();
+        if (!response.ok) {
+            const defaultError = `Request failed: ${response.status} ${response.statusText}`;
+            const error = await response.json().catch(() => ({ error: defaultError }));
+            
+            // Show user-friendly error message with hint if available
+            const errorMessage = error.hint || error.error || defaultError;
+            Toast.error(errorMessage);
+            
+            throw new Error(error.error || defaultError);
+        }
+
+        return response.json();
+    } catch (error) {
+        // Network error or other issues
+        if (!navigator.onLine) {
+            Toast.error('No internet connection', 'Offline');
+        } else if (!error.message.includes('Request failed')) {
+            // Only show toast if we haven't already shown one above
+            Toast.error(error.message);
+        }
+        throw error;
+    } finally {
+        // Remove loading spinner
+        if (button && button.tagName === 'BUTTON') {
+            button.classList.remove('loading');
+        }
+    }
 }
 
 // Authentication

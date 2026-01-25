@@ -60,27 +60,45 @@ router.get('/:id/students', async (req, res) => {
     }
 });
 
+// Helper function for random colors
+function getRandomColor() {
+    const colors = ['#4285f4', '#ea4335', '#fbbc04', '#34a853', '#ff6d00', '#46bdc6'];
+    return colors[Math.floor(Math.random() * colors.length)];
+}
+
 // Create a new class
 router.post('/', async (req, res) => {
     try {
         const { name, teacher_id, schedule, color } = req.body;
         
-        if (!name) {
-            return res.status(400).json({ error: 'Name is required' });
+        // Only validate name
+        if (!name || !name.trim()) {
+            return res.status(400).json({ 
+                error: 'Class name is required',
+                hint: 'Give your class a name (e.g., "Beginners Monday 10am")'
+            });
         }
+        
+        // Smart defaults
+        const finalTeacherId = teacher_id || req.session?.userId || null; // Default to current user
+        const finalSchedule = schedule || ''; // Empty schedule ok
+        const finalColor = color || getRandomColor(); // Auto-assign if not provided
         
         const result = await pool.query(`
             INSERT INTO classes (name, teacher_id, schedule, color) 
             VALUES ($1, $2, $3, $4)
             RETURNING id
-        `, [name, teacher_id || null, schedule || '', color || '#4A90E2']);
+        `, [name.trim(), finalTeacherId, finalSchedule, finalColor]);
         
         const classResult = await pool.query('SELECT * FROM classes WHERE id = $1', [result.rows[0].id]);
         const classInfo = classResult.rows[0];
         res.status(201).json(classInfo);
     } catch (error) {
         console.error('Error creating class:', error);
-        res.status(500).json({ error: 'Failed to create class' });
+        res.status(500).json({ 
+            error: 'Could not create class',
+            hint: 'Please try again or contact support'
+        });
     }
 });
 
