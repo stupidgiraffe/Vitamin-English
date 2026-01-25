@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const pool = require('./database/init');
+const { initializeDatabase } = require('./database/init-postgres');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,6 +75,13 @@ const reportRoutes = require('./routes/reports');
 const databaseRoutes = require('./routes/database');
 const makeupRoutes = require('./routes/makeup');
 const pdfRoutes = require('./routes/pdf');
+
+// Initialize database with default users
+// Note: Errors are caught and logged but don't stop the server
+// This allows the app to start even if initialization fails (e.g., DB already has users)
+initializeDatabase().catch(err => {
+    console.error('Failed to initialize database:', err);
+});
 
 // Use routes
 app.use('/api/auth', authRoutes);
