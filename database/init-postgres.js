@@ -1,6 +1,10 @@
 const bcrypt = require('bcrypt');
 const pool = require('./connection');
 
+// Default user credentials
+const DEFAULT_ADMIN_PASSWORD = 'admin123';
+const DEFAULT_TEACHER_PASSWORD = 'teacher123';
+
 async function initializeDatabase() {
     try {
         console.log('🔍 Checking database initialization status...');
@@ -16,11 +20,11 @@ async function initializeDatabase() {
             const adminCheck = await pool.query('SELECT * FROM users WHERE username = $1', ['admin']);
             if (adminCheck.rows.length > 0) {
                 const adminUser = adminCheck.rows[0];
-                const testPassword = bcrypt.compareSync('admin123', adminUser.password_hash);
+                const testPassword = bcrypt.compareSync(DEFAULT_ADMIN_PASSWORD, adminUser.password_hash);
                 if (!testPassword) {
                     console.log('⚠️  Admin user found but password is incorrect - recreating...');
                     await pool.query('DELETE FROM users WHERE username = $1', ['admin']);
-                    const adminHash = await bcrypt.hash('admin123', 10);
+                    const adminHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
                     await pool.query(
                         'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
                         ['admin', adminHash, 'Admin User', 'admin']
@@ -30,7 +34,7 @@ async function initializeDatabase() {
             } else {
                 // If admin doesn't exist at all, create it
                 console.log('⚠️  Admin user not found - creating...');
-                const adminHash = await bcrypt.hash('admin123', 10);
+                const adminHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
                 await pool.query(
                     'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
                     ['admin', adminHash, 'Admin User', 'admin']
@@ -42,11 +46,11 @@ async function initializeDatabase() {
             const teacherCheck = await pool.query('SELECT * FROM users WHERE username = $1', ['sarah']);
             if (teacherCheck.rows.length > 0) {
                 const teacherUser = teacherCheck.rows[0];
-                const testPassword = bcrypt.compareSync('teacher123', teacherUser.password_hash);
+                const testPassword = bcrypt.compareSync(DEFAULT_TEACHER_PASSWORD, teacherUser.password_hash);
                 if (!testPassword) {
                     console.log('⚠️  Teacher user found but password is incorrect - recreating...');
                     await pool.query('DELETE FROM users WHERE username = $1', ['sarah']);
-                    const teacherHash = await bcrypt.hash('teacher123', 10);
+                    const teacherHash = await bcrypt.hash(DEFAULT_TEACHER_PASSWORD, 10);
                     await pool.query(
                         'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
                         ['sarah', teacherHash, 'Sarah Johnson', 'teacher']
@@ -56,7 +60,7 @@ async function initializeDatabase() {
             } else {
                 // If teacher doesn't exist at all, create it
                 console.log('⚠️  Teacher user not found - creating...');
-                const teacherHash = await bcrypt.hash('teacher123', 10);
+                const teacherHash = await bcrypt.hash(DEFAULT_TEACHER_PASSWORD, 10);
                 await pool.query(
                     'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
                     ['sarah', teacherHash, 'Sarah Johnson', 'teacher']
@@ -70,7 +74,7 @@ async function initializeDatabase() {
         console.log('🔄 Initializing database with default users...');
         
         // Create admin user (username: admin, password: admin123)
-        const adminHash = await bcrypt.hash('admin123', 10);
+        const adminHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
         await pool.query(
             'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
             ['admin', adminHash, 'Admin User', 'admin']
@@ -79,7 +83,7 @@ async function initializeDatabase() {
         console.log('⚠️  WARNING: Change admin password immediately after first login!');
         
         // Create teacher user (username: sarah, password: teacher123)
-        const teacherHash = await bcrypt.hash('teacher123', 10);
+        const teacherHash = await bcrypt.hash(DEFAULT_TEACHER_PASSWORD, 10);
         await pool.query(
             'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4)',
             ['sarah', teacherHash, 'Sarah Johnson', 'teacher']

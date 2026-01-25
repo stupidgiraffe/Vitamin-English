@@ -19,7 +19,6 @@ router.post('/login', async (req, res) => {
         }
         
         console.log(`✅ User found: ${username} (ID: ${user.id}, Role: ${user.role})`);
-        console.log(`   Password hash in DB: ${user.password_hash.substring(0, 20)}...`);
         
         const validPassword = bcrypt.compareSync(password, user.password_hash);
         
@@ -321,7 +320,13 @@ router.delete('/teachers/:id', async (req, res) => {
 });
 
 // Debug endpoint - Check if default users exist (remove in production)
+// Note: This endpoint is restricted to development/staging environments
 router.get('/debug/users', async (req, res) => {
+    // Restrict to non-production environments
+    if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEBUG_ENDPOINTS) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    
     try {
         const result = await pool.query('SELECT id, username, full_name, role, created_at FROM users ORDER BY id');
         const users = result.rows;
@@ -338,7 +343,13 @@ router.get('/debug/users', async (req, res) => {
 });
 
 // Emergency endpoint - Manually create admin user (remove after fixing)
+// Note: This endpoint is restricted to development/staging environments
 router.post('/debug/create-admin', async (req, res) => {
+    // Restrict to non-production environments
+    if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEBUG_ENDPOINTS) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    
     try {
         // Check if admin exists
         const check = await pool.query('SELECT * FROM users WHERE username = $1', ['admin']);
