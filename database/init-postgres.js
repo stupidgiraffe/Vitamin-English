@@ -100,4 +100,54 @@ async function initializeDatabase() {
     }
 }
 
-module.exports = { initializeDatabase };
+async function verifyDatabaseSchema() {
+    try {
+        console.log('🔍 Verifying database schema...');
+        
+        // Check students table can accept NULL values
+        const studentSchema = await pool.query(`
+            SELECT column_name, is_nullable, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'students'
+            ORDER BY ordinal_position
+        `);
+        
+        console.log('Students table schema:');
+        console.table(studentSchema.rows);
+        
+        // Check classes table
+        const classSchema = await pool.query(`
+            SELECT column_name, is_nullable, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'classes'
+            ORDER BY ordinal_position
+        `);
+        
+        console.log('Classes table schema:');
+        console.table(classSchema.rows);
+        
+        // Verify foreign key constraints
+        const constraints = await pool.query(`
+            SELECT tc.constraint_name, tc.table_name, kcu.column_name, 
+                   ccu.table_name AS foreign_table_name,
+                   ccu.column_name AS foreign_column_name 
+            FROM information_schema.table_constraints AS tc 
+            JOIN information_schema.key_column_usage AS kcu
+              ON tc.constraint_name = kcu.constraint_name
+            JOIN information_schema.constraint_column_usage AS ccu
+              ON ccu.constraint_name = tc.constraint_name
+            WHERE tc.constraint_type = 'FOREIGN KEY'
+              AND tc.table_name IN ('students', 'classes', 'attendance')
+        `);
+        
+        console.log('Foreign key constraints:');
+        console.table(constraints.rows);
+        
+        console.log('✅ Schema verification complete');
+        
+    } catch (error) {
+        console.error('❌ Schema verification failed:', error);
+    }
+}
+
+module.exports = { initializeDatabase, verifyDatabaseSchema };

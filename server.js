@@ -5,7 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const pool = require('./database/init');
-const { initializeDatabase } = require('./database/init-postgres');
+const { initializeDatabase, verifyDatabaseSchema } = require('./database/init-postgres');
 const { seedTestData } = require('./database/seed-test-data');
 const { sanitizeInput } = require('./middleware/sanitize');
 
@@ -131,15 +131,39 @@ const makeupRoutes = require('./routes/makeup');
 const pdfRoutes = require('./routes/pdf');
 const adminRoutes = require('./routes/admin');
 
+// Auto-load test data on startup if database is empty
+async function initializeTestData() {
+    try {
+        // Check if database has any classes
+        const classCheck = await pool.query('SELECT COUNT(*) FROM classes WHERE active = true');
+        const classCount = parseInt(classCheck.rows[0].count);
+        
+        if (classCount === 0) {
+            console.log('📊 Database is empty, loading test data...');
+            await seedTestData();
+            console.log('✅ Test data loaded successfully');
+        } else {
+            console.log(`📊 Database has ${classCount} classes, skipping test data load`);
+        }
+    } catch (error) {
+        console.error('❌ Failed to initialize test data:', error);
+        console.error('Stack trace:', error.stack);
+    }
+}
+
 // Initialize database with default users
 // Note: Errors are caught and logged but don't stop the server
 // This allows the app to start even if initialization fails (e.g., DB already has users)
 initializeDatabase().then(() => {
-    // Seed test data if enabled (useful for first deployment or testing)
-    if (process.env.SEED_TEST_DATA === 'true') {
-        console.log('🌱 SEED_TEST_DATA is enabled, seeding test data...');
-        seedTestData().catch(err => {
-            console.error('Failed to seed test data:', err);
+    // Verify database schema
+    if (pool) {
+        verifyDatabaseSchema();
+    }
+    
+    // Auto-load test data if database is empty
+    if (pool) {
+        initializeTestData().catch(err => {
+            console.error('Test data initialization failed:', err);
         });
     }
 }).catch(err => {

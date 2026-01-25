@@ -347,6 +347,93 @@ async function loadDashboard() {
 // Attendance Management
 document.getElementById('load-attendance-btn').addEventListener('click', loadAttendance);
 document.getElementById('export-attendance-btn').addEventListener('click', exportAttendance);
+document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
+
+async function showNewAttendanceModal() {
+    try {
+        // Get list of classes
+        const allClasses = await api('/classes');
+        
+        const classOptions = allClasses
+            .map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+            .join('');
+        
+        const today = new Date().toISOString().split('T')[0];
+        
+        showModal('New Attendance Sheet', `
+            <form id="new-attendance-form">
+                <div class="form-group">
+                    <label for="attendance-class">Class *</label>
+                    <select id="attendance-class" class="form-control" required>
+                        <option value="">Select a class...</option>
+                        ${classOptions}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="attendance-date">Date *</label>
+                    <input type="date" id="attendance-date" class="form-control" value="${today}" required>
+                </div>
+                <div class="form-group">
+                    <label for="attendance-notes">Notes (Optional)</label>
+                    <textarea id="attendance-notes" class="form-control" rows="3"></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Create Attendance Sheet</button>
+            </form>
+        `);
+        
+        document.getElementById('new-attendance-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                const classId = document.getElementById('attendance-class').value;
+                const date = document.getElementById('attendance-date').value;
+                const notes = document.getElementById('attendance-notes').value;
+                
+                if (!classId || !date) {
+                    Toast.error('Please select a class and date');
+                    return;
+                }
+                
+                // Get all students in the class
+                const studentsInClass = await api(`/students?classId=${classId}`);
+                
+                if (studentsInClass.length === 0) {
+                    Toast.error('No students in this class. Add students first.');
+                    return;
+                }
+                
+                // Create attendance record for each student
+                for (const student of studentsInClass) {
+                    await api('/attendance', {
+                        method: 'POST',
+                        body: JSON.stringify({ 
+                            student_id: student.id,
+                            class_id: classId, 
+                            date, 
+                            status: '', // Empty status - to be filled in
+                            notes: notes || ''
+                        })
+                    });
+                }
+                
+                Toast.success(`Attendance sheet created for ${studentsInClass.length} students!`);
+                closeModal();
+                
+                // Reload attendance if the same class is selected
+                const currentClassId = document.getElementById('attendance-class-select').value;
+                if (currentClassId === classId) {
+                    await loadAttendance();
+                }
+            } catch (error) {
+                console.error('Error creating attendance:', error);
+                Toast.error('Failed to create attendance sheet');
+            }
+        });
+    } catch (error) {
+        console.error('Error showing new attendance modal:', error);
+        Toast.error('Failed to load classes');
+    }
+}
 
 async function loadAttendance() {
     const classId = document.getElementById('attendance-class-select').value;
