@@ -6,9 +6,15 @@ function sanitizeInput(req, res, next) {
                 // Trim whitespace
                 req.body[key] = req.body[key].trim();
                 
-                // Remove dangerous characters but preserve Japanese and other unicode
-                // Only remove actual HTML tags
-                req.body[key] = req.body[key].replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+                // Remove all HTML tags while preserving Japanese and unicode characters
+                // Apply twice to handle nested tags and avoid incomplete sanitization
+                let cleaned = req.body[key];
+                let previous;
+                do {
+                    previous = cleaned;
+                    cleaned = cleaned.replace(/<[^>]*>/g, '');
+                } while (cleaned !== previous);
+                req.body[key] = cleaned;
             }
         }
     }
