@@ -324,6 +324,7 @@ router.delete('/teachers/:id', async (req, res) => {
 
 // Debug endpoint - Check if default users exist (remove in production)
 // Note: This endpoint is restricted to development/staging environments
+// WARNING: Not rate-limited - intended for debugging only, not for production use
 router.get('/debug/users', async (req, res) => {
     // Restrict to non-production environments
     if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEBUG_ENDPOINTS) {
@@ -347,6 +348,7 @@ router.get('/debug/users', async (req, res) => {
 
 // Emergency endpoint - Manually create admin user (remove after fixing)
 // Note: This endpoint is restricted to development/staging environments
+// WARNING: Not rate-limited - intended for debugging only, not for production use
 router.post('/debug/create-admin', async (req, res) => {
     // Restrict to non-production environments
     if (process.env.NODE_ENV === 'production' && !process.env.ALLOW_DEBUG_ENDPOINTS) {
