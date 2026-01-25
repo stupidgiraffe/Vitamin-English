@@ -4,6 +4,70 @@ let classes = [];
 let students = [];
 let teachers = [];
 
+// Toast Notification System
+const Toast = {
+    container: null,
+    
+    init() {
+        if (!this.container) {
+            this.container = document.createElement('div');
+            this.container.className = 'toast-container';
+            document.body.appendChild(this.container);
+        }
+    },
+    
+    show(message, type = 'info', title = '', duration = 4000) {
+        this.init();
+        
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        
+        const icons = {
+            success: '✓',
+            error: '✕',
+            info: 'ℹ'
+        };
+        
+        const titles = {
+            success: title || 'Success',
+            error: title || 'Error',
+            info: title || 'Info'
+        };
+        
+        toast.innerHTML = `
+            <div class="toast-icon">${icons[type]}</div>
+            <div class="toast-content">
+                <div class="toast-title">${titles[type]}</div>
+                <div class="toast-message">${escapeHtml(message)}</div>
+            </div>
+            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+        `;
+        
+        this.container.appendChild(toast);
+        
+        if (duration > 0) {
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        }
+        
+        return toast;
+    },
+    
+    success(message, title) {
+        return this.show(message, 'success', title);
+    },
+    
+    error(message, title) {
+        return this.show(message, 'error', title);
+    },
+    
+    info(message, title) {
+        return this.show(message, 'info', title);
+    }
+};
+
 // HTML escaping helper to prevent XSS
 function escapeHtml(text) {
     const map = {
@@ -18,22 +82,49 @@ function escapeHtml(text) {
 
 // API Helper
 async function api(endpoint, options = {}) {
-    const response = await fetch(`/api${endpoint}`, {
-        ...options,
-        credentials: 'include',
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        }
-    });
-
-    if (!response.ok) {
-        const defaultError = `Request failed: ${response.status} ${response.statusText}`;
-        const error = await response.json().catch(() => ({ error: defaultError }));
-        throw new Error(error.error || defaultError);
+    // Show loading spinner on button if applicable
+    const button = document.activeElement;
+    if (button && button.tagName === 'BUTTON') {
+        button.classList.add('loading');
     }
+    
+    try {
+        const response = await fetch(`/api${endpoint}`, {
+            ...options,
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
 
-    return response.json();
+        if (!response.ok) {
+            const defaultError = `Request failed: ${response.status} ${response.statusText}`;
+            const error = await response.json().catch(() => ({ error: defaultError }));
+            
+            // Show user-friendly error message with hint if available
+            const errorMessage = error.hint || error.error || defaultError;
+            Toast.error(errorMessage);
+            
+            throw new Error(error.error || defaultError);
+        }
+
+        return response.json();
+    } catch (error) {
+        // Network error or other issues
+        if (!navigator.onLine) {
+            Toast.error('No internet connection', 'Offline');
+        } else if (!error.message.includes('Request failed')) {
+            // Only show toast if we haven't already shown one above
+            Toast.error(error.message);
+        }
+        throw error;
+    } finally {
+        // Remove loading spinner
+        if (button && button.tagName === 'BUTTON') {
+            button.classList.remove('loading');
+        }
+    }
 }
 
 // Authentication
@@ -146,7 +237,7 @@ async function loadInitialData() {
         populateTeacherSelects();
     } catch (error) {
         console.error('❌ Error loading initial data:', error);
-        alert('Failed to load initial data. Error: ' + error.message + '\n\nPlease check the browser console and server logs for details.');
+        Toast.error('Failed to load initial data. Error: ' + error.message + '\n\nPlease check the browser console and server logs for details.');
         throw error;
     }
 }
@@ -375,14 +466,14 @@ async function toggleAttendance(cell) {
         else if (newStatus === '/') cell.classList.add('partial');
     } catch (error) {
         console.error('Error updating attendance:', error);
-        alert('Failed to update attendance');
+        Toast.error('Failed to update attendance');
     }
 }
 
 function exportAttendance() {
     const table = document.querySelector('.attendance-table');
     if (!table) {
-        alert('No attendance data to export');
+        Toast.error('No attendance data to export');
         return;
     }
 
@@ -433,7 +524,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
     const date = document.getElementById('report-date').value;
 
     if (!classId || !date) {
-        alert('Please select a class and date');
+        Toast.error('Please select a class and date');
         return;
     }
 
@@ -466,7 +557,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
         }
     } catch (error) {
         console.error('Error loading report:', error);
-        alert('Error loading report: ' + error.message);
+        Toast.error('Error loading report: ' + error.message);
     }
 });
 
@@ -498,12 +589,12 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
             });
         }
 
-        alert('Report saved successfully!');
+        Toast.success('Report saved successfully!');
         document.getElementById('report-form-container').style.display = 'none';
         document.getElementById('reports-list-container').style.display = 'block';
         loadReportsList();
     } catch (error) {
-        alert('Error saving report: ' + error.message);
+        Toast.error('Error saving report: ' + error.message);
     }
 });
 
@@ -514,12 +605,12 @@ document.getElementById('delete-report-btn').addEventListener('click', async () 
     
     try {
         await api(`/reports/${reportId}`, { method: 'DELETE' });
-        alert('Report deleted successfully!');
+        Toast.success('Report deleted successfully!');
         document.getElementById('report-form-container').style.display = 'none';
         document.getElementById('reports-list-container').style.display = 'block';
         loadReportsList();
     } catch (error) {
-        alert('Error deleting report: ' + error.message);
+        Toast.error('Error deleting report: ' + error.message);
     }
 });
 
@@ -564,7 +655,7 @@ async function loadReportById(id) {
         document.getElementById('report-form-container').style.display = 'block';
         document.getElementById('reports-list-container').style.display = 'none';
     } catch (error) {
-        alert('Error loading report: ' + error.message);
+        Toast.error('Error loading report: ' + error.message);
     }
 }
 
@@ -661,15 +752,18 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
     showModal('Add Student', `
         <form id="student-form">
             <div class="form-group">
-                <label>Name *</label>
-                <input type="text" id="student-name" required class="form-control">
+                <label>Student Name *</label>
+                <input type="text" id="student-name" required class="form-control" 
+                       placeholder="Enter student's name" autofocus>
+                <small class="form-hint">This is the only required field</small>
             </div>
             <div class="form-group">
-                <label>Class</label>
+                <label>Class (Optional)</label>
                 <select id="student-class" class="form-control">
-                    <option value="">Unassigned</option>
+                    <option value="">Unassigned (can assign later)</option>
                     ${classes.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
                 </select>
+                <small class="form-hint">You can assign the student to a class later</small>
             </div>
             <div class="form-group">
                 <label>Type</label>
@@ -687,28 +781,34 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                 </select>
             </div>
             <div class="form-group">
-                <label>Email</label>
-                <input type="email" id="student-email" class="form-control">
+                <label>Email (Optional)</label>
+                <input type="email" id="student-email" class="form-control" 
+                       placeholder="student@example.com">
             </div>
             <div class="form-group">
-                <label>Phone</label>
-                <input type="tel" id="student-phone" class="form-control">
+                <label>Phone (Optional)</label>
+                <input type="tel" id="student-phone" class="form-control" 
+                       placeholder="555-1234">
             </div>
             <div class="form-group">
-                <label>Parent Name</label>
-                <input type="text" id="student-parent-name" class="form-control">
+                <label>Parent Name (Optional)</label>
+                <input type="text" id="student-parent-name" class="form-control" 
+                       placeholder="Parent's name">
+                <small class="form-hint">All parent info is optional</small>
             </div>
             <div class="form-group">
-                <label>Parent Phone</label>
-                <input type="tel" id="student-parent-phone" class="form-control">
+                <label>Parent Phone (Optional)</label>
+                <input type="tel" id="student-parent-phone" class="form-control" 
+                       placeholder="555-5678">
             </div>
             <div class="form-group">
-                <label>Parent Email</label>
-                <input type="email" id="student-parent-email" class="form-control">
+                <label>Parent Email (Optional)</label>
+                <input type="email" id="student-parent-email" class="form-control" 
+                       placeholder="parent@example.com">
             </div>
             <div class="form-group">
-                <label>Enrollment Date</label>
-                <input type="date" id="student-enrollment-date" class="form-control">
+                <label>Enrollment Date (Optional)</label>
+                <input type="date" id="student-enrollment-date" class="form-control date-picker">
             </div>
             <button type="submit" class="btn btn-primary">Add Student</button>
         </form>
@@ -734,11 +834,12 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                 })
             });
 
+            Toast.success('Student added successfully!');
             closeModal();
             await loadInitialData();
             await loadStudentsList();
         } catch (error) {
-            alert('Error adding student: ' + error.message);
+            // Error already shown by api() function
         }
     });
 });
@@ -828,11 +929,11 @@ async function editStudent(id) {
                 await loadInitialData();
                 await loadStudentsList();
             } catch (error) {
-                alert('Error updating student: ' + error.message);
+                Toast.error('Error updating student: ' + error.message);
             }
         });
     } catch (error) {
-        alert('Error loading student: ' + error.message);
+        Toast.error('Error loading student: ' + error.message);
     }
 }
 
@@ -844,7 +945,7 @@ async function deleteStudent(id) {
         await loadInitialData();
         await loadStudentsList();
     } catch (error) {
-        alert('Error deleting student: ' + error.message);
+        Toast.error('Error deleting student: ' + error.message);
     }
 }
 
@@ -853,23 +954,29 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
     showModal('Add Class', `
         <form id="class-form">
             <div class="form-group">
-                <label>Name *</label>
-                <input type="text" id="class-name" required class="form-control">
+                <label>Class Name *</label>
+                <input type="text" id="class-name" required class="form-control" 
+                       placeholder="e.g., Beginners Monday 10am" autofocus>
+                <small class="form-hint">Give your class a descriptive name</small>
             </div>
             <div class="form-group">
-                <label>Teacher</label>
+                <label>Teacher (Optional)</label>
                 <select id="class-teacher" class="form-control">
-                    <option value="">Unassigned</option>
+                    <option value="">Current user (default)</option>
                     ${teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('')}
                 </select>
+                <small class="form-hint">Defaults to you if not selected</small>
             </div>
             <div class="form-group">
-                <label>Schedule</label>
-                <input type="text" id="class-schedule" class="form-control" placeholder="e.g., Mon/Wed 10:00-11:30">
+                <label>Schedule (Optional)</label>
+                <input type="text" id="class-schedule" class="form-control schedule-picker" 
+                       placeholder="e.g., Mon/Wed 10:00-11:30 or Tuesday 2pm">
+                <small class="form-hint">Can be updated anytime</small>
             </div>
             <div class="form-group">
-                <label>Color</label>
-                <input type="color" id="class-color" value="#4A90E2" class="form-control">
+                <label>Color (Optional)</label>
+                <input type="color" id="class-color" value="#4285f4" class="form-control">
+                <small class="form-hint">Auto-assigned if not chosen</small>
             </div>
             <button type="submit" class="btn btn-primary">Add Class</button>
         </form>
@@ -889,11 +996,12 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
                 })
             });
 
+            Toast.success('Class created successfully!');
             closeModal();
             await loadInitialData();
             await loadClassesList();
         } catch (error) {
-            alert('Error adding class: ' + error.message);
+            // Error already shown by api() function
         }
     });
 });
@@ -946,11 +1054,11 @@ async function editClass(id) {
                 await loadInitialData();
                 await loadClassesList();
             } catch (error) {
-                alert('Error updating class: ' + error.message);
+                Toast.error('Error updating class: ' + error.message);
             }
         });
     } catch (error) {
-        alert('Error loading class: ' + error.message);
+        Toast.error('Error loading class: ' + error.message);
     }
 }
 
@@ -962,7 +1070,7 @@ async function deleteClass(id) {
         await loadInitialData();
         await loadClassesList();
     } catch (error) {
-        alert('Error deleting class: ' + error.message);
+        Toast.error('Error deleting class: ' + error.message);
     }
 }
 
@@ -1029,7 +1137,7 @@ document.getElementById('add-teacher-btn').addEventListener('click', () => {
         const confirmPassword = document.getElementById('teacher-password-confirm').value;
         
         if (password !== confirmPassword) {
-            alert('Passwords do not match');
+            Toast.error('Passwords do not match');
             return;
         }
         
@@ -1045,9 +1153,9 @@ document.getElementById('add-teacher-btn').addEventListener('click', () => {
 
             closeModal();
             await loadTeachersList();
-            alert('Teacher added successfully!');
+            Toast.success('Teacher added successfully!');
         } catch (error) {
-            alert('Error adding teacher: ' + error.message);
+            Toast.error('Error adding teacher: ' + error.message);
         }
     });
 });
@@ -1085,7 +1193,7 @@ async function editTeacher(id) {
             const confirmPassword = document.getElementById('edit-teacher-password-confirm').value;
             
             if (password && password !== confirmPassword) {
-                alert('Passwords do not match');
+                Toast.error('Passwords do not match');
                 return;
             }
             
@@ -1106,13 +1214,13 @@ async function editTeacher(id) {
 
                 closeModal();
                 await loadTeachersList();
-                alert('Teacher updated successfully!');
+                Toast.success('Teacher updated successfully!');
             } catch (error) {
-                alert('Error updating teacher: ' + error.message);
+                Toast.error('Error updating teacher: ' + error.message);
             }
         });
     } catch (error) {
-        alert('Error loading teacher: ' + error.message);
+        Toast.error('Error loading teacher: ' + error.message);
     }
 }
 
@@ -1122,9 +1230,9 @@ async function deleteTeacher(id) {
     try {
         await api(`/auth/teachers/${id}`, { method: 'DELETE' });
         await loadTeachersList();
-        alert('Teacher deleted successfully!');
+        Toast.success('Teacher deleted successfully!');
     } catch (error) {
-        alert('Error deleting teacher: ' + error.message);
+        Toast.error('Error deleting teacher: ' + error.message);
     }
 }
 
@@ -1250,7 +1358,7 @@ async function searchDatabase() {
     const container = document.getElementById('db-viewer-container');
     
     if (!query) {
-        alert('Please enter a search query');
+        Toast.error('Please enter a search query');
         return;
     }
     
@@ -1437,7 +1545,7 @@ function exportDatabaseTable() {
     const table = document.querySelector('.db-table');
     
     if (!table) {
-        alert('Please load data first');
+        Toast.error('Please load data first');
         return;
     }
     
@@ -1671,7 +1779,7 @@ async function showStudentDetail(studentId) {
         
         showModal(`${escapeHtml(student.name)} - Profile`, content);
     } catch (error) {
-        alert('Error loading student details: ' + error.message);
+        Toast.error('Error loading student details: ' + error.message);
     }
 }
 
@@ -1839,13 +1947,13 @@ async function editMakeupLesson(id) {
                 
                 closeModal();
                 document.getElementById('filter-makeup-btn').click();
-                alert('Make-up lesson updated successfully!');
+                Toast.success('Make-up lesson updated successfully!');
             } catch (error) {
-                alert('Error: ' + error.message);
+                Toast.error('Error: ' + error.message);
             }
         });
     } catch (error) {
-        alert('Error loading makeup lesson: ' + error.message);
+        Toast.error('Error loading makeup lesson: ' + error.message);
     }
 }
 
@@ -1855,9 +1963,9 @@ async function deleteMakeupLesson(id) {
     try {
         await api(`/makeup/${id}`, { method: 'DELETE' });
         document.getElementById('filter-makeup-btn').click();
-        alert('Make-up lesson deleted successfully!');
+        Toast.success('Make-up lesson deleted successfully!');
     } catch (error) {
-        alert('Error: ' + error.message);
+        Toast.error('Error: ' + error.message);
     }
 }
 
@@ -1967,9 +2075,9 @@ async function showMakeupLessonForm() {
             
             closeModal();
             loadMakeupLessons();
-            alert('Make-up lesson scheduled successfully!');
+            Toast.success('Make-up lesson scheduled successfully!');
         } catch (error) {
-            alert('Error: ' + error.message);
+            Toast.error('Error: ' + error.message);
         }
     });
 }
@@ -1991,7 +2099,7 @@ async function completeMakeupLesson(id) {
             if (filterBtn) filterBtn.click();
         }
     } catch (error) {
-        alert('Error: ' + error.message);
+        Toast.error('Error: ' + error.message);
     }
 }
 
@@ -2012,7 +2120,7 @@ async function cancelMakeupLesson(id) {
             if (filterBtn) filterBtn.click();
         }
     } catch (error) {
-        alert('Error: ' + error.message);
+        Toast.error('Error: ' + error.message);
     }
 }
 
@@ -2046,4 +2154,134 @@ navigateToPage = function(page) {
     } else if (page === 'profile') {
         loadProfilePage();
     }
+};
+
+// Keyboard Shortcuts
+document.addEventListener('keydown', (e) => {
+    // Escape - Close modal
+    if (e.key === 'Escape') {
+        closeModal();
+    }
+    
+    // Don't handle shortcuts when typing in inputs
+    if (e.target.matches('input, textarea, select')) {
+        return;
+    }
+    
+    // N - New item (context-aware)
+    if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        const currentPage = getCurrentPage();
+        if (currentPage === 'admin') {
+            // Check if on classes or students subtab
+            const classesTab = document.getElementById('admin-classes-tab');
+            const studentsTab = document.getElementById('admin-students-tab');
+            if (classesTab && classesTab.classList.contains('active')) {
+                document.querySelector('[onclick*="showAddClassModal"]')?.click();
+            } else if (studentsTab && studentsTab.classList.contains('active')) {
+                document.querySelector('[onclick*="showAddStudentModal"]')?.click();
+            }
+        }
+    }
+});
+
+// Get current active page
+function getCurrentPage() {
+    const pages = ['dashboard', 'attendance', 'reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
+    for (const page of pages) {
+        const pageElement = document.getElementById(`${page}-page`);
+        if (pageElement && pageElement.classList.contains('active')) {
+            return page;
+        }
+    }
+    return null;
+}
+
+// Inline Editing Helper
+function makeEditable(element, saveCallback) {
+    element.style.cursor = 'pointer';
+    element.title = 'Click to edit';
+    
+    element.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const originalValue = this.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = originalValue;
+        input.className = 'inline-edit-input';
+        
+        // Replace text with input
+        this.textContent = '';
+        this.appendChild(input);
+        input.focus();
+        input.select();
+        
+        // Save on blur or enter
+        const save = async () => {
+            const newValue = input.value.trim();
+            if (newValue && newValue !== originalValue) {
+                try {
+                    await saveCallback(newValue);
+                    element.textContent = newValue;
+                    Toast.success('Updated successfully');
+                } catch (error) {
+                    element.textContent = originalValue;
+                    Toast.error('Failed to update');
+                }
+            } else {
+                element.textContent = originalValue;
+            }
+        };
+        
+        input.addEventListener('blur', save);
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                save();
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                element.textContent = originalValue;
+            }
+        });
+    });
+}
+
+// Initialize date/time pickers when modals are shown
+function initializeDateTimePickers() {
+    // Date pickers
+    document.querySelectorAll('.date-picker').forEach(input => {
+        if (!input._flatpickr) { // Don't reinitialize
+            flatpickr(input, {
+                dateFormat: 'Y-m-d',
+                allowInput: true
+            });
+        }
+    });
+    
+    // Time pickers
+    document.querySelectorAll('.time-picker').forEach(input => {
+        if (!input._flatpickr) {
+            flatpickr(input, {
+                enableTime: true,
+                noCalendar: true,
+                dateFormat: 'H:i',
+                time_24hr: false,
+                allowInput: true
+            });
+        }
+    });
+}
+
+// Override showModal to initialize date pickers
+const originalShowModal = showModal;
+showModal = function(title, content) {
+    originalShowModal(title, content);
+    // Initialize date pickers after modal content is loaded
+    // Use requestAnimationFrame for reliable DOM ready detection
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            initializeDateTimePickers();
+        });
+    });
 };

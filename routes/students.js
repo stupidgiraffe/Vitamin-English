@@ -132,8 +132,12 @@ router.post('/', async (req, res) => {
             email, phone, parent_name, parent_phone, parent_email, enrollment_date 
         } = req.body;
         
-        if (!name) {
-            return res.status(400).json({ error: 'Name is required' });
+        // Only validate name
+        if (!name || !name.trim()) {
+            return res.status(400).json({ 
+                error: 'Student name is required',
+                hint: 'Enter the student\'s name to get started'
+            });
         }
         
         const result = await pool.query(`
@@ -144,7 +148,7 @@ router.post('/', async (req, res) => {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING id
         `, [
-            name, 
+            name.trim(), 
             class_id || null, 
             student_type || 'regular', 
             color_code || '', 
@@ -162,7 +166,10 @@ router.post('/', async (req, res) => {
         res.status(201).json(student);
     } catch (error) {
         console.error('Error creating student:', error);
-        res.status(500).json({ error: 'Failed to create student' });
+        res.status(500).json({ 
+            error: 'Could not create student',
+            hint: 'Please try again or contact support'
+        });
     }
 });
 
