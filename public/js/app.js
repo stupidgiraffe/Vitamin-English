@@ -80,6 +80,15 @@ function escapeHtml(text) {
     return text ? String(text).replace(/[&<>"']/g, m => map[m]) : '';
 }
 
+// Calculate brightness and return appropriate text color for contrast
+function getContrastTextColor(hexColor) {
+    const r = parseInt(hexColor.substring(1, 3), 16);
+    const g = parseInt(hexColor.substring(3, 5), 16);
+    const b = parseInt(hexColor.substring(5, 7), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 128 ? '#000' : '#fff';
+}
+
 // API Helper
 async function api(endpoint, options = {}) {
     // Show loading spinner on button if applicable
@@ -975,12 +984,24 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
             </div>
             <div class="form-group">
                 <label>Color (Optional)</label>
-                <input type="color" id="class-color" value="#4285f4" class="form-control">
-                <small class="form-hint">Auto-assigned if not chosen</small>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="color" id="class-color" value="#4285f4" class="form-control" 
+                           style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
+                    <span id="color-preview" style="padding: 8px 16px; border-radius: 4px; background: #4285f4; color: white; font-size: 12px;">Preview</span>
+                </div>
+                <small class="form-hint">Pick any color or leave default</small>
             </div>
             <button type="submit" class="btn btn-primary">Add Class</button>
         </form>
     `);
+
+    // Add color picker preview update
+    document.getElementById('class-color').addEventListener('input', (e) => {
+        const color = e.target.value;
+        const preview = document.getElementById('color-preview');
+        preview.style.background = color;
+        preview.style.color = getContrastTextColor(color);
+    });
 
     document.getElementById('class-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -1029,11 +1050,28 @@ async function editClass(id) {
                 </div>
                 <div class="form-group">
                     <label>Color</label>
-                    <input type="color" id="edit-class-color" value="${cls.color}" class="form-control">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" id="edit-class-color" value="${cls.color}" class="form-control"
+                               style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
+                        <span id="edit-color-preview" style="padding: 8px 16px; border-radius: 4px; background: ${cls.color}; color: white; font-size: 12px;">Preview</span>
+                    </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Update Class</button>
             </form>
         `);
+
+        // Add color picker preview update for edit form
+        const editColorInput = document.getElementById('edit-class-color');
+        const editPreview = document.getElementById('edit-color-preview');
+        
+        // Set initial text color based on brightness
+        editPreview.style.color = getContrastTextColor(editColorInput.value);
+        
+        editColorInput.addEventListener('input', (e) => {
+            const color = e.target.value;
+            editPreview.style.background = color;
+            editPreview.style.color = getContrastTextColor(color);
+        });
 
         document.getElementById('edit-class-form').addEventListener('submit', async (e) => {
             e.preventDefault();

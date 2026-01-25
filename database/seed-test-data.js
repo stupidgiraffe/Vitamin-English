@@ -1,65 +1,134 @@
 const pool = require('./init');
 
 async function seedTestData() {
+    const client = await pool.connect();
+    
     try {
-        console.log('🌱 Seeding test data...');
+        await client.query('BEGIN');
+        
+        console.log('🌱 Starting test data seed...');
         
         // Check if data already exists
-        const classCheck = await pool.query('SELECT COUNT(*) FROM classes WHERE active = true');
-        if (parseInt(classCheck.rows[0].count) > 0) {
-            console.log('⚠️  Data already exists, skipping seed');
-            return;
+        const existingClasses = await client.query('SELECT COUNT(*) FROM classes WHERE active = true');
+        if (parseInt(existingClasses.rows[0].count) > 0) {
+            console.log('⚠️  Test data already exists, skipping seed');
+            await client.query('ROLLBACK');
+            return { success: true, message: 'Data already exists' };
         }
         
-        // Get teacher ID (use any admin or teacher user)
-        const teacherResult = await pool.query('SELECT id FROM users WHERE role IN (\'admin\', \'teacher\') ORDER BY id LIMIT 1');
+        // Get teacher ID (use Sarah or first available user)
+        const teacherResult = await client.query(
+            `SELECT id FROM users WHERE role = 'teacher' OR role = 'admin' ORDER BY id LIMIT 1`
+        );
         const teacherId = teacherResult.rows[0]?.id;
         
         if (!teacherId) {
-            console.log('⚠️  No admin or teacher user found, skipping seed');
-            return;
+            throw new Error('No teacher or admin user found. Please create a user first.');
         }
         
-        // Create 3 test classes
+        // Create 3 classes with Japanese names
         const classes = [
-            { name: 'Beginners Monday/Wednesday', schedule: 'Mon/Wed 10:00-11:30', color: '#4285f4' },
-            { name: 'Intermediate Tuesday/Thursday', schedule: 'Tue/Thu 14:00-15:30', color: '#34a853' },
-            { name: 'Advanced Friday', schedule: 'Fri 11:00-13:00', color: '#ea4335' }
+            { name: '初級クラス (Beginners)', schedule: 'Mon/Wed 10:00-11:30', color: '#4285f4' },
+            { name: '中級クラス (Intermediate)', schedule: 'Tue/Thu 14:00-15:30', color: '#34a853' },
+            { name: '上級クラス (Advanced)', schedule: 'Fri 11:00-13:00', color: '#ea4335' }
         ];
         
         const createdClasses = [];
         for (const cls of classes) {
-            const result = await pool.query(
-                'INSERT INTO classes (name, teacher_id, schedule, color, active) VALUES ($1, $2, $3, $4, true) RETURNING *',
+            const result = await client.query(
+                `INSERT INTO classes (name, teacher_id, schedule, color, active) 
+                 VALUES ($1, $2, $3, $4, true) 
+                 RETURNING *`,
                 [cls.name, teacherId, cls.schedule, cls.color]
             );
             createdClasses.push(result.rows[0]);
             console.log(`✅ Created class: ${cls.name}`);
         }
         
-        // Create 12 test students
-        const studentNames = [
-            'Emma Wilson', 'Liam Chen', 'Olivia Garcia', 'Noah Kim',
-            'Ava Martinez', 'Ethan Patel', 'Sophia Lee', 'Mason Rodriguez',
-            'Isabella Nguyen', 'Lucas Anderson', 'Mia Thompson', 'James Taylor'
+        // Create 12 students with Japanese names and realistic info
+        const students = [
+            { name: '田中 花子', reading: 'Tanaka Hanako', parent: '田中 太郎', phone: '090-1234-5678', email: 'tanaka@example.jp' },
+            { name: '佐藤 太郎', reading: 'Sato Taro', parent: '佐藤 美咲', phone: '090-2345-6789', email: 'sato@example.jp' },
+            { name: '鈴木 美咲', reading: 'Suzuki Misaki', parent: '鈴木 健太', phone: '090-3456-7890', email: 'suzuki@example.jp' },
+            { name: '高橋 健太', reading: 'Takahashi Kenta', parent: '高橋 愛美', phone: '090-4567-8901', email: 'takahashi@example.jp' },
+            { name: '伊藤 愛美', reading: 'Ito Aimi', parent: '伊藤 大輔', phone: '090-5678-9012', email: 'ito@example.jp' },
+            { name: '渡辺 大輔', reading: 'Watanabe Daisuke', parent: '渡辺 さくら', phone: '090-6789-0123', email: 'watanabe@example.jp' },
+            { name: '山本 さくら', reading: 'Yamamoto Sakura', parent: '山本 翔太', phone: '090-7890-1234', email: 'yamamoto@example.jp' },
+            { name: '中村 翔太', reading: 'Nakamura Shota', parent: '中村 結衣', phone: '090-8901-2345', email: 'nakamura@example.jp' },
+            { name: '小林 結衣', reading: 'Kobayashi Yui', parent: '小林 翼', phone: '090-9012-3456', email: 'kobayashi@example.jp' },
+            { name: '加藤 翼', reading: 'Kato Tsubasa', parent: '加藤 優花', phone: '090-0123-4567', email: 'kato@example.jp' },
+            { name: '吉田 優花', reading: 'Yoshida Yuka', parent: '吉田 蓮', phone: '080-1234-5678', email: 'yoshida@example.jp' },
+            { name: '山田 蓮', reading: 'Yamada Ren', parent: '山田 花子', phone: '080-2345-6789', email: 'yamada@example.jp' }
         ];
         
-        for (let i = 0; i < studentNames.length; i++) {
+        // Distribute students across classes
+        for (let i = 0; i < students.length; i++) {
+            const student = students[i];
             const classId = createdClasses[i % createdClasses.length].id;
-            // Generate valid phone number with proper padding
-            const phoneNumber = `555-${String(1000 + i).slice(-4)}`;
-            await pool.query(
-                'INSERT INTO students (name, class_id, parent_name, parent_phone, active) VALUES ($1, $2, $3, $4, true)',
-                [studentNames[i], classId, `Parent of ${studentNames[i].split(' ')[0]}`, phoneNumber]
+            
+            await client.query(
+                `INSERT INTO students (name, class_id, parent_name, parent_phone, parent_email, notes, active) 
+                 VALUES ($1, $2, $3, $4, $5, $6, true)`,
+                [
+                    student.name,
+                    classId,
+                    student.parent,
+                    student.phone,
+                    student.email,
+                    `Reading: ${student.reading}`
+                ]
             );
         }
-        console.log(`✅ Created ${studentNames.length} students`);
+        console.log(`✅ Created ${students.length} students`);
         
-        console.log('🎉 Test data seeded successfully!');
+        await client.query('COMMIT');
+        console.log('🎉 Test data seed completed successfully!');
+        
+        return { 
+            success: true, 
+            message: 'Test data created',
+            stats: {
+                classes: createdClasses.length,
+                students: students.length
+            }
+        };
         
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('❌ Error seeding test data:', error);
+        throw error;
+    } finally {
+        client.release();
     }
 }
 
-module.exports = { seedTestData };
+// Function to clear all data
+async function clearAllData() {
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        
+        console.log('🗑️  Clearing all data...');
+        
+        await client.query('DELETE FROM attendance WHERE 1=1');
+        await client.query('DELETE FROM students WHERE 1=1');
+        await client.query('DELETE FROM classes WHERE 1=1');
+        await client.query('DELETE FROM lesson_reports WHERE 1=1');
+        await client.query('DELETE FROM makeup_lessons WHERE 1=1');
+        
+        await client.query('COMMIT');
+        console.log('✅ All data cleared');
+        
+        return { success: true, message: 'All data cleared' };
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('❌ Error clearing data:', error);
+        throw error;
+    } finally {
+        client.release();
+    }
+}
+
+module.exports = { seedTestData, clearAllData };

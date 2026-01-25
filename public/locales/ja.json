@@ -1,0 +1,65 @@
+{
+  "nav": {
+    "attendance": "出席",
+    "students": "生徒",
+    "classes": "クラス",
+    "database": "データベース",
+    "admin": "管理者",
+    "profile": "プロフィール",
+    "logout": "ログアウト",
+    "dashboard": "ダッシュボード",
+    "reports": "レッスン報告",
+    "makeup": "振替レッスン"
+  },
+  "buttons": {
+    "addClass": "クラスを追加",
+    "addStudent": "生徒を追加",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "edit": "編集",
+    "delete": "削除",
+    "login": "ログイン",
+    "markPresent": "出席",
+    "markAbsent": "欠席",
+    "seedData": "テストデータを読み込む",
+    "clearData": "すべてのデータを削除"
+  },
+  "forms": {
+    "className": "クラス名",
+    "teacher": "先生",
+    "schedule": "スケジュール",
+    "color": "色",
+    "studentName": "生徒名",
+    "class": "クラス",
+    "parentName": "保護者名",
+    "parentContact": "保護者連絡先",
+    "parentEmail": "保護者メール",
+    "notes": "備考",
+    "username": "ユーザー名",
+    "password": "パスワード",
+    "required": "必須",
+    "optional": "任意"
+  },
+  "messages": {
+    "loginSuccess": "ログインしました！",
+    "logoutSuccess": "ログアウトしました",
+    "classAdded": "クラスを作成しました！",
+    "studentAdded": "生徒を追加しました！",
+    "attendanceMarked": "出席を記録しました",
+    "error": "エラー",
+    "success": "成功",
+    "loading": "読み込み中...",
+    "noData": "データがありません",
+    "confirmDelete": "本当に削除しますか？",
+    "dataSeeded": "テストデータを読み込みました！",
+    "dataCleared": "すべてのデータを削除しました"
+  },
+  "placeholders": {
+    "className": "例：初級クラス 月曜日 10時",
+    "schedule": "例：月/水 10:00-11:30",
+    "studentName": "生徒のフルネーム",
+    "parentName": "保護者のフルネーム",
+    "parentContact": "電話番号",
+    "parentEmail": "メールアドレス"
+  }
+}
