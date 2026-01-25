@@ -80,6 +80,15 @@ function escapeHtml(text) {
     return text ? String(text).replace(/[&<>"']/g, m => map[m]) : '';
 }
 
+// Calculate brightness and return appropriate text color for contrast
+function getContrastTextColor(hexColor) {
+    const r = parseInt(hexColor.substring(1, 3), 16);
+    const g = parseInt(hexColor.substring(3, 5), 16);
+    const b = parseInt(hexColor.substring(5, 7), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 128 ? '#000' : '#fff';
+}
+
 // API Helper
 async function api(endpoint, options = {}) {
     // Show loading spinner on button if applicable
@@ -991,12 +1000,7 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
         const color = e.target.value;
         const preview = document.getElementById('color-preview');
         preview.style.background = color;
-        // Auto adjust text color for contrast
-        const r = parseInt(color.substr(1, 2), 16);
-        const g = parseInt(color.substr(3, 2), 16);
-        const b = parseInt(color.substr(5, 2), 16);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        preview.style.color = brightness > 128 ? '#000' : '#fff';
+        preview.style.color = getContrastTextColor(color);
     });
 
     document.getElementById('class-form').addEventListener('submit', async (e) => {
@@ -1061,22 +1065,12 @@ async function editClass(id) {
         const editPreview = document.getElementById('edit-color-preview');
         
         // Set initial text color based on brightness
-        const initColor = editColorInput.value;
-        const initR = parseInt(initColor.substr(1, 2), 16);
-        const initG = parseInt(initColor.substr(3, 2), 16);
-        const initB = parseInt(initColor.substr(5, 2), 16);
-        const initBrightness = (initR * 299 + initG * 587 + initB * 114) / 1000;
-        editPreview.style.color = initBrightness > 128 ? '#000' : '#fff';
+        editPreview.style.color = getContrastTextColor(editColorInput.value);
         
         editColorInput.addEventListener('input', (e) => {
             const color = e.target.value;
             editPreview.style.background = color;
-            // Auto adjust text color for contrast
-            const r = parseInt(color.substr(1, 2), 16);
-            const g = parseInt(color.substr(3, 2), 16);
-            const b = parseInt(color.substr(5, 2), 16);
-            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            editPreview.style.color = brightness > 128 ? '#000' : '#fff';
+            editPreview.style.color = getContrastTextColor(color);
         });
 
         document.getElementById('edit-class-form').addEventListener('submit', async (e) => {
