@@ -155,13 +155,9 @@ async function initializeTestData() {
 // Note: Errors are caught and logged but don't stop the server
 // This allows the app to start even if initialization fails (e.g., DB already has users)
 initializeDatabase().then(() => {
-    // Verify database schema
     if (pool) {
+        // Verify database schema and auto-load test data
         verifyDatabaseSchema();
-    }
-    
-    // Auto-load test data if database is empty
-    if (pool) {
         initializeTestData().catch(err => {
             console.error('Test data initialization failed:', err);
         });

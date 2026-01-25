@@ -402,9 +402,9 @@ async function showNewAttendanceModal() {
                     return;
                 }
                 
-                // Create attendance record for each student
-                for (const student of studentsInClass) {
-                    await api('/attendance', {
+                // Create attendance records for all students in parallel
+                const attendancePromises = studentsInClass.map(student => 
+                    api('/attendance', {
                         method: 'POST',
                         body: JSON.stringify({ 
                             student_id: student.id,
@@ -413,8 +413,10 @@ async function showNewAttendanceModal() {
                             status: '', // Empty status - to be filled in
                             notes: notes || ''
                         })
-                    });
-                }
+                    })
+                );
+                
+                await Promise.all(attendancePromises);
                 
                 Toast.success(`Attendance sheet created for ${studentsInClass.length} students!`);
                 closeModal();

@@ -1,5 +1,8 @@
 const pool = require('./init');
 
+// Constants for seed data configuration
+const ATTENDANCE_ABSENCE_RATE = 0.15; // 15% absence rate (85% attendance)
+
 async function seedTestData() {
     const client = await pool.connect();
     
@@ -92,7 +95,7 @@ async function seedTestData() {
             
             // Create attendance records for each student
             for (const student of studentsInClass) {
-                const isPresent = Math.random() > 0.15; // 85% attendance
+                const isPresent = Math.random() > ATTENDANCE_ABSENCE_RATE;
                 await client.query(
                     `INSERT INTO attendance (student_id, class_id, date, status, notes) 
                      VALUES ($1, $2, $3, $4, $5)`,
