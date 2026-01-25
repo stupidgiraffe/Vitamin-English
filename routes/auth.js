@@ -3,6 +3,9 @@ const bcrypt = require('bcrypt');
 const router = express.Router();
 const pool = require('../database/init');
 
+// Default admin credentials for debug endpoints
+const DEFAULT_ADMIN_PASSWORD = 'admin123';
+
 // Login
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
@@ -338,7 +341,7 @@ router.get('/debug/users', async (req, res) => {
         });
     } catch (error) {
         console.error('Debug users error:', error);
-        res.status(500).json({ error: error.message, stack: error.stack });
+        res.status(500).json({ error: error.message });
     }
 });
 
@@ -360,14 +363,14 @@ router.post('/debug/create-admin', async (req, res) => {
         }
         
         // Create admin with correct password
-        const adminHash = await bcrypt.hash('admin123', 10);
+        const adminHash = await bcrypt.hash(DEFAULT_ADMIN_PASSWORD, 10);
         const result = await pool.query(
             'INSERT INTO users (username, password_hash, full_name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, full_name, role',
             ['admin', adminHash, 'Admin User', 'admin']
         );
         
         // Test the password immediately
-        const testPassword = bcrypt.compareSync('admin123', adminHash);
+        const testPassword = bcrypt.compareSync(DEFAULT_ADMIN_PASSWORD, adminHash);
         
         res.json({
             message: 'Admin user created successfully',
@@ -376,7 +379,7 @@ router.post('/debug/create-admin', async (req, res) => {
         });
     } catch (error) {
         console.error('Create admin error:', error);
-        res.status(500).json({ error: error.message, stack: error.stack });
+        res.status(500).json({ error: error.message });
     }
 });
 
