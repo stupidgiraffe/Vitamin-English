@@ -73,6 +73,7 @@ const attendanceRoutes = require('./routes/attendance');
 const reportRoutes = require('./routes/reports');
 const databaseRoutes = require('./routes/database');
 const makeupRoutes = require('./routes/makeup');
+const pdfRoutes = require('./routes/pdf');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -82,6 +83,7 @@ app.use('/api/attendance', requireAuth, attendanceRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
 app.use('/api/database', requireAuth, databaseRoutes);
 app.use('/api/makeup', requireAuth, makeupRoutes);
+app.use('/api/pdf', requireAuth, pdfRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
