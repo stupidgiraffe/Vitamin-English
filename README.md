@@ -1,6 +1,8 @@
 # Vitamin English School Management System
 
-A beautiful, modern web application for managing student attendance and teacher lesson reports at Vitamin English School.
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/stupidgiraffe/Vitamin-English)
+
+A beautiful, modern web application for managing student attendance and teacher lesson reports at Vitamin English School. Now with enhanced PDF generation and flexible search capabilities!
 
 ## Features
 
@@ -10,8 +12,15 @@ A beautiful, modern web application for managing student attendance and teacher 
 - 📚 **Class Management** - Manage classes, teachers, and schedules
 - 🔄 **Make-up Lessons Management** - Dedicated section for scheduling and tracking makeup lessons
 - 🔍 **Advanced Database Search** - Cross-reference search across students, teachers, classes, attendance, and reports
+  - **NEW**: Search without keywords - filter by type and date range only
+  - **NEW**: Flexible filtering - any combination of query, type, and date filters
 - 📈 **Dashboard** - Quick overview of today's classes, makeup lessons, and recent activity
 - 💾 **Data Export** - Export attendance and reports to CSV/Excel
+- 📄 **PDF Generation** - Generate professional PDFs for:
+  - Student attendance reports
+  - Class attendance sheets
+  - Lesson reports
+- ☁️ **Cloud Storage** - PDFs automatically uploaded to Cloudflare R2 with download links
 - 🔐 **Secure Authentication** - Password-protected access with production-grade security headers
 - 🛡️ **Production-Ready** - Security headers, input validation, error handling, and deployment configs
 
@@ -19,8 +28,11 @@ A beautiful, modern web application for managing student attendance and teacher 
 
 - **Frontend**: HTML5, CSS3, Vanilla JavaScript
 - **Backend**: Node.js with Express
-- **Database**: SQLite (file-based, no setup required)
+- **Database**: PostgreSQL (Neon) - Production-grade, scalable database
+- **PDF Generation**: PDFKit
+- **Cloud Storage**: Cloudflare R2 (S3-compatible)
 - **Authentication**: bcrypt password hashing with session management
+- **Deployment**: Vercel (serverless functions)
 
 ## Installation & Setup
 
@@ -28,8 +40,10 @@ A beautiful, modern web application for managing student attendance and teacher 
 
 - Node.js (version 14 or higher)
 - npm (comes with Node.js)
+- PostgreSQL database (use [Neon](https://neon.tech) for free hosted PostgreSQL)
+- Cloudflare R2 account (optional, for PDF storage features)
 
-### Quick Start
+### Local Development Setup
 
 1. **Clone the repository**
    ```bash
@@ -42,14 +56,57 @@ A beautiful, modern web application for managing student attendance and teacher 
    npm install
    ```
 
-3. **Start the server**
+3. **Set up environment variables**
+   
+   Create a `.env` file in the root directory:
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Update the `.env` file with your configuration:
+   ```env
+   DATABASE_URL=postgresql://localhost:5432/vitamin_english
+   SESSION_SECRET=your-random-secret-key-here
+   NODE_ENV=development
+   
+   # Optional: For PDF features
+   R2_ACCOUNT_ID=your-account-id
+   R2_ACCESS_KEY_ID=your-access-key
+   R2_SECRET_ACCESS_KEY=your-secret-key
+   R2_BUCKET_NAME=vitamin-english-pdfs
+   R2_ENDPOINT=https://account-id.r2.cloudflarestorage.com
+   ```
+
+4. **Initialize the database**
+   
+   The application will automatically create tables and sample data on first run.
+
+5. **Start the server**
    ```bash
    npm start
    ```
 
-4. **Access the application**
+6. **Access the application**
    - Open your browser and go to: `http://localhost:3000`
-   - The database will be automatically created with sample data on first run
+   - The database will be automatically initialized with sample data
+
+### Production Deployment to Vercel
+
+For detailed deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+**Quick Deploy:**
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/stupidgiraffe/Vitamin-English)
+
+**Manual Steps:**
+
+1. Set up [Neon PostgreSQL](https://neon.tech) database
+2. Set up [Cloudflare R2](https://cloudflare.com/r2) bucket (optional)
+3. Deploy to [Vercel](https://vercel.com)
+4. Configure environment variables in Vercel
+5. Import your data using `scripts/migrate-to-neon.js`
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete step-by-step instructions.
 
 ### Default Login Credentials
 
@@ -61,7 +118,7 @@ A beautiful, modern web application for managing student attendance and teacher 
 - Username: `sarah`
 - Password: `teacher123`
 
-**⚠️ Important:** Change these default passwords in production!
+**⚠️ Important:** Change these default passwords immediately after deployment!
 
 ## Usage Guide
 
@@ -126,39 +183,109 @@ A beautiful, modern web application for managing student attendance and teacher 
 5. Edit, complete, or cancel existing makeup lessons
 6. All makeup lessons are linked to student profiles
 
-### Database Viewer & Search
+### Database Viewer & Advanced Search
 
 1. Navigate to the **Database** page
 2. Use the table selector to view data from different tables
-3. **Advanced Search**:
-   - Enter search terms to find records across all tables
-   - Filter by type (students, teachers, classes, attendance, reports, makeup lessons)
-   - Apply date range filters for time-sensitive data
-   - Results are grouped by type with counts
-4. Export any table or search results to CSV
+3. **Advanced Search** (Enhanced!):
+   - **Flexible filtering** - No longer requires a search query!
+   - **Search by type only**: Select type (e.g., "students") to see all records of that type
+   - **Search by date range only**: Set start/end dates to filter time-sensitive data
+   - **Search with keywords**: Enter search terms to find records across all tables
+   - **Combine filters**: Use any combination of query, type, and date filters
+   
+   **Examples:**
+   - `?type=students` → View all students
+   - `?startDate=2026-01-01&endDate=2026-01-31&type=attendance` → All attendance in January
+   - `?query=John&type=students` → Search for students named "John"
+   - `?query=English&type=reports&startDate=2026-01-01` → Reports about "English" since Jan 1
+
+4. Results are grouped by type with counts
+5. Export any table or search results to CSV
+
+### PDF Generation (NEW!)
+
+Generate professional PDF reports with automatic cloud storage:
+
+#### Student Attendance Reports
+
+1. Navigate to a student's profile or the Students page
+2. Click **"Generate PDF"** button
+3. PDF includes:
+   - Student information
+   - Complete attendance history
+   - Attendance statistics and rate
+4. PDF is automatically uploaded to cloud storage
+5. Download link provided immediately
+
+#### Class Attendance Sheets
+
+1. Navigate to the Attendance page
+2. Select a class and date
+3. Click **"Generate PDF"** button
+4. PDF includes:
+   - Class and teacher information
+   - All students in the class
+   - Attendance status for the selected date
+   - Summary statistics
+5. Perfect for printing or emailing to administration
+
+#### Lesson Report PDFs
+
+1. Navigate to the Lesson Reports page
+2. View a specific report
+3. Click **"Generate PDF"** button
+4. PDF includes:
+   - Class and teacher information
+   - Lesson topic and vocabulary
+   - Student strengths and mistakes
+   - Comments and homework
+5. Professional formatting for sharing with parents or administration
+
+#### PDF History
+
+1. Navigate to the Database page → PDF History tab
+2. View all generated PDFs with:
+   - Filename and type
+   - Creation date and creator
+   - Student/class associated
+   - File size
+3. Click **"Download"** to get a secure download link
+4. Links are valid for 1 hour
+
+**Note:** PDF generation requires Cloudflare R2 configuration. If not configured, the feature will show an appropriate message.
 
 ## Project Structure
 
 ```
 Vitamin-English/
-├── server.js              # Express server and API routes configuration
-├── package.json           # Node.js dependencies and scripts
+├── server.js                   # Express server and API routes configuration
+├── package.json                # Node.js dependencies and scripts
+├── DEPLOYMENT.md               # Detailed deployment guide
 ├── database/
-│   ├── schema.sql        # SQLite database schema
-│   ├── init.js           # Database initialization with sample data
-│   └── school.db         # SQLite database file (auto-generated)
+│   ├── schema-postgres.sql    # PostgreSQL database schema
+│   ├── schema.sql             # Original SQLite schema (legacy)
+│   └── init.js                # Database initialization with sample data
 ├── routes/
-│   ├── auth.js           # Authentication endpoints
-│   ├── students.js       # Student CRUD operations
-│   ├── classes.js        # Class CRUD operations
-│   ├── attendance.js     # Attendance tracking endpoints
-│   └── reports.js        # Lesson report endpoints
+│   ├── auth.js                # Authentication endpoints
+│   ├── students.js            # Student CRUD operations
+│   ├── classes.js             # Class CRUD operations
+│   ├── attendance.js          # Attendance tracking endpoints
+│   ├── reports.js             # Lesson report endpoints
+│   ├── database.js            # Database viewer and search
+│   ├── makeup.js              # Makeup lessons management
+│   └── pdf.js                 # PDF generation endpoints (NEW)
+├── utils/
+│   ├── pdfGenerator.js        # PDF generation utilities (NEW)
+│   └── r2Storage.js           # Cloudflare R2 storage utilities (NEW)
+├── scripts/
+│   └── migrate-to-neon.js     # SQLite to PostgreSQL migration script
 └── public/
-    ├── index.html        # Main application HTML
+    ├── index.html             # Main application HTML
     ├── css/
-    │   └── styles.css    # Modern, responsive styling
+    │   └── styles.css         # Modern, responsive styling
     └── js/
-        └── app.js        # Frontend application logic
+        └── app.js             # Frontend application logic
 ```
 
 ## API Endpoints
@@ -197,6 +324,28 @@ Vitamin-English/
 - `PUT /api/reports/:id` - Update a report
 - `DELETE /api/reports/:id` - Delete a report
 
+### Database & Search
+- `GET /api/database/table/:tableName` - Get data from a specific table
+- `GET /api/database/search` - Advanced search (enhanced - query parameter now optional!)
+  - Query parameters: `query` (optional), `type`, `startDate`, `endDate`
+  - Examples:
+    - `/api/database/search?type=students` - All students
+    - `/api/database/search?startDate=2026-01-01&endDate=2026-01-31&type=attendance` - Attendance in date range
+    - `/api/database/search?query=John&type=students` - Search students for "John"
+
+### PDF Generation (NEW)
+- `POST /api/pdf/student-attendance/:studentId` - Generate student attendance PDF
+- `POST /api/pdf/class-attendance/:classId` - Generate class attendance PDF (requires `date` in body)
+- `POST /api/pdf/lesson-report/:reportId` - Generate lesson report PDF
+- `GET /api/pdf/history` - List all generated PDFs (with optional `type` filter)
+- `GET /api/pdf/download/:pdfId` - Get download URL for a PDF
+
+### Make-up Lessons
+- `GET /api/makeup` - Get all makeup lessons (with filters)
+- `POST /api/makeup` - Schedule a new makeup lesson
+- `PUT /api/makeup/:id` - Update a makeup lesson
+- `DELETE /api/makeup/:id` - Delete a makeup lesson
+
 ## Development
 
 To run in development mode with auto-reload:
@@ -209,26 +358,41 @@ This uses nodemon to automatically restart the server when files change.
 
 ## Data Backup
 
-The SQLite database is stored as a single file: `database/school.db`
+### PostgreSQL (Neon) Backups
 
-To backup your data:
-1. Stop the server
-2. Copy `database/school.db` to a safe location
-3. Restart the server
+**Automatic backups:**
+- Neon provides automatic backups (7-30 days retention depending on plan)
+- Point-in-time recovery available
 
-To restore:
-1. Stop the server
-2. Replace `database/school.db` with your backup
-3. Restart the server
+**Manual backup:**
+```bash
+pg_dump "postgresql://username:password@host/database" > backup.sql
+```
+
+**Restore:**
+```bash
+psql "postgresql://username:password@host/database" < backup.sql
+```
+
+### PDF Storage Backups
+
+PDFs are stored in Cloudflare R2:
+- List all PDFs via `/api/pdf/history`
+- Download PDFs individually
+- Consider R2 bucket replication for redundancy
 
 ## Security Features
 
 - Password hashing using bcrypt
 - Session-based authentication
 - HTTP-only session cookies
+- Secure session secrets
 - Input validation on all forms
-- SQL injection prevention using prepared statements
+- SQL injection prevention using parameterized queries
 - Soft deletes to preserve data integrity
+- HTTPS enforced in production
+- CORS protection
+- Security headers (CSP, X-Frame-Options, etc.)
 
 ## Browser Support
 
@@ -236,166 +400,100 @@ To restore:
 - Firefox
 - Safari
 - Edge
-- Mobile browsers (responsive design)
+- Mobile browsers (fully responsive design)
 
 ## Production Deployment
+
+For complete deployment instructions, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+### Quick Deploy to Vercel
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/stupidgiraffe/Vitamin-English)
+
+### Prerequisites
+
+1. **Neon PostgreSQL** - Sign up at [neon.tech](https://neon.tech)
+2. **Cloudflare R2** (optional) - Set up at [cloudflare.com](https://cloudflare.com/r2)
+3. **Vercel Account** - Sign up at [vercel.com](https://vercel.com)
+
+### Deployment Steps
+
+1. **Set up Neon Database**
+   - Create a new Neon project
+   - Copy connection string
+   - Run `database/schema-postgres.sql` in Neon SQL Editor
+
+2. **Configure Cloudflare R2** (optional, for PDF features)
+   - Create R2 bucket
+   - Generate API tokens
+   - Save credentials
+
+3. **Deploy to Vercel**
+   - Import repository
+   - Configure environment variables
+   - Deploy!
+
+4. **Migrate Data** (if coming from Railway)
+   - Run `node scripts/migrate-to-neon.js` on Railway
+   - Import generated SQL to Neon
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed step-by-step instructions.
 
 ### Important: Before deploying to production
 
 1. **Change default passwords** - Update or remove the sample users
 2. **Set a strong session secret** - Use the `SESSION_SECRET` environment variable (minimum 32 characters)
-3. **Configure HTTPS** - Use a reverse proxy like nginx or deploy on platforms with automatic HTTPS
-4. **Set proper file permissions** - Restrict access to `database/school.db`
-5. **Regular backups** - Set up automated database backups
-6. **Update CORS origin** - Set `CORS_ORIGIN` to your production domain
+3. **Configure environment variables** - Set all required variables in Vercel
+4. **Update CORS origin** - Set `CORS_ORIGIN` to your production domain
+5. **Test all features** - Verify login, attendance, reports, search, and PDF generation
+6. **Set up monitoring** - Use Vercel Analytics and Neon monitoring
 
-### Deploy to Vercel (Recommended for New Deployments)
+### Environment Variables
 
-Vercel provides seamless deployment with automatic HTTPS, zero-config, and excellent performance.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete environment variable documentation.
 
-#### Quick Deploy to Vercel
+Required variables:
+- `DATABASE_URL` - Neon PostgreSQL connection string
+- `SESSION_SECRET` - Random secret key (32+ characters)
+- `NODE_ENV` - Set to `production`
 
-1. **Install Vercel CLI** (optional):
-   ```bash
-   npm install -g vercel
-   ```
-
-2. **Fork this repository** to your GitHub account
-
-3. **Deploy via Vercel Dashboard**:
-   - Go to [vercel.com](https://vercel.com) and sign in with GitHub
-   - Click "Add New Project"
-   - Import your forked repository
-   - Vercel will automatically detect the Node.js configuration
-   - Click "Deploy"
-
-4. **Or deploy via CLI**:
-   ```bash
-   vercel
-   ```
-   Follow the prompts to link your project
-
-5. **Set environment variables** in Vercel dashboard (Settings → Environment Variables):
-   ```
-   SESSION_SECRET=your-strong-random-secret-key-min-32-chars
-   NODE_ENV=production
-   CORS_ORIGIN=https://your-app.vercel.app
-   ```
-
-6. **Important: Database Persistence on Vercel**
-   
-   ⚠️ **Note**: Vercel's serverless functions are stateless, so SQLite database changes won't persist between deployments. For Vercel deployment, you should either:
-   
-   **Option A: Use Vercel Postgres (Recommended for Production)**
-   - Add Vercel Postgres to your project
-   - Update the database connection to use PostgreSQL instead of SQLite
-   - This provides a persistent, production-grade database
-   
-   **Option B: Keep using Railway for Production Database**
-   - Keep your existing Railway deployment as the production instance (as requested)
-   - Use Vercel deployment as a preview/staging environment
-   - Both can run simultaneously
-
-7. **Access your app**:
-   - Vercel provides a URL like `your-app.vercel.app`
-   - Custom domains can be configured in project settings
-   - The health check endpoint will be available at `/health`
-
-#### Custom Domain Setup (Vercel)
-
-1. Go to Project Settings → Domains
-2. Add your custom domain (e.g., `school.yourdomain.com`)
-3. Configure DNS records as instructed by Vercel
-4. SSL certificate is automatically provisioned
-
-### Deploy to Railway (Current Production - Leave As-Is)
-
-Railway provides a simple one-click deployment with automatic HTTPS and persistent storage.
-
-**Note**: As requested, your existing Railway deployment should remain untouched as a preview for stakeholders.
-
-#### Quick Deploy
-
-1. **Fork this repository** to your GitHub account
-
-2. **Create a Railway account** at [railway.app](https://railway.app)
-
-3. **Deploy from GitHub**:
-   - Click "New Project" in Railway
-   - Select "Deploy from GitHub repo"
-   - Choose your forked repository
-   - Railway will auto-detect the configuration from `railway.json`
-
-4. **Set environment variables** in Railway dashboard:
-   ```
-   SESSION_SECRET=your-strong-random-secret-key
-   NODE_ENV=production
-   CORS_ORIGIN=https://your-app.up.railway.app
-   ```
-
-5. **Access your app**:
-   - Railway will provide a public URL (e.g., `your-app.up.railway.app`)
-   - The health check endpoint will be available at `/health`
-
-#### Database Persistence on Railway
-
-Railway automatically persists the SQLite database file (`database/school.db`):
-- The database is stored in the project volume
-- Data persists across deployments
-- **Important**: To backup your database, use Railway's volume backup feature
-
-#### Database Backup Instructions
-
-**Manual Backup:**
-1. Connect to your Railway service via CLI: `railway run bash`
-2. Copy the database: `cp database/school.db /tmp/backup.db`
-3. Download the backup file from the Railway dashboard
-
-**Automated Backups:**
-- Enable Railway's volume snapshots feature
-- Configure daily snapshots in the Railway project settings
-- Snapshots are stored for 7 days by default
-
-### Deploy to Other Platforms
-
-The application can be deployed on any platform that supports Node.js:
-- Heroku
-- DigitalOcean
-- AWS
-- Render
-
-Basic deployment steps:
-1. Upload all files to your server
-2. Run `npm install --production`
-3. Set environment variables (see `.env.example`)
-4. Run `npm start`
+Optional (for PDF features):
+- `R2_ACCOUNT_ID` - Cloudflare account ID
+- `R2_ACCESS_KEY_ID` - R2 access key
+- `R2_SECRET_ACCESS_KEY` - R2 secret key
+- `R2_BUCKET_NAME` - R2 bucket name
+- `R2_ENDPOINT` - R2 endpoint URL
 
 ### Post-Deployment Checklist
 
-After deploying to any platform:
+After deploying:
 
-- [ ] Verify health endpoint works: `https://your-domain.com/health`
+- [ ] Verify health endpoint: `https://your-domain.com/health`
 - [ ] Test login with default credentials
-- [ ] **Immediately change default passwords** for admin and teacher accounts
-- [ ] Test all major features (attendance, reports, students, database search, makeup lessons)
-- [ ] Set up automated database backups
-- [ ] Configure monitoring/alerting
+- [ ] **Immediately change default passwords**
+- [ ] Test all features (attendance, reports, search, PDFs)
+- [ ] Set up database backups
+- [ ] Configure monitoring
 - [ ] Test mobile responsiveness
-- [ ] Update CORS_ORIGIN to match your production domain
+- [ ] Update `CORS_ORIGIN` to match your domain
 
 ## Troubleshooting
 
-**Database not found:**
-- The database is auto-created on first run
-- Check that you have write permissions in the `database/` folder
+**Database connection issues:**
+- Verify `DATABASE_URL` is correct in environment variables
+- Ensure URL includes `?sslmode=require`
+- Check Neon project is active
 
-**Port already in use:**
-- Change the port in `server.js` or set the PORT environment variable
-- `PORT=3001 npm start`
+**PDF generation not working:**
+- Verify all R2 environment variables are set
+- Check R2 credentials and bucket name
+- App works without R2, but PDFs won't generate
 
-**Login not working:**
-- Clear your browser cookies and cache
-- Check the console for error messages
+**Search not returning results:**
+- Query parameter is now optional
+- Try: `/api/database/search?type=students`
+
+For more troubleshooting, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## License
 
@@ -403,4 +501,11 @@ MIT License - feel free to use this for your school or organization.
 
 ## Support
 
-For issues or questions, please open an issue on GitHub.
+For issues or questions:
+- Check [DEPLOYMENT.md](DEPLOYMENT.md) for deployment issues
+- Open an issue on GitHub
+- Review API endpoints documentation above
+
+---
+
+**Ready to deploy?** Check out [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step instructions! 🚀
