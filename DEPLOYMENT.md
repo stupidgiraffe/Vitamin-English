@@ -208,6 +208,7 @@ Complete reference of all environment variables:
 | `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user:pass@host/db` |
 | `SESSION_SECRET` | Yes | Secret for session encryption | Random 32+ char string |
 | `NODE_ENV` | Yes | Environment mode | `production` |
+| `SEED_ON_STARTUP` | No | Auto-seed empty database | `false` (default: enabled) |
 | `CORS_ORIGIN` | No | Allowed CORS origin | `https://app.vercel.app` |
 | `R2_ACCOUNT_ID` | Yes* | Cloudflare account ID | `abc123...` |
 | `R2_ACCESS_KEY_ID` | Yes* | R2 access key | `key123...` |
@@ -216,6 +217,22 @@ Complete reference of all environment variables:
 | `R2_ENDPOINT` | Yes* | R2 endpoint URL | `https://[id].r2.cloudflarestorage.com` |
 
 \* Required for PDF generation features. App will work without R2, but PDF endpoints will return 503.
+
+### Seed Data Control
+
+The application includes a seeding mechanism that automatically populates an empty database with test data:
+- 4 classes: Adult beginner, Intermediate, Advanced, Young elementary
+- 12 students with realistic contact information
+- Sample attendance records
+
+**For Production:**
+- Set `SEED_ON_STARTUP=false` to prevent auto-seeding
+- Use the admin endpoint `/api/admin/seed-data` to manually seed once if needed
+- See [SEED_DATA.md](SEED_DATA.md) for complete seed data documentation
+
+**For Development/Staging:**
+- Leave `SEED_ON_STARTUP` unset or set to `true`
+- Database will auto-seed on first run if empty
 
 ## Testing
 
@@ -241,7 +258,28 @@ Try logging in with default credentials:
 
 ⚠️ **Change default passwords immediately after deployment!**
 
-### 3. Test Features
+### 3. Seed Test Data (Optional)
+
+If you want to populate the database with test data:
+
+**Option 1: Auto-seed on first deploy**
+- Don't set `SEED_ON_STARTUP` (it defaults to enabled)
+- Database will auto-populate on first run if empty
+
+**Option 2: Manual seeding**
+1. Set `SEED_ON_STARTUP=false` in Vercel
+2. Deploy the application
+3. Login as admin
+4. Use curl or Postman to call:
+   ```bash
+   curl -X POST https://your-app.vercel.app/api/admin/seed-data \
+     -H "Content-Type: application/json" \
+     --cookie "vitamin_session=your-session-cookie"
+   ```
+
+See [SEED_DATA.md](SEED_DATA.md) for complete documentation.
+
+### 4. Test Features
 
 - ✅ Login/logout
 - ✅ View students, classes, attendance
@@ -250,7 +288,7 @@ Try logging in with default credentials:
 - ✅ Generate PDFs (if R2 is configured)
 - ✅ Download PDFs
 
-### 4. Check Logs
+### 5. Check Logs
 
 In Vercel Dashboard:
 1. Go to your project
