@@ -145,7 +145,7 @@ router.post('/', async (req, res) => {
         console.log('✅ Validation passed, attempting to insert...');
         
         // Simplified INSERT with only essential fields
-        // Convert empty strings to null for cleaner database
+        // Convert empty strings to null for cleaner database (except notes which defaults to empty)
         const result = await pool.query(
             `INSERT INTO students (name, class_id, parent_name, parent_contact, parent_email, notes, active) 
              VALUES ($1, $2, $3, $4, $5, $6, true) 
@@ -156,7 +156,7 @@ router.post('/', async (req, res) => {
                 parent_name?.trim() || null,
                 parent_contact?.trim() || null,
                 parent_email?.trim() || null,
-                notes?.trim() || ''
+                notes?.trim() || null  // Allow null for notes field
             ]
         );
         
@@ -221,8 +221,8 @@ router.put('/:id', async (req, res) => {
             name.trim(), 
             class_id || null, 
             student_type || 'regular', 
-            color_code?.trim() || '', 
-            notes?.trim() || '', 
+            color_code?.trim() || null,  // Allow null for consistency
+            notes?.trim() || null,       // Allow null for consistency
             active !== undefined ? active : true,
             email?.trim() || null,
             phone?.trim() || null,

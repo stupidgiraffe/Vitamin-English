@@ -97,7 +97,7 @@ router.post('/', async (req, res) => {
         
         // Smart defaults
         const finalTeacherId = teacher_id || req.session?.userId || null;
-        const finalSchedule = schedule?.trim() || '';
+        const finalSchedule = schedule?.trim() || null;  // Use null for consistency
         const finalColor = color || getRandomColor();
         
         console.log('✅ Validation passed, attempting to insert...');
@@ -168,7 +168,7 @@ router.put('/:id', async (req, res) => {
         `, [
             name.trim(), 
             teacher_id || null, 
-            schedule?.trim() || '', 
+            schedule?.trim() || null,  // Use null for consistency
             color || '#4A90E2',
             active !== undefined ? active : true,
             req.params.id
