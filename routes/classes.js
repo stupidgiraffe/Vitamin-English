@@ -79,11 +79,16 @@ function getRandomColor() {
 
 // Create a new class
 router.post('/', async (req, res) => {
+    console.log('🔵 Class POST request received');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Session user:', req.session?.userId);
+    
     try {
         const { name, teacher_id, schedule, color } = req.body;
         
         // Only validate name
         if (!name || !name.trim()) {
+            console.log('❌ Validation failed: name is empty');
             return res.status(400).json({ 
                 error: 'Class name is required',
                 hint: 'Give your class a name (e.g., "Beginners Monday 10am")'
@@ -95,6 +100,14 @@ router.post('/', async (req, res) => {
         const finalSchedule = schedule || ''; // Empty schedule ok
         const finalColor = color || getRandomColor(); // Auto-assign if not provided
         
+        console.log('✅ Validation passed, attempting to insert...');
+        console.log('Values:', {
+            name: name.trim(),
+            teacher_id: finalTeacherId,
+            schedule: finalSchedule,
+            color: finalColor
+        });
+        
         const result = await pool.query(`
             INSERT INTO classes (name, teacher_id, schedule, color) 
             VALUES ($1, $2, $3, $4)
@@ -103,12 +116,22 @@ router.post('/', async (req, res) => {
         
         const classResult = await pool.query('SELECT * FROM classes WHERE id = $1', [result.rows[0].id]);
         const classInfo = classResult.rows[0];
+        
+        console.log('✅ Class created successfully:', classInfo);
         res.status(201).json(classInfo);
     } catch (error) {
-        console.error('Error creating class:', error);
+        console.error('❌❌❌ ERROR CREATING CLASS ❌❌❌');
+        console.error('Error message:', error.message);
+        console.error('Error code:', error.code);
+        console.error('Error detail:', error.detail);
+        console.error('Full error:', error);
+        console.error('Stack trace:', error.stack);
+        
         res.status(500).json({ 
-            error: 'Could not create class',
-            hint: 'Please try again or contact support'
+            error: 'Failed to create class',
+            details: error.message,
+            code: error.code,
+            hint: 'Check server logs for detailed error information'
         });
     }
 });

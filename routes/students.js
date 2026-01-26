@@ -126,6 +126,10 @@ router.get('/:id/details', async (req, res) => {
 
 // Create a new student
 router.post('/', async (req, res) => {
+    console.log('🔵 Student POST request received');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Session user:', req.session?.userId);
+    
     try {
         const { 
             name, class_id, student_type, color_code, notes,
@@ -134,11 +138,27 @@ router.post('/', async (req, res) => {
         
         // Only validate name
         if (!name || !name.trim()) {
+            console.log('❌ Validation failed: name is empty');
             return res.status(400).json({ 
                 error: 'Student name is required',
                 hint: 'Enter the student\'s name to get started'
             });
         }
+        
+        console.log('✅ Validation passed, attempting to insert...');
+        console.log('Values:', {
+            name: name.trim(),
+            class_id: class_id || null,
+            student_type: student_type || 'regular',
+            color_code: color_code || '',
+            notes: notes || '',
+            email: email || '',
+            phone: phone || '',
+            parent_name: parent_name || '',
+            parent_phone: parent_phone || '',
+            parent_email: parent_email || '',
+            enrollment_date: enrollment_date || new Date().toISOString().split('T')[0]
+        });
         
         const result = await pool.query(`
             INSERT INTO students (
@@ -163,12 +183,22 @@ router.post('/', async (req, res) => {
         
         const studentResult = await pool.query('SELECT * FROM students WHERE id = $1', [result.rows[0].id]);
         const student = studentResult.rows[0];
+        
+        console.log('✅ Student created successfully:', student);
         res.status(201).json(student);
     } catch (error) {
-        console.error('Error creating student:', error);
+        console.error('❌❌❌ ERROR CREATING STUDENT ❌❌❌');
+        console.error('Error message:', error.message);
+        console.error('Error code:', error.code);
+        console.error('Error detail:', error.detail);
+        console.error('Full error:', error);
+        console.error('Stack trace:', error.stack);
+        
         res.status(500).json({ 
-            error: 'Could not create student',
-            hint: 'Please try again or contact support'
+            error: 'Failed to create student',
+            details: error.message,
+            code: error.code,
+            hint: 'Check server logs for detailed error information'
         });
     }
 });
