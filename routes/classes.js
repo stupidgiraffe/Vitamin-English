@@ -96,7 +96,7 @@ router.post('/', async (req, res) => {
         }
         
         // Smart defaults
-        const finalTeacherId = teacher_id || req.session.userId;
+        const finalTeacherId = teacher_id || req.session?.userId;
         const finalSchedule = schedule || '';
         const finalColor = color || getRandomColor();
         
