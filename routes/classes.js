@@ -86,8 +86,8 @@ router.post('/', async (req, res) => {
     try {
         const { name, teacher_id, schedule, color } = req.body;
         
-        // Only validate name
-        if (!name || !name.trim()) {
+        // ONLY validate name
+        if (!name || name.trim() === '') {
             console.log('❌ Validation failed: name is empty');
             return res.status(400).json({ 
                 error: 'Class name is required',
@@ -96,9 +96,9 @@ router.post('/', async (req, res) => {
         }
         
         // Smart defaults
-        const finalTeacherId = teacher_id || req.session?.userId || null; // Default to current user
-        const finalSchedule = schedule || ''; // Empty schedule ok
-        const finalColor = color || getRandomColor(); // Auto-assign if not provided
+        const finalTeacherId = teacher_id || req.session.userId;
+        const finalSchedule = schedule || '';
+        const finalColor = color || getRandomColor();
         
         console.log('✅ Validation passed, attempting to insert...');
         console.log('Values:', {
@@ -108,30 +108,30 @@ router.post('/', async (req, res) => {
             color: finalColor
         });
         
-        const result = await pool.query(`
-            INSERT INTO classes (name, teacher_id, schedule, color) 
-            VALUES ($1, $2, $3, $4)
-            RETURNING id
-        `, [name.trim(), finalTeacherId, finalSchedule, finalColor]);
+        const result = await pool.query(
+            `INSERT INTO classes (name, teacher_id, schedule, color, active) 
+             VALUES ($1, $2, $3, $4, true) 
+             RETURNING *`,
+            [name.trim(), finalTeacherId, finalSchedule, finalColor]
+        );
         
-        const classResult = await pool.query('SELECT * FROM classes WHERE id = $1', [result.rows[0].id]);
-        const classInfo = classResult.rows[0];
+        console.log('✅ Class created successfully:', result.rows[0]);
+        res.status(201).json(result.rows[0]);
         
-        console.log('✅ Class created successfully:', classInfo);
-        res.status(201).json(classInfo);
     } catch (error) {
         console.error('❌❌❌ ERROR CREATING CLASS ❌❌❌');
         console.error('Error message:', error.message);
         console.error('Error code:', error.code);
         console.error('Error detail:', error.detail);
-        console.error('Full error:', error);
+        console.error('Error constraint:', error.constraint);
+        console.error('Full error:', JSON.stringify(error, null, 2));
         console.error('Stack trace:', error.stack);
         
         res.status(500).json({ 
             error: 'Failed to create class',
             details: error.message,
             code: error.code,
-            hint: 'Check server logs for detailed error information'
+            hint: error.hint || 'Check server logs for detailed error information'
         });
     }
 });

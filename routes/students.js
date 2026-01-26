@@ -131,74 +131,54 @@ router.post('/', async (req, res) => {
     console.log('Session user:', req.session?.userId);
     
     try {
-        const { 
-            name, class_id, student_type, color_code, notes,
-            email, phone, parent_name, parent_phone, parent_email, enrollment_date 
-        } = req.body;
+        const { name, class_id, parent_name, parent_contact, parent_email, notes } = req.body;
         
-        // Only validate name
-        if (!name || !name.trim()) {
+        // ONLY validate name - everything else is optional
+        if (!name || name.trim() === '') {
             console.log('❌ Validation failed: name is empty');
             return res.status(400).json({ 
                 error: 'Student name is required',
-                hint: 'Enter the student\'s name to get started'
+                hint: 'Please enter the student\'s name'
             });
         }
         
         console.log('✅ Validation passed, attempting to insert...');
-        console.log('Values:', {
-            name: name.trim(),
-            class_id: class_id || null,
-            student_type: student_type || 'regular',
-            color_code: color_code || '',
-            notes: notes || '',
-            email: email || '',
-            phone: phone || '',
-            parent_name: parent_name || '',
-            parent_phone: parent_phone || '',
-            parent_email: parent_email || '',
-            enrollment_date: enrollment_date || new Date().toISOString().split('T')[0]
-        });
         
-        const result = await pool.query(`
-            INSERT INTO students (
-                name, class_id, student_type, color_code, notes,
-                email, phone, parent_name, parent_phone, parent_email, enrollment_date
-            ) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id
-        `, [
-            name.trim(), 
-            class_id || null, 
-            student_type || 'regular', 
-            color_code || '', 
-            notes || '',
-            email || '',
-            phone || '',
-            parent_name || '',
-            parent_phone || '',
-            parent_email || '',
-            enrollment_date || new Date().toISOString().split('T')[0]
-        ]);
+        // Simplified INSERT with only essential fields
+        const result = await pool.query(
+            `INSERT INTO students (name, class_id, parent_name, parent_contact, parent_email, notes, active) 
+             VALUES ($1, $2, $3, $4, $5, $6, true) 
+             RETURNING *`,
+            [
+                name.trim(),
+                class_id || null,
+                parent_name || null,
+                parent_contact || null,
+                parent_email || null,
+                notes || ''
+            ]
+        );
         
-        const studentResult = await pool.query('SELECT * FROM students WHERE id = $1', [result.rows[0].id]);
-        const student = studentResult.rows[0];
+        console.log('✅ Student created successfully:', result.rows[0]);
+        res.status(201).json(result.rows[0]);
         
-        console.log('✅ Student created successfully:', student);
-        res.status(201).json(student);
     } catch (error) {
         console.error('❌❌❌ ERROR CREATING STUDENT ❌❌❌');
         console.error('Error message:', error.message);
         console.error('Error code:', error.code);
         console.error('Error detail:', error.detail);
-        console.error('Full error:', error);
+        console.error('Error constraint:', error.constraint);
+        console.error('Error table:', error.table);
+        console.error('Full error:', JSON.stringify(error, null, 2));
         console.error('Stack trace:', error.stack);
         
         res.status(500).json({ 
             error: 'Failed to create student',
             details: error.message,
             code: error.code,
-            hint: 'Check server logs for detailed error information'
+            hint: error.hint || 'Check server logs for detailed error information',
+            constraint: error.constraint,
+            table: error.table
         });
     }
 });

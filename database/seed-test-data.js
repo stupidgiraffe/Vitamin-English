@@ -49,7 +49,7 @@ async function seedTestData() {
             console.log(`✅ Created class: ${result.rows[0].name} (ID: ${result.rows[0].id})`);
         }
         
-        // Create 12 students
+        // Create 12 students with Japanese names and realistic info
         const students = [
             { name: '田中 花子', parent: '田中 太郎', phone: '090-1234-5678', email: 'tanaka@example.jp', classIdx: 0 },
             { name: '佐藤 太郎', parent: '佐藤 美咲', phone: '090-2345-6789', email: 'sato@example.jp', classIdx: 0 },
@@ -71,7 +71,7 @@ async function seedTestData() {
         for (const student of students) {
             const classId = classIds[student.classIdx];
             const result = await client.query(
-                `INSERT INTO students (name, class_id, parent_name, parent_phone, parent_email, notes, active) 
+                `INSERT INTO students (name, class_id, parent_name, parent_contact, parent_email, notes, active) 
                  VALUES ($1, $2, $3, $4, $5, $6, true)
                  RETURNING id, name`,
                 [student.name, classId, student.parent, student.phone, student.email, '']
