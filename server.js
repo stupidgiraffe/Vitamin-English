@@ -131,9 +131,15 @@ const makeupRoutes = require('./routes/makeup');
 const pdfRoutes = require('./routes/pdf');
 const adminRoutes = require('./routes/admin');
 
-// Auto-load test data on startup if database is empty
+// Auto-load test data on startup if database is empty (controlled by SEED_ON_STARTUP env var)
 async function initializeTestData() {
     try {
+        // Skip auto-seeding if SEED_ON_STARTUP is explicitly set to 'false'
+        if (process.env.SEED_ON_STARTUP === 'false') {
+            console.log('📊 Auto-seeding disabled by SEED_ON_STARTUP=false');
+            return;
+        }
+        
         // Check if database has any classes
         const classCheck = await pool.query('SELECT COUNT(*) FROM classes WHERE active = true');
         const classCount = parseInt(classCheck.rows[0].count);

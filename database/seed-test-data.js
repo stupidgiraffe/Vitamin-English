@@ -30,11 +30,12 @@ async function seedTestData() {
         const teacherId = userResult.rows[0].id;
         console.log(`Using teacher ID: ${teacherId}`);
         
-        // Create 3 classes
+        // Create 4 classes with requested names
         const classes = [
-            { name: '初級クラス (Beginners)', schedule: 'Mon/Wed 10:00-11:30', color: '#4285f4' },
-            { name: '中級クラス (Intermediate)', schedule: 'Tue/Thu 14:00-15:30', color: '#34a853' },
-            { name: '上級クラス (Advanced)', schedule: 'Fri 11:00-13:00', color: '#ea4335' }
+            { name: 'Adult beginner', schedule: 'Mon/Wed 10:00-11:30', color: '#4285f4' },
+            { name: 'Intermediate', schedule: 'Tue/Thu 14:00-15:30', color: '#34a853' },
+            { name: 'Advanced', schedule: 'Fri 11:00-13:00', color: '#ea4335' },
+            { name: 'Young elementary', schedule: 'Sat 09:00-10:00', color: '#fbbc04' }
         ];
         
         const classIds = [];
@@ -49,22 +50,27 @@ async function seedTestData() {
             console.log(`✅ Created class: ${result.rows[0].name} (ID: ${result.rows[0].id})`);
         }
         
-        // Create 12 students with Japanese names and realistic info
+        // Create students with realistic English names (minimum 4, distributed across classes)
         const students = [
-            { name: '田中 花子', parent: '田中 太郎', phone: '090-1234-5678', email: 'tanaka@example.jp', classIdx: 0 },
-            { name: '佐藤 太郎', parent: '佐藤 美咲', phone: '090-2345-6789', email: 'sato@example.jp', classIdx: 0 },
-            { name: '鈴木 美咲', parent: '鈴木 健太', phone: '090-3456-7890', email: 'suzuki@example.jp', classIdx: 0 },
-            { name: '高橋 健太', parent: '高橋 愛美', phone: '090-4567-8901', email: 'takahashi@example.jp', classIdx: 0 },
+            // Adult beginner class
+            { name: 'Emma Wilson', parent: 'Robert Wilson', phone: '555-0101', email: 'emma.wilson@example.com', classIdx: 0 },
+            { name: 'James Anderson', parent: 'Mary Anderson', phone: '555-0102', email: 'james.anderson@example.com', classIdx: 0 },
+            { name: 'Sophia Martinez', parent: 'Carlos Martinez', phone: '555-0103', email: 'sophia.martinez@example.com', classIdx: 0 },
             
-            { name: '伊藤 愛美', parent: '伊藤 大輔', phone: '090-5678-9012', email: 'ito@example.jp', classIdx: 1 },
-            { name: '渡辺 大輔', parent: '渡辺 さくら', phone: '090-6789-0123', email: 'watanabe@example.jp', classIdx: 1 },
-            { name: '山本 さくら', parent: '山本 翔太', phone: '090-7890-1234', email: 'yamamoto@example.jp', classIdx: 1 },
-            { name: '中村 翔太', parent: '中村 結衣', phone: '090-8901-2345', email: 'nakamura@example.jp', classIdx: 1 },
+            // Intermediate class
+            { name: 'Oliver Taylor', parent: 'Jennifer Taylor', phone: '555-0201', email: 'oliver.taylor@example.com', classIdx: 1 },
+            { name: 'Charlotte Brown', parent: 'David Brown', phone: '555-0202', email: 'charlotte.brown@example.com', classIdx: 1 },
+            { name: 'Liam Johnson', parent: 'Sarah Johnson', phone: '555-0203', email: 'liam.johnson@example.com', classIdx: 1 },
             
-            { name: '小林 結衣', parent: '小林 翼', phone: '090-9012-3456', email: 'kobayashi@example.jp', classIdx: 2 },
-            { name: '加藤 翼', parent: '加藤 優花', phone: '090-0123-4567', email: 'kato@example.jp', classIdx: 2 },
-            { name: '吉田 優花', parent: '吉田 蓮', phone: '080-1234-5678', email: 'yoshida@example.jp', classIdx: 2 },
-            { name: '山田 蓮', parent: '山田 花子', phone: '080-2345-6789', email: 'yamada@example.jp', classIdx: 2 }
+            // Advanced class
+            { name: 'Ava Davis', parent: 'Michael Davis', phone: '555-0301', email: 'ava.davis@example.com', classIdx: 2 },
+            { name: 'Noah Garcia', parent: 'Patricia Garcia', phone: '555-0302', email: 'noah.garcia@example.com', classIdx: 2 },
+            { name: 'Isabella Rodriguez', parent: 'Jose Rodriguez', phone: '555-0303', email: 'isabella.rodriguez@example.com', classIdx: 2 },
+            
+            // Young elementary class
+            { name: 'Ethan Smith', parent: 'Linda Smith', phone: '555-0401', email: 'ethan.smith@example.com', classIdx: 3 },
+            { name: 'Mia Lee', parent: 'Kevin Lee', phone: '555-0402', email: 'mia.lee@example.com', classIdx: 3 },
+            { name: 'Lucas White', parent: 'Nancy White', phone: '555-0403', email: 'lucas.white@example.com', classIdx: 3 }
         ];
         
         const studentIds = [];

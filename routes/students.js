@@ -145,6 +145,7 @@ router.post('/', async (req, res) => {
         console.log('✅ Validation passed, attempting to insert...');
         
         // Simplified INSERT with only essential fields
+        // Convert empty strings to null for cleaner database
         const result = await pool.query(
             `INSERT INTO students (name, class_id, parent_name, parent_contact, parent_email, notes, active) 
              VALUES ($1, $2, $3, $4, $5, $6, true) 
@@ -152,10 +153,10 @@ router.post('/', async (req, res) => {
             [
                 name.trim(),
                 class_id || null,
-                parent_name || null,
-                parent_contact || null,
-                parent_email || null,
-                notes || ''
+                parent_name?.trim() || null,
+                parent_contact?.trim() || null,
+                parent_email?.trim() || null,
+                notes?.trim() || ''
             ]
         );
         
@@ -172,11 +173,23 @@ router.post('/', async (req, res) => {
         console.error('Full error:', JSON.stringify(error, null, 2));
         console.error('Stack trace:', error.stack);
         
+        // Provide helpful error messages for common database errors
+        let errorMessage = 'Failed to create student';
+        let hint = 'Check server logs for detailed error information';
+        
+        if (error.code === '23503') { // Foreign key violation
+            errorMessage = 'Invalid class selected';
+            hint = 'The selected class does not exist. Please choose a valid class.';
+        } else if (error.code === '23505') { // Unique violation
+            errorMessage = 'Duplicate student';
+            hint = 'A student with this information already exists.';
+        }
+        
         res.status(500).json({ 
-            error: 'Failed to create student',
+            error: errorMessage,
             details: error.message,
             code: error.code,
-            hint: error.hint || 'Check server logs for detailed error information',
+            hint: hint,
             constraint: error.constraint,
             table: error.table
         });
@@ -191,33 +204,60 @@ router.put('/:id', async (req, res) => {
             email, phone, parent_name, parent_phone, parent_email, enrollment_date
         } = req.body;
         
+        // Validate required field
+        if (!name || name.trim() === '') {
+            return res.status(400).json({ 
+                error: 'Student name is required',
+                hint: 'Please enter the student\'s name'
+            });
+        }
+        
         await pool.query(`
             UPDATE students 
             SET name = $1, class_id = $2, student_type = $3, color_code = $4, notes = $5, active = $6,
                 email = $7, phone = $8, parent_name = $9, parent_phone = $10, parent_email = $11, enrollment_date = $12
             WHERE id = $13
         `, [
-            name, 
+            name.trim(), 
             class_id || null, 
             student_type || 'regular', 
-            color_code || '', 
-            notes || '', 
+            color_code?.trim() || '', 
+            notes?.trim() || '', 
             active !== undefined ? active : true,
-            email || '',
-            phone || '',
-            parent_name || '',
-            parent_phone || '',
-            parent_email || '',
-            enrollment_date || '',
+            email?.trim() || null,
+            phone?.trim() || null,
+            parent_name?.trim() || null,
+            parent_phone?.trim() || null,
+            parent_email?.trim() || null,
+            enrollment_date?.trim() || null,
             req.params.id
         ]);
         
         const result = await pool.query('SELECT * FROM students WHERE id = $1', [req.params.id]);
         const student = result.rows[0];
+        
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        
         res.json(student);
     } catch (error) {
         console.error('Error updating student:', error);
-        res.status(500).json({ error: 'Failed to update student' });
+        
+        // Provide helpful error messages for common database errors
+        let errorMessage = 'Failed to update student';
+        let hint = 'Check server logs for detailed error information';
+        
+        if (error.code === '23503') { // Foreign key violation
+            errorMessage = 'Invalid class selected';
+            hint = 'The selected class does not exist. Please choose a valid class.';
+        }
+        
+        res.status(500).json({ 
+            error: errorMessage,
+            details: error.message,
+            hint: hint
+        });
     }
 });
 

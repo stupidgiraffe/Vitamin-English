@@ -79,7 +79,10 @@ A beautiful, modern web application for managing student attendance and teacher 
 
 4. **Initialize the database**
    
-   The application will automatically create tables and sample data on first run.
+   The application will automatically create tables and seed with test data on first run.
+   - Includes 4 classes: Adult beginner, Intermediate, Advanced, Young elementary
+   - Includes 12 sample students with realistic contact information
+   - See [SEED_DATA.md](SEED_DATA.md) for details on seed data and customization
 
 5. **Start the server**
    ```bash
@@ -89,6 +92,7 @@ A beautiful, modern web application for managing student attendance and teacher 
 6. **Access the application**
    - Open your browser and go to: `http://localhost:3000`
    - The database will be automatically initialized with sample data
+   - Login with default credentials (see below)
 
 ### Production Deployment to Vercel
 
@@ -452,17 +456,25 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed step-by-step instructions.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for complete environment variable documentation.
 
-Required variables:
+**Required variables:**
 - `DATABASE_URL` - Neon PostgreSQL connection string
 - `SESSION_SECRET` - Random secret key (32+ characters)
 - `NODE_ENV` - Set to `production`
 
-Optional (for PDF features):
+**Optional (for PDF features):**
 - `R2_ACCOUNT_ID` - Cloudflare account ID
 - `R2_ACCESS_KEY_ID` - R2 access key
 - `R2_SECRET_ACCESS_KEY` - R2 secret key
 - `R2_BUCKET_NAME` - R2 bucket name
 - `R2_ENDPOINT` - R2 endpoint URL
+
+**Optional (for seed data control):**
+- `SEED_ON_STARTUP` - Set to `false` to disable automatic seeding on startup (default: enabled if database is empty)
+  - See [SEED_DATA.md](SEED_DATA.md) for complete seed data documentation
+
+**Optional (for debugging):**
+- `DEBUG_SESSIONS` - Set to `true` to enable session debugging logs
+- `CORS_ORIGIN` - Set to your domain in production (e.g., `https://yourdomain.com`)
 
 ### Post-Deployment Checklist
 

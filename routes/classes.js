@@ -96,8 +96,8 @@ router.post('/', async (req, res) => {
         }
         
         // Smart defaults
-        const finalTeacherId = teacher_id || req.session?.userId;
-        const finalSchedule = schedule || '';
+        const finalTeacherId = teacher_id || req.session?.userId || null;
+        const finalSchedule = schedule?.trim() || '';
         const finalColor = color || getRandomColor();
         
         console.log('✅ Validation passed, attempting to insert...');
@@ -127,11 +127,23 @@ router.post('/', async (req, res) => {
         console.error('Full error:', JSON.stringify(error, null, 2));
         console.error('Stack trace:', error.stack);
         
+        // Provide helpful error messages for common database errors
+        let errorMessage = 'Failed to create class';
+        let hint = 'Check server logs for detailed error information';
+        
+        if (error.code === '23503') { // Foreign key violation
+            errorMessage = 'Invalid teacher selected';
+            hint = 'The selected teacher does not exist. Please choose a valid teacher.';
+        } else if (error.code === '23505') { // Unique violation
+            errorMessage = 'Duplicate class';
+            hint = 'A class with this name already exists.';
+        }
+        
         res.status(500).json({ 
-            error: 'Failed to create class',
+            error: errorMessage,
             details: error.message,
             code: error.code,
-            hint: error.hint || 'Check server logs for detailed error information'
+            hint: hint
         });
     }
 });
@@ -141,14 +153,22 @@ router.put('/:id', async (req, res) => {
     try {
         const { name, teacher_id, schedule, color, active } = req.body;
         
+        // Validate required field
+        if (!name || name.trim() === '') {
+            return res.status(400).json({ 
+                error: 'Class name is required',
+                hint: 'Please enter the class name'
+            });
+        }
+        
         await pool.query(`
             UPDATE classes 
             SET name = $1, teacher_id = $2, schedule = $3, color = $4, active = $5
             WHERE id = $6
         `, [
-            name, 
+            name.trim(), 
             teacher_id || null, 
-            schedule || '', 
+            schedule?.trim() || '', 
             color || '#4A90E2',
             active !== undefined ? active : true,
             req.params.id
@@ -156,10 +176,29 @@ router.put('/:id', async (req, res) => {
         
         const result = await pool.query('SELECT * FROM classes WHERE id = $1', [req.params.id]);
         const classInfo = result.rows[0];
+        
+        if (!classInfo) {
+            return res.status(404).json({ error: 'Class not found' });
+        }
+        
         res.json(classInfo);
     } catch (error) {
         console.error('Error updating class:', error);
-        res.status(500).json({ error: 'Failed to update class' });
+        
+        // Provide helpful error messages for common database errors
+        let errorMessage = 'Failed to update class';
+        let hint = 'Check server logs for detailed error information';
+        
+        if (error.code === '23503') { // Foreign key violation
+            errorMessage = 'Invalid teacher selected';
+            hint = 'The selected teacher does not exist. Please choose a valid teacher.';
+        }
+        
+        res.status(500).json({ 
+            error: errorMessage,
+            details: error.message,
+            hint: hint
+        });
     }
 });
 
