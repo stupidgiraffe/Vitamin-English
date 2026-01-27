@@ -77,7 +77,7 @@ async function seedTestData() {
         for (const student of students) {
             const classId = classIds[student.classIdx];
             const result = await client.query(
-                `INSERT INTO students (name, class_id, parent_name, parent_contact, parent_email, notes, active) 
+                `INSERT INTO students (name, class_id, parent_name, parent_phone, parent_email, notes, active) 
                  VALUES ($1, $2, $3, $4, $5, $6, true)
                  RETURNING id, name`,
                 [student.name, classId, student.parent, student.phone, student.email, '']
