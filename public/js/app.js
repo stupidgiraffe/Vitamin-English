@@ -2133,18 +2133,14 @@ async function searchDatabase() {
     const endDate = document.getElementById('db-search-end-date').value;
     const container = document.getElementById('db-viewer-container');
     
-    if (!query) {
-        Toast.error('Please enter a search query');
-        return;
-    }
-    
     try {
         container.innerHTML = '<p class="info-text">Searching...</p>';
         
-        const params = new URLSearchParams({ query });
+        const params = new URLSearchParams();
+        if (query) params.append('query', query);
         if (type) params.append('type', type);
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
         
         const results = await api(`/database/search?${params.toString()}`);
         

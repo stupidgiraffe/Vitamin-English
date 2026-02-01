@@ -493,6 +493,9 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                         doc.rect(x, currentY, dateColumnWidth, rowHeight)
                            .stroke('#CCCCCC');
                         
+                        // Reset fill color after stroke to ensure text renders correctly
+                        doc.fillColor('black');
+                        
                         // Draw status symbol
                         if (status) {
                             doc.font('Helvetica-Bold')
