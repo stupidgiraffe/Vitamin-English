@@ -122,6 +122,34 @@
                     <button id="export-attendance-pdf-btn" class="btn btn-secondary">Export PDF</button>
                 </div>
 
+                <!-- Attendance Metadata -->
+                <div id="attendance-metadata" class="attendance-metadata" style="display: none;">
+                    <div class="metadata-item">
+                        <label>Class:</label>
+                        <div class="value" id="metadata-class-name">-</div>
+                    </div>
+                    <div class="metadata-item">
+                        <label>Date Range:</label>
+                        <div class="value" id="metadata-date-range">-</div>
+                    </div>
+                    <div class="metadata-item">
+                        <label>Teacher:</label>
+                        <div class="value" id="metadata-teacher">-</div>
+                    </div>
+                    <div class="metadata-item">
+                        <label>Taken by:</label>
+                        <select id="attendance-taken-by" class="form-control">
+                            <option value="">Select teacher...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Attendance Controls -->
+                <div id="attendance-controls" class="attendance-controls" style="display: none;">
+                    <button id="add-date-btn" class="add-date-btn">➕ Add Date</button>
+                    <button id="move-attendance-btn" class="move-attendance-btn">📅 Move Attendance</button>
+                </div>
+
                 <div id="attendance-container" class="attendance-sheet">
                     <p class="info-text">Select a class and date range to view attendance</p>
                 </div>

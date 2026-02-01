@@ -143,14 +143,15 @@ router.post('/change-username', async (req, res) => {
     }
 });
 
-// Get all teachers (for admin)
+// Get all teachers (for admin and teachers)
 router.get('/teachers', async (req, res) => {
     if (!req.session.userId) {
         return res.status(401).json({ error: 'Not authenticated' });
     }
     
-    if (req.session.role !== 'admin') {
-        return res.status(403).json({ error: 'Admin access required' });
+    // Allow both admin and teacher roles to view all teachers
+    if (req.session.role !== 'admin' && req.session.role !== 'teacher') {
+        return res.status(403).json({ error: 'Admin or teacher access required' });
     }
     
     try {

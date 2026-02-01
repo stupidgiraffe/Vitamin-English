@@ -275,4 +275,66 @@ router.post('/bulk', async (req, res) => {
     }
 });
 
+// Move attendance records from one date to another
+router.post('/move', async (req, res) => {
+    // Authentication check
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
+    try {
+        const { class_id, from_date, to_date } = req.body;
+        
+        if (!class_id || !from_date || !to_date) {
+            return res.status(400).json({ error: 'class_id, from_date, and to_date are required' });
+        }
+        
+        // Normalize dates to ISO format (YYYY-MM-DD)
+        const normalizedFromDate = normalizeToISO(from_date);
+        const normalizedToDate = normalizeToISO(to_date);
+        
+        if (!normalizedFromDate || !normalizedToDate) {
+            return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
+        }
+        
+        if (normalizedFromDate === normalizedToDate) {
+            return res.status(400).json({ error: 'Source and target dates must be different' });
+        }
+        
+        // Check if there are records to move
+        const checkResult = await pool.query(`
+            SELECT COUNT(*) as count FROM attendance 
+            WHERE class_id = $1 AND date = $2
+        `, [class_id, normalizedFromDate]);
+        
+        const recordCount = parseInt(checkResult.rows[0].count);
+        
+        if (recordCount === 0) {
+            return res.status(404).json({ error: 'No attendance records found for the source date' });
+        }
+        
+        // Delete any existing records at the target date first
+        await pool.query(`
+            DELETE FROM attendance 
+            WHERE class_id = $1 AND date = $2
+        `, [class_id, normalizedToDate]);
+        
+        // Move records by updating the date
+        const result = await pool.query(`
+            UPDATE attendance 
+            SET date = $1
+            WHERE class_id = $2 AND date = $3
+            RETURNING id
+        `, [normalizedToDate, class_id, normalizedFromDate]);
+        
+        res.json({ 
+            message: 'Attendance records moved successfully',
+            movedCount: result.rowCount
+        });
+    } catch (error) {
+        console.error('Error moving attendance:', error);
+        res.status(500).json({ error: 'Failed to move attendance records' });
+    }
+});
+
 module.exports = router;

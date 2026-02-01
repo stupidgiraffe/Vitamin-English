@@ -197,8 +197,13 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                 const statusX = 400;
                 const notesX = 500;
                 
+                // Blue header background
+                doc.rect(50, tableTop - 5, doc.page.width - 100, 20)
+                   .fillAndStroke('#4472C4', '#2B5797');
+                
                 doc.font('Helvetica-Bold')
                    .fontSize(11)
+                   .fillColor('white')
                    .text('#', numberX, tableTop)
                    .text('Student Name', nameX, tableTop)
                    .text('Type', typeX, tableTop)
@@ -207,12 +212,8 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                 
                 doc.moveDown(0.5);
                 
-                // Draw line under headers
-                doc.moveTo(50, doc.y)
-                   .lineTo(doc.page.width - 50, doc.y)
-                   .stroke();
-                
-                doc.moveDown(0.3);
+                // Reset fill color for body
+                doc.fillColor('black');
                 
                 // Table rows
                 doc.font('Helvetica')
@@ -225,6 +226,14 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                     }
                     
                     const rowY = doc.y;
+                    
+                    // Alternate row background (yellow striping)
+                    if (index % 2 === 1) {
+                        doc.rect(50, rowY - 2, doc.page.width - 100, 16)
+                           .fill('#FFF9E6');
+                        doc.fillColor('black');
+                    }
+                    
                     const attendance = attendanceRecords.find(a => a.student_id === student.id);
                     const statusText = attendance 
                         ? (attendance.status === 'O' ? 'Present' : 
