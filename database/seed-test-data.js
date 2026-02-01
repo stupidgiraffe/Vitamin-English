@@ -42,9 +42,9 @@ async function seedTestData() {
         for (const cls of classes) {
             const result = await client.query(
                 `INSERT INTO classes (name, teacher_id, schedule, color, active) 
-                 VALUES ($1, $2, $3, $4, true) 
+                 VALUES ($1, $2, $3, $4, $5) 
                  RETURNING id, name`,
-                [cls.name, teacherId, cls.schedule, cls.color]
+                [cls.name, teacherId, cls.schedule, cls.color, true]
             );
             classIds.push(result.rows[0].id);
             console.log(`✅ Created class: ${result.rows[0].name} (ID: ${result.rows[0].id})`);
@@ -102,7 +102,7 @@ async function seedTestData() {
             const classId = classIds[student.classIdx];
             const result = await client.query(
                 `INSERT INTO students (name, class_id, email, phone, parent_name, parent_phone, parent_email, notes, active) 
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING id, name`,
                 [
                     student.name, 
@@ -112,7 +112,8 @@ async function seedTestData() {
                     student.parent, 
                     student.parentPhone, 
                     student.parentEmail, 
-                    ''
+                    '',
+                    true
                 ]
             );
             studentIds.push({ id: result.rows[0].id, classIdx: student.classIdx });

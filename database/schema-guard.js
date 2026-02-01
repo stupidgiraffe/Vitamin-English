@@ -40,13 +40,13 @@ async function ensureSchemaColumns() {
 
 async function ensureStudentColumns(client) {
     const requiredColumns = [
-        { name: 'parent_phone', type: 'VARCHAR(50)', default: null },
-        { name: 'color_code', type: 'VARCHAR(50)', default: null },
-        { name: 'email', type: 'VARCHAR(255)', default: null },
-        { name: 'phone', type: 'VARCHAR(50)', default: null },
-        { name: 'parent_name', type: 'VARCHAR(255)', default: null },
-        { name: 'parent_email', type: 'VARCHAR(255)', default: null },
-        { name: 'enrollment_date', type: 'VARCHAR(50)', default: null }
+        { name: 'parent_phone', type: 'VARCHAR(50)', default: 'NULL' },
+        { name: 'color_code', type: 'VARCHAR(50)', default: 'NULL' },
+        { name: 'email', type: 'VARCHAR(255)', default: 'NULL' },
+        { name: 'phone', type: 'VARCHAR(50)', default: 'NULL' },
+        { name: 'parent_name', type: 'VARCHAR(255)', default: 'NULL' },
+        { name: 'parent_email', type: 'VARCHAR(255)', default: 'NULL' },
+        { name: 'enrollment_date', type: 'VARCHAR(50)', default: 'NULL' }
     ];
 
     for (const column of requiredColumns) {
@@ -66,6 +66,30 @@ async function ensureClassColumns(client) {
 
 async function ensureColumnExists(client, tableName, columnName, columnType, defaultValue) {
     try {
+        // Validate table and column names against allowlist to prevent SQL injection
+        const allowedTables = ['students', 'classes'];
+        const allowedColumns = {
+            students: ['parent_phone', 'color_code', 'email', 'phone', 'parent_name', 'parent_email', 'enrollment_date'],
+            classes: ['color']
+        };
+        
+        if (!allowedTables.includes(tableName)) {
+            console.error(`❌ Invalid table name: ${tableName}`);
+            return;
+        }
+        
+        if (!allowedColumns[tableName] || !allowedColumns[tableName].includes(columnName)) {
+            console.error(`❌ Invalid column name: ${columnName} for table ${tableName}`);
+            return;
+        }
+        
+        // Validate default value against allowlist (only allow NULL or specific safe values)
+        const allowedDefaults = ['NULL', "'#4A90E2'"];
+        if (defaultValue !== null && !allowedDefaults.includes(defaultValue)) {
+            console.error(`❌ Invalid default value: ${defaultValue}`);
+            return;
+        }
+        
         // Check if column exists
         const checkResult = await client.query(`
             SELECT column_name 
@@ -77,6 +101,7 @@ async function ensureColumnExists(client, tableName, columnName, columnType, def
             // Column doesn't exist, add it
             console.log(`⚠️  Column ${tableName}.${columnName} missing - adding...`);
             
+            // Safe to use validated table/column names and default values in SQL
             const defaultClause = defaultValue !== null ? `DEFAULT ${defaultValue}` : '';
             const alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType} ${defaultClause}`;
             
