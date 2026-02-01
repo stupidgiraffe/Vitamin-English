@@ -781,6 +781,25 @@ async function toggleAttendance(cell) {
     const currentIndex = statusCycle.indexOf(currentStatus);
     const newStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
 
+    // Get time from metadata field if available
+    const timeInput = document.getElementById('attendance-time');
+    let time = timeInput ? timeInput.value.trim() : null;
+    
+    // Validate time format if provided (HH:MM or H:MM)
+    if (time) {
+        const timePattern = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+        if (!timePattern.test(time)) {
+            Toast.error('Invalid time format. Please use HH:MM format (e.g., 14:00)');
+            cell.classList.remove('saving');
+            return;
+        }
+    }
+
+    // Show saving indicator
+    const originalContent = cell.textContent;
+    cell.textContent = '⏳';
+    cell.classList.add('saving');
+
     try {
         // Normalize date to ISO format before sending to API
         const normalizedDate = normalizeToISO(date) || date;
@@ -791,7 +810,8 @@ async function toggleAttendance(cell) {
                 student_id: parseInt(studentId),
                 class_id: parseInt(classId),
                 date: normalizedDate,
-                status: newStatus
+                status: newStatus,
+                time: time || null
             })
         });
 
@@ -801,9 +821,21 @@ async function toggleAttendance(cell) {
         if (newStatus === 'O') cell.classList.add('present');
         else if (newStatus === 'X') cell.classList.add('absent');
         else if (newStatus === '/') cell.classList.add('partial');
+        
+        // Show saved indicator briefly
+        cell.classList.add('saved');
+        setTimeout(() => {
+            cell.classList.remove('saved');
+        }, 1000);
+        
+        // Show success toast
+        Toast.success('Attendance saved ✓', { duration: 1500 });
     } catch (error) {
         console.error('Error updating attendance:', error);
         Toast.error('Failed to update attendance');
+        // Restore original content on error
+        cell.textContent = originalContent;
+        cell.classList.remove('saving');
     }
 }
 
@@ -2165,11 +2197,16 @@ async function loadDatabaseTable() {
         }
         
         const columns = Object.keys(result.data[0]);
+        const hasActions = tableName === 'lesson_reports';
+        
         let html = '<table class="db-table"><thead><tr>';
         
         columns.forEach(col => {
             html += `<th>${col}</th>`;
         });
+        if (hasActions) {
+            html += '<th>Actions</th>';
+        }
         html += '</tr></thead><tbody>';
         
         result.data.forEach(row => {
@@ -2180,6 +2217,19 @@ async function loadDatabaseTable() {
                 else if (typeof value === 'object') value = JSON.stringify(value);
                 html += `<td>${value}</td>`;
             });
+            if (hasActions) {
+                // Sanitize ID to prevent XSS
+                const sanitizedId = parseInt(row.id);
+                if (isNaN(sanitizedId)) {
+                    console.error('Invalid row ID:', row.id);
+                    html += '<td class="actions-cell">Invalid ID</td>';
+                } else {
+                    html += `<td class="actions-cell">
+                        <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${sanitizedId})">Edit</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${sanitizedId})">Delete</button>
+                    </td>`;
+                }
+            }
             html += '</tr>';
         });
         
@@ -2187,6 +2237,38 @@ async function loadDatabaseTable() {
         container.innerHTML = html;
     } catch (error) {
         container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
+    }
+}
+
+// Edit report from database viewer - navigate to reports page and load the report
+async function editReportFromDatabase(reportId) {
+    try {
+        // Navigate to reports page
+        navigateToPage('reports');
+        
+        // Load the report
+        await loadReportById(reportId);
+        
+        Toast.success('Report loaded for editing');
+    } catch (error) {
+        Toast.error('Failed to load report: ' + error.message);
+    }
+}
+
+// Delete report from database viewer
+async function deleteReportFromDatabase(reportId) {
+    if (!confirm('Are you sure you want to delete this lesson report? This action cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        await api(`/reports/${reportId}`, { method: 'DELETE' });
+        Toast.success('Report deleted successfully');
+        
+        // Reload the database table
+        await loadDatabaseTable();
+    } catch (error) {
+        Toast.error('Failed to delete report: ' + error.message);
     }
 }
 
