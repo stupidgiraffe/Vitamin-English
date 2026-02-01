@@ -400,6 +400,7 @@ async function loadDashboard() {
 // Attendance Management
 document.getElementById('load-attendance-btn').addEventListener('click', loadAttendance);
 document.getElementById('export-attendance-btn').addEventListener('click', exportAttendance);
+document.getElementById('export-attendance-pdf-btn').addEventListener('click', exportAttendancePDF);
 document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
 
 async function showNewAttendanceModal() {
@@ -681,6 +682,50 @@ function exportAttendance() {
     window.URL.revokeObjectURL(url);
 }
 
+async function exportAttendancePDF() {
+    const classId = document.getElementById('attendance-class-select').value;
+    const startDate = document.getElementById('attendance-start-date').value;
+    const endDate = document.getElementById('attendance-end-date').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    if (!startDate) {
+        Toast.error('Please select a start date');
+        return;
+    }
+    
+    try {
+        // Use the start date for the PDF (or could iterate through date range)
+        const date = startDate;
+        
+        Toast.info('Generating PDF...', 'Please wait');
+        
+        const response = await api(`/pdf/class-attendance/${classId}`, {
+            method: 'POST',
+            body: JSON.stringify({ date })
+        });
+        
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated successfully!');
+            
+            // Open download URL in new tab
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error generating attendance PDF:', error);
+        if (error.message.includes('not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
+        } else {
+            Toast.error('Error generating PDF: ' + error.message);
+        }
+    }
+}
+
 // Set default dates for attendance
 const today = new Date();
 const weekAgo = new Date(today);
@@ -695,6 +740,7 @@ document.getElementById('new-report-btn').addEventListener('click', () => {
     document.getElementById('report-form').reset();
     document.getElementById('report-id').value = '';
     document.getElementById('delete-report-btn').style.display = 'none';
+    document.getElementById('export-report-pdf-btn').style.display = 'none';
     document.getElementById('report-form-date').value = new Date().toISOString().split('T')[0];
 });
 
@@ -727,6 +773,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('report-strengths').value = report.strengths || '';
             document.getElementById('report-comments').value = report.comments || '';
             document.getElementById('delete-report-btn').style.display = 'inline-block';
+            document.getElementById('export-report-pdf-btn').style.display = 'inline-block';
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
         } else {
@@ -736,6 +783,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('report-form-date').value = date;
             document.getElementById('report-class').value = classId;
             document.getElementById('delete-report-btn').style.display = 'none';
+            document.getElementById('export-report-pdf-btn').style.display = 'none';
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
         }
@@ -795,6 +843,39 @@ document.getElementById('delete-report-btn').addEventListener('click', async () 
         loadReportsList();
     } catch (error) {
         Toast.error('Error deleting report: ' + error.message);
+    }
+});
+
+document.getElementById('export-report-pdf-btn').addEventListener('click', async () => {
+    const reportId = document.getElementById('report-id').value;
+    
+    if (!reportId) {
+        Toast.error('Please save the report first before exporting to PDF');
+        return;
+    }
+    
+    try {
+        Toast.info('Generating PDF...', 'Please wait');
+        
+        const response = await api(`/pdf/lesson-report/${reportId}`, {
+            method: 'POST'
+        });
+        
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated successfully!');
+            
+            // Open download URL in new tab
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error generating lesson report PDF:', error);
+        if (error.message.includes('not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
+        } else {
+            Toast.error('Error generating PDF: ' + error.message);
+        }
     }
 });
 
