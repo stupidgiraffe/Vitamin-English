@@ -131,7 +131,7 @@ router.post('/', async (req, res) => {
     console.log('Session user:', req.session?.userId);
     
     try {
-        const { name, class_id, parent_name, parent_contact, parent_email, notes } = req.body;
+        const { name, class_id, student_type, color_code, email, phone, parent_name, parent_phone, parent_email, enrollment_date, notes } = req.body;
         
         // ONLY validate name - everything else is optional
         if (!name || name.trim() === '') {
@@ -144,18 +144,23 @@ router.post('/', async (req, res) => {
         
         console.log('✅ Validation passed, attempting to insert...');
         
-        // Simplified INSERT with only essential fields
+        // Insert with all fields from frontend
         // Convert empty strings to null for cleaner database (except notes which defaults to empty)
         const result = await pool.query(
-            `INSERT INTO students (name, class_id, parent_name, parent_contact, parent_email, notes, active) 
-             VALUES ($1, $2, $3, $4, $5, $6, true) 
+            `INSERT INTO students (name, class_id, student_type, color_code, email, phone, parent_name, parent_phone, parent_email, enrollment_date, notes, active) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true) 
              RETURNING *`,
             [
                 name.trim(),
                 class_id || null,
+                student_type || 'regular',
+                color_code?.trim() || null,
+                email?.trim() || null,
+                phone?.trim() || null,
                 parent_name?.trim() || null,
-                parent_contact?.trim() || null,
+                parent_phone?.trim() || null,
                 parent_email?.trim() || null,
+                enrollment_date?.trim() || null,
                 notes?.trim() || null  // Allow null for notes field
             ]
         );
