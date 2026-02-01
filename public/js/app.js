@@ -635,6 +635,15 @@ async function loadAttendance() {
         const normalizedStartDate = startDate ? normalizeToISO(startDate) : '';
         const normalizedEndDate = endDate ? normalizeToISO(endDate) : '';
         
+        // Validate date range
+        if (normalizedStartDate && normalizedEndDate && normalizedStartDate > normalizedEndDate) {
+            Toast.error('Start date must be before or equal to end date');
+            container.innerHTML = '<p class="info-text">Please select a valid date range</p>';
+            metadataDiv.style.display = 'none';
+            controlsDiv.style.display = 'none';
+            return;
+        }
+        
         const data = await api(`/attendance/matrix?classId=${classId}${normalizedStartDate ? `&startDate=${normalizedStartDate}` : ''}${normalizedEndDate ? `&endDate=${normalizedEndDate}` : ''}`);
         
         if (data.students.length === 0) {
@@ -671,7 +680,8 @@ async function loadAttendance() {
 
         renderAttendanceTable(data, classId);
     } catch (error) {
-        container.innerHTML = `<p class="info-text">Error loading attendance: ${error.message}</p>`;
+        console.error('Error loading attendance:', error);
+        container.innerHTML = '<p class="info-text">Unable to load attendance. Please try again.</p>';
         metadataDiv.style.display = 'none';
         controlsDiv.style.display = 'none';
     }
@@ -720,8 +730,8 @@ function renderAttendanceTable(data, classId) {
             const rowClass = student.color_code ? `student-row-${student.color_code}` : '';
             html += `<tr class="${rowClass}"><td class="student-name">
                 <div class="student-name-cell">
-                    <span>${student.name}</span>
-                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${student.name}">✏️</button>
+                    <span>${escapeHtml(student.name)}</span>
+                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
                 </div>
             </td>`;
             
@@ -746,8 +756,8 @@ function renderAttendanceTable(data, classId) {
         trialStudents.forEach(student => {
             html += `<tr class="student-row-trial"><td class="student-name">
                 <div class="student-name-cell">
-                    <span>${student.name}</span>
-                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${student.name}">✏️</button>
+                    <span>${escapeHtml(student.name)}</span>
+                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
                 </div>
             </td>`;
             
@@ -955,20 +965,29 @@ async function exportAttendancePDF() {
         return;
     }
     
-    if (!startDate) {
-        Toast.error('Please select a start date');
+    if (!startDate || !endDate) {
+        Toast.error('Please select both start and end dates');
         return;
     }
     
     try {
-        // Note: Backend API generates PDF for a single date. Using start date from the selected range.
-        const date = startDate;
+        // Normalize dates to ISO format before sending to API
+        const normalizedStartDate = normalizeToISO(startDate);
+        const normalizedEndDate = normalizeToISO(endDate);
+        
+        if (!normalizedStartDate || !normalizedEndDate) {
+            Toast.error('Invalid date format');
+            return;
+        }
         
         Toast.info('Generating PDF...', 'Please wait');
         
-        const response = await api(`/pdf/class-attendance/${classId}`, {
+        const response = await api(`/pdf/attendance-grid/${classId}`, {
             method: 'POST',
-            body: JSON.stringify({ date })
+            body: JSON.stringify({ 
+                startDate: normalizedStartDate, 
+                endDate: normalizedEndDate 
+            })
         });
         
         if (response.success && response.downloadUrl) {
