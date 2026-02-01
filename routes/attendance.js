@@ -81,32 +81,46 @@ router.get('/matrix', async (req, res) => {
         `, [classId]);
         const students = studentsResult.rows;
         
-        // Get dates
-        let dateQuery = 'SELECT DISTINCT date FROM attendance WHERE class_id = $1';
-        const dateParams = [classId];
-        let paramIndex = 2;
-        
         // Normalize date inputs to ISO format (YYYY-MM-DD)
         const normalizedStartDate = startDate ? normalizeToISO(startDate) : null;
         const normalizedEndDate = endDate ? normalizeToISO(endDate) : null;
         
-        if (normalizedStartDate) {
-            dateQuery += ` AND date >= $${paramIndex}`;
-            dateParams.push(normalizedStartDate);
-            paramIndex++;
+        let dates = [];
+        
+        // If date range is provided, generate all dates in range
+        if (normalizedStartDate && normalizedEndDate) {
+            const start = new Date(normalizedStartDate);
+            const end = new Date(normalizedEndDate);
+            const current = new Date(start);
+            
+            while (current <= end) {
+                dates.push(current.toISOString().split('T')[0]);
+                current.setDate(current.getDate() + 1);
+            }
+        } else {
+            // Otherwise, get dates from existing attendance records
+            let dateQuery = 'SELECT DISTINCT date FROM attendance WHERE class_id = $1';
+            const dateParams = [classId];
+            let paramIndex = 2;
+            
+            if (normalizedStartDate) {
+                dateQuery += ` AND date >= $${paramIndex}`;
+                dateParams.push(normalizedStartDate);
+                paramIndex++;
+            }
+            
+            if (normalizedEndDate) {
+                dateQuery += ` AND date <= $${paramIndex}`;
+                dateParams.push(normalizedEndDate);
+                paramIndex++;
+            }
+            
+            dateQuery += ' ORDER BY date';
+            
+            const datesResult = await pool.query(dateQuery, dateParams);
+            // Normalize all dates to ISO format
+            dates = datesResult.rows.map(row => normalizeToISO(row.date) || row.date);
         }
-        
-        if (normalizedEndDate) {
-            dateQuery += ` AND date <= $${paramIndex}`;
-            dateParams.push(normalizedEndDate);
-            paramIndex++;
-        }
-        
-        dateQuery += ' ORDER BY date';
-        
-        const datesResult = await pool.query(dateQuery, dateParams);
-        // Normalize all dates to ISO format
-        const dates = datesResult.rows.map(row => normalizeToISO(row.date) || row.date);
         
         // Get attendance records
         let attendanceQuery = `
@@ -114,16 +128,19 @@ router.get('/matrix', async (req, res) => {
             FROM attendance 
             WHERE class_id = $1
         `;
-        paramIndex = 2;
+        const attendanceParams = [classId];
+        let paramIndex = 2;
         if (normalizedStartDate) {
             attendanceQuery += ` AND date >= $${paramIndex}`;
+            attendanceParams.push(normalizedStartDate);
             paramIndex++;
         }
         if (normalizedEndDate) {
             attendanceQuery += ` AND date <= $${paramIndex}`;
+            attendanceParams.push(normalizedEndDate);
         }
         
-        const attendanceResult = await pool.query(attendanceQuery, dateParams);
+        const attendanceResult = await pool.query(attendanceQuery, attendanceParams);
         const attendanceRecords = attendanceResult.rows;
         
         // Create attendance matrix with normalized dates
