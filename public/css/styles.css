@@ -332,11 +332,18 @@ body {
     background: #FFF9E6; /* Light yellow striping */
 }
 
+.attendance-table tbody tr:nth-child(odd) {
+    background: white;
+}
+
 .attendance-table .student-name {
     text-align: left;
     font-weight: 600;
     white-space: nowrap;
-    background: white;
+    background: inherit; /* Inherit row color */
+    position: sticky;
+    left: 0;
+    z-index: 5;
 }
 
 .attendance-cell {

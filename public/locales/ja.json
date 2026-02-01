@@ -22,7 +22,19 @@
     "markPresent": "出席",
     "markAbsent": "欠席",
     "seedData": "テストデータを読み込む",
-    "clearData": "すべてのデータを削除"
+    "clearData": "すべてのデータを削除",
+    "load": "読み込む",
+    "loadAttendance": "出席を読み込む",
+    "loadData": "データを読み込む",
+    "loadReport": "報告を読み込む",
+    "export": "エクスポート",
+    "exportCSV": "CSVエクスポート",
+    "exportPDF": "PDFエクスポート",
+    "filter": "フィルター",
+    "search": "検索",
+    "addDate": "日付を追加",
+    "newAttendance": "新しい出席表",
+    "scheduleMakeup": "振替レッスンを予定する"
   },
   "forms": {
     "className": "クラス名",
@@ -38,7 +50,12 @@
     "username": "ユーザー名",
     "password": "パスワード",
     "required": "必須",
-    "optional": "任意"
+    "optional": "任意",
+    "startDate": "開始日",
+    "endDate": "終了日",
+    "date": "日付",
+    "status": "ステータス",
+    "type": "種類"
   },
   "messages": {
     "loginSuccess": "ログインしました！",
@@ -52,7 +69,11 @@
     "noData": "データがありません",
     "confirmDelete": "本当に削除しますか？",
     "dataSeeded": "テストデータを読み込みました！",
-    "dataCleared": "すべてのデータを削除しました"
+    "dataCleared": "すべてのデータを削除しました",
+    "selectClass": "クラスを選択してください",
+    "selectClassAndDate": "クラスと日付範囲を選択して出席を表示",
+    "noStudentsInClass": "このクラスには生徒がいません",
+    "loadingRecentRecords": "最近のレコードを読み込んでいます..."
   },
   "placeholders": {
     "className": "例：初級クラス 月曜日 10時",
@@ -60,6 +81,15 @@
     "studentName": "生徒のフルネーム",
     "parentName": "保護者のフルネーム",
     "parentContact": "電話番号",
-    "parentEmail": "メールアドレス"
+    "parentEmail": "メールアドレス",
+    "search": "すべてのレコードを検索...",
+    "searchStudents": "生徒を検索..."
+  },
+  "headers": {
+    "attendanceManagement": "出席管理",
+    "databaseViewer": "データベースビューア",
+    "administration": "管理",
+    "regularStudents": "正規生徒",
+    "makeupTrialStudents": "振替／体験生徒"
   }
 }

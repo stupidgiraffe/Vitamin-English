@@ -337,4 +337,97 @@ router.post('/move', async (req, res) => {
     }
 });
 
+// Generate dates based on class schedule
+// Helper function to parse schedule and generate dates
+function generateScheduleDates(schedule, startDate, endDate) {
+    const dates = [];
+    
+    if (!schedule || !startDate || !endDate) {
+        return dates;
+    }
+    
+    // Parse day names from schedule (e.g., "Monday, Wednesday" or "Mon/Wed 10:00-11:30")
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayAbbr = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    
+    const scheduleLower = schedule.toLowerCase();
+    const scheduleDays = [];
+    
+    // Check for each day in the schedule
+    dayNames.forEach((day, index) => {
+        if (scheduleLower.includes(day) || scheduleLower.includes(dayAbbr[index])) {
+            scheduleDays.push(index);
+        }
+    });
+    
+    // If no days found, return empty array
+    if (scheduleDays.length === 0) {
+        return dates;
+    }
+    
+    // Generate dates for those days of the week within the date range
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const current = new Date(start);
+    
+    while (current <= end) {
+        const dayOfWeek = current.getDay();
+        if (scheduleDays.includes(dayOfWeek)) {
+            dates.push(current.toISOString().split('T')[0]);
+        }
+        current.setDate(current.getDate() + 1);
+    }
+    
+    return dates;
+}
+
+// Get schedule-based dates for a class
+router.get('/schedule-dates', async (req, res) => {
+    try {
+        const { classId, startDate, endDate } = req.query;
+        
+        if (!classId) {
+            return res.status(400).json({ error: 'classId is required' });
+        }
+        
+        // Get class information including schedule
+        const classResult = await pool.query('SELECT schedule FROM classes WHERE id = $1', [classId]);
+        
+        if (classResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Class not found' });
+        }
+        
+        const classData = classResult.rows[0];
+        
+        // Helper to get default date range (last 6 months)
+        const getDefaultDateRange = () => {
+            const end = new Date();
+            const start = new Date();
+            start.setMonth(start.getMonth() - 6);
+            return {
+                start: start.toISOString().split('T')[0],
+                end: end.toISOString().split('T')[0]
+            };
+        };
+        
+        // Use provided dates or default to last 6 months
+        const defaults = getDefaultDateRange();
+        const endDateValue = endDate ? normalizeToISO(endDate) : defaults.end;
+        const startDateValue = startDate ? normalizeToISO(startDate) : defaults.start;
+        
+        // Generate dates based on schedule
+        const dates = generateScheduleDates(classData.schedule, startDateValue, endDateValue);
+        
+        res.json({
+            schedule: classData.schedule,
+            startDate: startDateValue,
+            endDate: endDateValue,
+            dates
+        });
+    } catch (error) {
+        console.error('Error generating schedule dates:', error);
+        res.status(500).json({ error: 'Failed to generate schedule dates' });
+    }
+});
+
 module.exports = router;

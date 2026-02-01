@@ -378,6 +378,62 @@ function navigateToPage(page) {
     // Load page-specific data
     if (page === 'dashboard') loadDashboard();
     else if (page === 'admin') loadAdminData();
+    else if (page === 'attendance') initializeAttendancePage();
+    else if (page === 'database') initializeDatabasePage();
+}
+
+// Initialize attendance page with default date range (last 6 months)
+function initializeAttendancePage() {
+    const startDateInput = document.getElementById('attendance-start-date');
+    const endDateInput = document.getElementById('attendance-end-date');
+    
+    // Only set defaults if inputs are empty
+    if (!startDateInput.value || !endDateInput.value) {
+        const { startDate, endDate } = getDefaultAttendanceDateRange();
+        startDateInput.value = startDate;
+        endDateInput.value = endDate;
+    }
+}
+
+// Helper: Get default date range for attendance (last 6 months)
+function getDefaultAttendanceDateRange() {
+    const today = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    return {
+        startDate: sixMonthsAgo.toISOString().split('T')[0],
+        endDate: today.toISOString().split('T')[0]
+    };
+}
+
+// Initialize database page to show recent records by default
+async function initializeDatabasePage() {
+    const container = document.getElementById('db-viewer-container');
+    
+    // Check if already loaded
+    if (container.querySelector('.db-table')) {
+        return;
+    }
+    
+    const DEFAULT_DATABASE_DAYS_BACK = 30;
+    
+    // Set default date range (last 30 days)
+    const today = new Date();
+    const daysAgo = new Date();
+    daysAgo.setDate(daysAgo.getDate() - DEFAULT_DATABASE_DAYS_BACK);
+    
+    document.getElementById('db-search-start-date').value = daysAgo.toISOString().split('T')[0];
+    document.getElementById('db-search-end-date').value = today.toISOString().split('T')[0];
+    
+    // Load recent attendance records by default
+    try {
+        container.innerHTML = '<p class="info-text">Loading recent records...</p>';
+        document.getElementById('db-search-type').value = 'attendance';
+        await searchDatabase();
+    } catch (error) {
+        console.error('Error loading initial database view:', error);
+    }
 }
 
 // Dashboard
@@ -421,6 +477,46 @@ document.getElementById('export-attendance-pdf-btn').addEventListener('click', e
 document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
 document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
+document.getElementById('use-schedule-btn')?.addEventListener('click', useScheduleForDates);
+
+// Use class schedule to auto-fill dates
+async function useScheduleForDates() {
+    const classId = document.getElementById('attendance-class-select').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    try {
+        const startDateInput = document.getElementById('attendance-start-date');
+        const endDateInput = document.getElementById('attendance-end-date');
+        
+        // Get current date range or use defaults
+        const { startDate: defaultStart, endDate: defaultEnd } = getDefaultAttendanceDateRange();
+        const startDate = startDateInput.value || defaultStart;
+        const endDate = endDateInput.value || defaultEnd;
+        
+        // Fetch schedule-based dates
+        const result = await api(`/attendance/schedule-dates?classId=${classId}&startDate=${startDate}&endDate=${endDate}`);
+        
+        if (result.dates && result.dates.length > 0) {
+            Toast.success(`Found ${result.dates.length} dates based on schedule: ${result.schedule || 'N/A'}`);
+            
+            // Update date range inputs
+            startDateInput.value = result.startDate;
+            endDateInput.value = result.endDate;
+            
+            // Reload attendance with the schedule-based dates
+            await loadAttendance();
+        } else {
+            Toast.info(`No schedule found for this class. Using custom date range instead.`);
+        }
+    } catch (error) {
+        console.error('Error using schedule:', error);
+        Toast.error('Failed to load schedule-based dates');
+    }
+}
 
 async function showNewAttendanceModal() {
     try {
