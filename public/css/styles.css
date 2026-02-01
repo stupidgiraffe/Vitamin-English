@@ -350,8 +350,8 @@ body {
     background: white;
 }
 
-.attendance-cell:hover {
-    background: #e8f4f8 !important;
+.attendance-table tbody tr:hover .attendance-cell:hover {
+    background: #e8f4f8;
     transform: scale(1.05);
 }
 

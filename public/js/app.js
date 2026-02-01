@@ -698,7 +698,7 @@ async function exportAttendancePDF() {
     }
     
     try {
-        // Use the start date for the PDF (or could iterate through date range)
+        // Note: Backend API generates PDF for a single date. Using start date from the selected range.
         const date = startDate;
         
         Toast.info('Generating PDF...', 'Please wait');
