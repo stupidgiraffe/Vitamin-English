@@ -495,6 +495,50 @@ body {
     background: #2B5797;
 }
 
+/* Save Status Badge */
+.save-status-badge {
+    margin-left: auto;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: all 0.3s ease;
+    opacity: 0;
+    animation: fadeIn 0.3s forwards;
+}
+
+@keyframes fadeIn {
+    to { opacity: 1; }
+}
+
+.save-status-badge.saving {
+    background: #FFF3CD;
+    border: 1px solid #FFC107;
+    color: #856404;
+}
+
+.save-status-badge.saved {
+    background: #D4EDDA;
+    border: 1px solid #28A745;
+    color: #155724;
+}
+
+.save-status-badge .status-icon {
+    font-size: 1rem;
+}
+
+.save-status-badge.saving .status-icon {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
 /* Warning box for modal dialogs */
 .warning-box {
     background: #fff3cd;

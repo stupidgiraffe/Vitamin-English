@@ -4,6 +4,98 @@ let classes = [];
 let students = [];
 let teachers = [];
 
+// Autosave mechanism for attendance
+const AttendanceSaveQueue = {
+    queue: new Map(), // key: "studentId-classId-date", value: { studentId, classId, date, status, time }
+    saveTimeout: null,
+    debounceDelay: 1500, // 1.5 seconds
+    
+    // Add item to queue and schedule save
+    add(studentId, classId, date, status, time = null) {
+        const key = `${studentId}-${classId}-${date}`;
+        this.queue.set(key, { studentId, classId, date, status, time });
+        
+        // Show saving status
+        this.updateSaveStatus('saving');
+        
+        // Clear existing timeout and set new one
+        if (this.saveTimeout) {
+            clearTimeout(this.saveTimeout);
+        }
+        
+        this.saveTimeout = setTimeout(() => {
+            this.processSave();
+        }, this.debounceDelay);
+    },
+    
+    // Process all queued saves
+    async processSave() {
+        if (this.queue.size === 0) return;
+        
+        const items = Array.from(this.queue.values());
+        this.queue.clear();
+        
+        try {
+            // Save all items
+            const promises = items.map(item => 
+                api('/attendance', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        student_id: parseInt(item.studentId),
+                        class_id: parseInt(item.classId),
+                        date: item.date,
+                        status: item.status,
+                        time: item.time
+                    })
+                })
+            );
+            
+            await Promise.all(promises);
+            
+            // Show saved status
+            this.updateSaveStatus('saved');
+            
+            // Hide badge after 2 seconds
+            setTimeout(() => {
+                this.hideSaveStatus();
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Error saving attendance:', error);
+            Toast.error('Failed to save some attendance changes');
+            this.updateSaveStatus('saved'); // Still hide the badge even on error
+        }
+    },
+    
+    // Update save status badge
+    updateSaveStatus(status) {
+        const badge = document.getElementById('save-status-badge');
+        if (!badge) return;
+        
+        badge.style.display = 'flex';
+        badge.className = 'save-status-badge ' + status;
+        
+        const icon = badge.querySelector('.status-icon');
+        const text = badge.querySelector('.status-text');
+        
+        if (status === 'saving') {
+            icon.textContent = '⏳';
+            text.textContent = 'Saving...';
+        } else if (status === 'saved') {
+            icon.textContent = '✓';
+            text.textContent = 'Saved';
+        }
+    },
+    
+    // Hide save status badge
+    hideSaveStatus() {
+        const badge = document.getElementById('save-status-badge');
+        if (badge) {
+            badge.style.display = 'none';
+        }
+    }
+};
+
 // Toast Notification System
 const Toast = {
     container: null,
@@ -800,52 +892,27 @@ async function toggleAttendance(cell) {
         const timePattern = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
         if (!timePattern.test(time)) {
             Toast.error('Invalid time format. Please use HH:MM format (e.g., 14:00)');
-            cell.classList.remove('saving');
             return;
         }
     }
 
-    // Show saving indicator
-    const originalContent = cell.textContent;
-    cell.textContent = '⏳';
-    cell.classList.add('saving');
+    // Optimistic UI update - update immediately without waiting for server
+    cell.textContent = newStatus;
+    cell.className = 'attendance-cell';
+    if (newStatus === 'O') cell.classList.add('present');
+    else if (newStatus === 'X') cell.classList.add('absent');
+    else if (newStatus === '/') cell.classList.add('partial');
 
     try {
-        // Normalize date to ISO format before sending to API
+        // Normalize date to ISO format before queueing
         const normalizedDate = normalizeToISO(date) || date;
         
-        await api('/attendance', {
-            method: 'POST',
-            body: JSON.stringify({
-                student_id: parseInt(studentId),
-                class_id: parseInt(classId),
-                date: normalizedDate,
-                status: newStatus,
-                time: time || null
-            })
-        });
-
-        // Update UI
-        cell.textContent = newStatus;
-        cell.className = 'attendance-cell';
-        if (newStatus === 'O') cell.classList.add('present');
-        else if (newStatus === 'X') cell.classList.add('absent');
-        else if (newStatus === '/') cell.classList.add('partial');
+        // Add to save queue with debouncing
+        AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, time);
         
-        // Show saved indicator briefly
-        cell.classList.add('saved');
-        setTimeout(() => {
-            cell.classList.remove('saved');
-        }, 1000);
-        
-        // Show success toast
-        Toast.success('Attendance saved ✓', { duration: 1500 });
     } catch (error) {
-        console.error('Error updating attendance:', error);
-        Toast.error('Failed to update attendance');
-        // Restore original content on error
-        cell.textContent = originalContent;
-        cell.classList.remove('saving');
+        console.error('Error queueing attendance update:', error);
+        Toast.error('Failed to queue attendance update');
     }
 }
 

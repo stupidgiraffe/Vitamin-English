@@ -466,6 +466,29 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                         const key = `${student.id}-${date}`;
                         const status = attendanceMap[key] || '';
                         
+                        // Apply subtle background color for status
+                        let cellBgColor = null;
+                        let textColor = 'black';
+                        if (status === 'X') {
+                            // Absent - subtle red/pink
+                            cellBgColor = '#FFE6E6';
+                            textColor = '#DC3545';
+                        } else if (status === '/') {
+                            // Late/Partial - subtle yellow
+                            cellBgColor = '#FFF9E6';
+                            textColor = '#FFC107';
+                        } else if (status === 'O') {
+                            // Present - subtle green
+                            cellBgColor = '#F0FFF4';
+                            textColor = '#28A745';
+                        }
+                        
+                        // Draw cell background with color if status exists
+                        if (cellBgColor) {
+                            doc.rect(x, currentY, dateColumnWidth, rowHeight)
+                               .fill(cellBgColor);
+                        }
+                        
                         // Draw cell border
                         doc.rect(x, currentY, dateColumnWidth, rowHeight)
                            .stroke('#CCCCCC');
@@ -474,13 +497,15 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                         if (status) {
                             doc.font('Helvetica-Bold')
                                .fontSize(10)
+                               .fillColor(textColor)
                                .text(status, x + 2, currentY + 3, { 
                                    width: dateColumnWidth - 4,
                                    height: rowHeight,
                                    align: 'center'
                                });
                             doc.font('Helvetica')
-                               .fontSize(9);
+                               .fontSize(9)
+                               .fillColor('black');
                         }
                     });
                     
