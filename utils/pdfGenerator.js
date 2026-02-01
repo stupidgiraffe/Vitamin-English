@@ -167,6 +167,10 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
             });
             doc.on('error', reject);
             
+            // Constants for PDF layout
+            const MAX_STUDENT_NAME_LENGTH = 25;
+            const MAX_NOTES_LENGTH = 30;
+            
             // Header
             doc.fontSize(20)
                .font('Helvetica-Bold')
@@ -243,10 +247,14 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                            attendance.status === '/' ? 'Late' : 'Not marked')
                         : 'Not marked';
                     
-                    // Measure text to ensure it fits
-                    const studentName = student.name.length > 25 ? student.name.substring(0, 25) + '...' : student.name;
+                    // Truncate text to prevent overflow
+                    const studentName = student.name.length > MAX_STUDENT_NAME_LENGTH 
+                        ? student.name.substring(0, MAX_STUDENT_NAME_LENGTH) + '...' 
+                        : student.name;
                     const notes = attendance?.notes || '';
-                    const notesText = notes.length > 30 ? notes.substring(0, 30) + '...' : notes;
+                    const notesText = notes.length > MAX_NOTES_LENGTH 
+                        ? notes.substring(0, MAX_NOTES_LENGTH) + '...' 
+                        : notes;
                     
                     doc.text((index + 1).toString(), numberX, rowY, { width: 30, height: rowHeight })
                        .text(studentName, nameX, rowY, { width: 170, height: rowHeight })

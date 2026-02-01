@@ -389,13 +389,22 @@ function initializeAttendancePage() {
     
     // Only set defaults if inputs are empty
     if (!startDateInput.value || !endDateInput.value) {
-        const today = new Date();
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-        
-        startDateInput.value = sixMonthsAgo.toISOString().split('T')[0];
-        endDateInput.value = today.toISOString().split('T')[0];
+        const { startDate, endDate } = getDefaultAttendanceDateRange();
+        startDateInput.value = startDate;
+        endDateInput.value = endDate;
     }
+}
+
+// Helper: Get default date range for attendance (last 6 months)
+function getDefaultAttendanceDateRange() {
+    const today = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    return {
+        startDate: sixMonthsAgo.toISOString().split('T')[0],
+        endDate: today.toISOString().split('T')[0]
+    };
 }
 
 // Initialize database page to show recent records by default
@@ -407,12 +416,14 @@ async function initializeDatabasePage() {
         return;
     }
     
+    const DEFAULT_DATABASE_DAYS_BACK = 30;
+    
     // Set default date range (last 30 days)
     const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const daysAgo = new Date();
+    daysAgo.setDate(daysAgo.getDate() - DEFAULT_DATABASE_DAYS_BACK);
     
-    document.getElementById('db-search-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('db-search-start-date').value = daysAgo.toISOString().split('T')[0];
     document.getElementById('db-search-end-date').value = today.toISOString().split('T')[0];
     
     // Load recent attendance records by default
@@ -482,13 +493,9 @@ async function useScheduleForDates() {
         const endDateInput = document.getElementById('attendance-end-date');
         
         // Get current date range or use defaults
-        const startDate = startDateInput.value || (() => {
-            const sixMonthsAgo = new Date();
-            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-            return sixMonthsAgo.toISOString().split('T')[0];
-        })();
-        
-        const endDate = endDateInput.value || new Date().toISOString().split('T')[0];
+        const { startDate: defaultStart, endDate: defaultEnd } = getDefaultAttendanceDateRange();
+        const startDate = startDateInput.value || defaultStart;
+        const endDate = endDateInput.value || defaultEnd;
         
         // Fetch schedule-based dates
         const result = await api(`/attendance/schedule-dates?classId=${classId}&startDate=${startDate}&endDate=${endDate}`);

@@ -399,13 +399,21 @@ router.get('/schedule-dates', async (req, res) => {
         
         const classData = classResult.rows[0];
         
+        // Helper to get default date range (last 6 months)
+        const getDefaultDateRange = () => {
+            const end = new Date();
+            const start = new Date();
+            start.setMonth(start.getMonth() - 6);
+            return {
+                start: start.toISOString().split('T')[0],
+                end: end.toISOString().split('T')[0]
+            };
+        };
+        
         // Use provided dates or default to last 6 months
-        const endDateValue = endDate ? normalizeToISO(endDate) : new Date().toISOString().split('T')[0];
-        const startDateValue = startDate ? normalizeToISO(startDate) : (() => {
-            const sixMonthsAgo = new Date();
-            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-            return sixMonthsAgo.toISOString().split('T')[0];
-        })();
+        const defaults = getDefaultDateRange();
+        const endDateValue = endDate ? normalizeToISO(endDate) : defaults.end;
+        const startDateValue = startDate ? normalizeToISO(startDate) : defaults.start;
         
         // Generate dates based on schedule
         const dates = generateScheduleDates(classData.schedule, startDateValue, endDateValue);
