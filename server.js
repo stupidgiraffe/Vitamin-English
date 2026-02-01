@@ -4,6 +4,8 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const pool = require('./database/init');
 const { initializeDatabase, verifyDatabaseSchema } = require('./database/init-postgres');
 const { ensureSchemaColumns } = require('./database/schema-guard');
@@ -13,22 +15,60 @@ const { sanitizeInput } = require('./middleware/sanitize');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Security headers middleware
+// Trust proxy for rate limiting behind reverse proxies (Vercel, Railway, etc.)
+app.set('trust proxy', 1);
+
+// Enhanced security headers with Helmet
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
+            styleSrc: ["'self'", "'unsafe-inline'", "cdn.jsdelivr.net"],
+            imgSrc: ["'self'", "data:", "blob:"],
+            fontSrc: ["'self'", "data:"],
+            connectSrc: ["'self'"],
+            frameSrc: ["'none'"],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+        }
+    },
+    crossOriginEmbedderPolicy: false, // Allow loading external resources like flatpickr
+    crossOriginResourcePolicy: { policy: "same-site" }
+}));
+
+// Additional security headers
 app.use((req, res, next) => {
-    // Prevent clickjacking
-    res.setHeader('X-Frame-Options', 'DENY');
-    // Prevent MIME type sniffing
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    // Enable XSS protection
-    res.setHeader('X-XSS-Protection', '1; mode=block');
     // Referrer policy
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    // Content Security Policy
-    if (process.env.NODE_ENV === 'production') {
-        res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-    }
+    // Permissions policy
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
 });
+
+// Rate limiting configuration
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 500, // Limit each IP to 500 requests per windowMs
+    message: { error: 'Too many requests, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+// Stricter rate limit for authentication endpoints
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Limit each IP to 10 login attempts per windowMs
+    message: { error: 'Too many login attempts, please try again after 15 minutes.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipSuccessfulRequests: true // Don't count successful logins
+});
+
+// Apply general rate limiting to all requests
+app.use(generalLimiter);
 
 // Ensure cookies are sent in responses (for Vercel serverless environment)
 app.use((req, res, next) => {
@@ -179,6 +219,8 @@ initializeDatabase().then(() => {
 });
 
 // Use routes
+// Apply stricter rate limiting to authentication endpoints
+app.use('/api/auth/login', authLimiter);
 app.use('/api/auth', authRoutes);
 app.use('/api/students', requireAuth, studentRoutes);
 app.use('/api/classes', requireAuth, classRoutes);
