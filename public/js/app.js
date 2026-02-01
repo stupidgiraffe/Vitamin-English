@@ -466,6 +466,50 @@ document.getElementById('export-attendance-pdf-btn').addEventListener('click', e
 document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
 document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
+document.getElementById('use-schedule-btn')?.addEventListener('click', useScheduleForDates);
+
+// Use class schedule to auto-fill dates
+async function useScheduleForDates() {
+    const classId = document.getElementById('attendance-class-select').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    try {
+        const startDateInput = document.getElementById('attendance-start-date');
+        const endDateInput = document.getElementById('attendance-end-date');
+        
+        // Get current date range or use defaults
+        const startDate = startDateInput.value || (() => {
+            const sixMonthsAgo = new Date();
+            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+            return sixMonthsAgo.toISOString().split('T')[0];
+        })();
+        
+        const endDate = endDateInput.value || new Date().toISOString().split('T')[0];
+        
+        // Fetch schedule-based dates
+        const result = await api(`/attendance/schedule-dates?classId=${classId}&startDate=${startDate}&endDate=${endDate}`);
+        
+        if (result.dates && result.dates.length > 0) {
+            Toast.success(`Found ${result.dates.length} dates based on schedule: ${result.schedule || 'N/A'}`);
+            
+            // Update date range inputs
+            startDateInput.value = result.startDate;
+            endDateInput.value = result.endDate;
+            
+            // Reload attendance with the schedule-based dates
+            await loadAttendance();
+        } else {
+            Toast.info(`No schedule found for this class. Using custom date range instead.`);
+        }
+    } catch (error) {
+        console.error('Error using schedule:', error);
+        Toast.error('Failed to load schedule-based dates');
+    }
+}
 
 async function showNewAttendanceModal() {
     try {
