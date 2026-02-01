@@ -283,17 +283,31 @@ async function loadInitialData() {
         const studentsData = await studentsResponse.json();
         console.log('✅ Students loaded:', studentsData.length, 'students');
         
+        // Load all teachers
+        console.log('🔄 Loading teachers...');
+        const teachersResponse = await fetch('/api/auth/teachers', {
+            credentials: 'include'
+        });
+        
+        let teachersData = [];
+        if (teachersResponse.ok) {
+            teachersData = await teachersResponse.json();
+            console.log('✅ Teachers loaded:', teachersData.length, 'teachers');
+        } else {
+            console.warn('⚠️ Could not load teachers, falling back to class teachers');
+            // Fallback: Get unique teachers from classes
+            const teacherMap = new Map();
+            classesData.forEach(cls => {
+                if (cls.teacher_id && cls.teacher_name) {
+                    teacherMap.set(cls.teacher_id, { id: cls.teacher_id, full_name: cls.teacher_name });
+                }
+            });
+            teachersData = Array.from(teacherMap.values());
+        }
+        
         classes = classesData;
         students = studentsData;
-
-        // Get unique teachers from classes
-        const teacherMap = new Map();
-        classes.forEach(cls => {
-            if (cls.teacher_id && cls.teacher_name) {
-                teacherMap.set(cls.teacher_id, { id: cls.teacher_id, full_name: cls.teacher_name });
-            }
-        });
-        teachers = Array.from(teacherMap.values());
+        teachers = teachersData;
 
         populateClassSelects();
         populateTeacherSelects();
@@ -324,7 +338,10 @@ function populateClassSelects() {
 }
 
 function populateTeacherSelects() {
-    const selects = [document.getElementById('report-teacher')];
+    const selects = [
+        document.getElementById('report-teacher'),
+        document.getElementById('attendance-taken-by')
+    ];
     
     selects.forEach(select => {
         if (!select) return;
@@ -402,6 +419,8 @@ document.getElementById('load-attendance-btn').addEventListener('click', loadAtt
 document.getElementById('export-attendance-btn').addEventListener('click', exportAttendance);
 document.getElementById('export-attendance-pdf-btn').addEventListener('click', exportAttendancePDF);
 document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
+document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
+document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
 
 async function showNewAttendanceModal() {
     try {
@@ -503,9 +522,13 @@ async function loadAttendance() {
     const startDate = document.getElementById('attendance-start-date').value;
     const endDate = document.getElementById('attendance-end-date').value;
     const container = document.getElementById('attendance-container');
+    const metadataDiv = document.getElementById('attendance-metadata');
+    const controlsDiv = document.getElementById('attendance-controls');
 
     if (!classId) {
         container.innerHTML = '<p class="info-text">Please select a class</p>';
+        metadataDiv.style.display = 'none';
+        controlsDiv.style.display = 'none';
         return;
     }
 
@@ -520,6 +543,8 @@ async function loadAttendance() {
         
         if (data.students.length === 0) {
             container.innerHTML = '<p class="info-text">No students in this class</p>';
+            metadataDiv.style.display = 'none';
+            controlsDiv.style.display = 'none';
             return;
         }
 
@@ -529,9 +554,30 @@ async function loadAttendance() {
             data.dates = [new Date().toISOString().split('T')[0]];
         }
 
+        // Update metadata display
+        const selectedClass = classes.find(c => c.id == classId);
+        if (selectedClass) {
+            document.getElementById('metadata-class-name').textContent = selectedClass.name;
+            document.getElementById('metadata-teacher').textContent = selectedClass.teacher_name || 'N/A';
+        }
+        
+        const dateRangeText = normalizedStartDate && normalizedEndDate 
+            ? `${normalizedStartDate} to ${normalizedEndDate}`
+            : normalizedStartDate 
+                ? `From ${normalizedStartDate}`
+                : normalizedEndDate
+                    ? `Until ${normalizedEndDate}`
+                    : 'All dates';
+        document.getElementById('metadata-date-range').textContent = dateRangeText;
+        
+        metadataDiv.style.display = 'grid';
+        controlsDiv.style.display = 'flex';
+
         renderAttendanceTable(data, classId);
     } catch (error) {
         container.innerHTML = `<p class="info-text">Error loading attendance: ${error.message}</p>`;
+        metadataDiv.style.display = 'none';
+        controlsDiv.style.display = 'none';
     }
 }
 
@@ -576,7 +622,12 @@ function renderAttendanceTable(data, classId) {
         html += '<tr><td colspan="' + (dates.length + 1) + '" class="student-type-header">Regular Students</td></tr>';
         regularStudents.forEach(student => {
             const rowClass = student.color_code ? `student-row-${student.color_code}` : '';
-            html += `<tr class="${rowClass}"><td class="student-name">${student.name}</td>`;
+            html += `<tr class="${rowClass}"><td class="student-name">
+                <div class="student-name-cell">
+                    <span>${student.name}</span>
+                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student">✏️</button>
+                </div>
+            </td>`;
             
             dates.forEach(date => {
                 const key = `${student.id}-${date}`;
@@ -597,7 +648,12 @@ function renderAttendanceTable(data, classId) {
     if (trialStudents.length > 0) {
         html += '<tr><td colspan="' + (dates.length + 1) + '" class="student-type-header">Make-up / Trial Students</td></tr>';
         trialStudents.forEach(student => {
-            html += `<tr class="student-row-trial"><td class="student-name">${student.name}</td>`;
+            html += `<tr class="student-row-trial"><td class="student-name">
+                <div class="student-name-cell">
+                    <span>${student.name}</span>
+                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student">✏️</button>
+                </div>
+            </td>`;
             
             dates.forEach(date => {
                 const key = `${student.id}-${date}`;
@@ -652,6 +708,85 @@ async function toggleAttendance(cell) {
     } catch (error) {
         console.error('Error updating attendance:', error);
         Toast.error('Failed to update attendance');
+    }
+}
+
+// Edit student from attendance sheet - opens modal and reloads attendance after save
+async function editStudentFromAttendance(studentId) {
+    try {
+        const student = await api(`/students/${studentId}`);
+        
+        showModal('Edit Student', `
+            <form id="edit-student-form">
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input type="text" id="edit-student-name" value="${escapeHtml(student.name)}" required class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Class</label>
+                    <select id="edit-student-class" class="form-control">
+                        <option value="">Unassigned</option>
+                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Type</label>
+                    <select id="edit-student-type" class="form-control">
+                        <option value="regular" ${student.student_type === 'regular' ? 'selected' : ''}>Regular</option>
+                        <option value="trial" ${student.student_type === 'trial' ? 'selected' : ''}>Trial/Make-up</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Color Code</label>
+                    <select id="edit-student-color" class="form-control">
+                        <option value="">None</option>
+                        <option value="yellow" ${student.color_code === 'yellow' ? 'selected' : ''}>Yellow</option>
+                        <option value="blue" ${student.color_code === 'blue' ? 'selected' : ''}>Blue</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="edit-student-email" value="${escapeHtml(student.email || '')}" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="edit-student-phone" value="${escapeHtml(student.phone || '')}" class="form-control">
+                </div>
+                <button type="submit" class="btn btn-primary">Update Student</button>
+            </form>
+        `);
+
+        document.getElementById('edit-student-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                await api(`/students/${studentId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        name: document.getElementById('edit-student-name').value,
+                        class_id: document.getElementById('edit-student-class').value || null,
+                        student_type: document.getElementById('edit-student-type').value,
+                        color_code: document.getElementById('edit-student-color').value,
+                        email: document.getElementById('edit-student-email').value || null,
+                        phone: document.getElementById('edit-student-phone').value || null,
+                        active: 1
+                    })
+                });
+
+                Toast.success('Student updated successfully');
+                closeModal();
+                
+                // Reload attendance table to reflect changes
+                await loadInitialData();
+                await loadAttendance();
+            } catch (error) {
+                console.error('Error updating student:', error);
+                Toast.error('Failed to update student');
+            }
+        });
+    } catch (error) {
+        console.error('Error loading student:', error);
+        Toast.error('Failed to load student');
     }
 }
 
@@ -724,6 +859,131 @@ async function exportAttendancePDF() {
             Toast.error('Error generating PDF: ' + error.message);
         }
     }
+}
+
+// Add a new date column to attendance sheet
+function showAddDateModal() {
+    const classId = document.getElementById('attendance-class-select').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    showModal('Add New Date', `
+        <form id="add-date-form">
+            <div class="form-group">
+                <label>Select Date *</label>
+                <input type="date" id="new-date-input" class="form-control" value="${today}" required>
+            </div>
+            <p class="info-text">This will add a new date column to the attendance sheet. You can then mark attendance for this date.</p>
+            <button type="submit" class="btn btn-primary">Add Date</button>
+        </form>
+    `);
+    
+    document.getElementById('add-date-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const newDate = document.getElementById('new-date-input').value;
+        const normalizedDate = normalizeToISO(newDate);
+        
+        if (!normalizedDate) {
+            Toast.error('Invalid date format');
+            return;
+        }
+        
+        try {
+            // Just reload with the new date in the range
+            const currentStartDate = document.getElementById('attendance-start-date').value;
+            const currentEndDate = document.getElementById('attendance-end-date').value;
+            
+            // Expand the date range to include the new date
+            const newDateObj = new Date(normalizedDate);
+            const startDateObj = currentStartDate ? new Date(currentStartDate) : newDateObj;
+            const endDateObj = currentEndDate ? new Date(currentEndDate) : newDateObj;
+            
+            if (newDateObj < startDateObj) {
+                document.getElementById('attendance-start-date').value = normalizedDate;
+            }
+            if (newDateObj > endDateObj) {
+                document.getElementById('attendance-end-date').value = normalizedDate;
+            }
+            
+            closeModal();
+            await loadAttendance();
+            Toast.success(`Date ${normalizedDate} added to attendance sheet`);
+        } catch (error) {
+            console.error('Error adding date:', error);
+            Toast.error('Failed to add date');
+        }
+    });
+}
+
+// Move attendance records from one date to another
+function showMoveAttendanceModal() {
+    const classId = document.getElementById('attendance-class-select').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    showModal('Move Attendance Records', `
+        <form id="move-attendance-form">
+            <div class="form-group">
+                <label>From Date *</label>
+                <input type="date" id="move-from-date" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>To Date *</label>
+                <input type="date" id="move-to-date" class="form-control" required>
+            </div>
+            <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
+                <strong>⚠️ Warning:</strong> This will move ALL attendance records from the source date to the target date for this class. The source date records will be deleted. This action cannot be undone.
+            </div>
+            <button type="submit" class="btn btn-primary">Move Attendance</button>
+        </form>
+    `);
+    
+    document.getElementById('move-attendance-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const fromDate = document.getElementById('move-from-date').value;
+        const toDate = document.getElementById('move-to-date').value;
+        
+        const normalizedFromDate = normalizeToISO(fromDate);
+        const normalizedToDate = normalizeToISO(toDate);
+        
+        if (!normalizedFromDate || !normalizedToDate) {
+            Toast.error('Invalid date format');
+            return;
+        }
+        
+        if (normalizedFromDate === normalizedToDate) {
+            Toast.error('Source and target dates must be different');
+            return;
+        }
+        
+        try {
+            await api('/attendance/move', {
+                method: 'POST',
+                body: JSON.stringify({
+                    class_id: parseInt(classId),
+                    from_date: normalizedFromDate,
+                    to_date: normalizedToDate
+                })
+            });
+            
+            closeModal();
+            await loadAttendance();
+            Toast.success(`Attendance records moved from ${normalizedFromDate} to ${normalizedToDate}`);
+        } catch (error) {
+            console.error('Error moving attendance:', error);
+            Toast.error('Failed to move attendance: ' + error.message);
+        }
+    });
 }
 
 // Set default dates for attendance

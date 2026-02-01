@@ -315,13 +315,13 @@ body {
 }
 
 .attendance-table th {
-    background: #f5f5f5;
-    color: #333;
+    background: #4472C4; /* Blue header to match paper form */
+    color: white;
     font-weight: 600;
     position: sticky;
     top: 0;
     z-index: 10;
-    border: 1px solid #b0b0b0;
+    border: 1px solid #2B5797;
 }
 
 .attendance-table tbody tr:hover {
@@ -329,7 +329,7 @@ body {
 }
 
 .attendance-table tbody tr:nth-child(even) {
-    background: #fafafa;
+    background: #FFF9E6; /* Light yellow striping */
 }
 
 .attendance-table .student-name {
@@ -371,16 +371,16 @@ body {
 }
 
 .student-type-header {
-    background: #e0e0e0 !important;
-    color: #333 !important;
+    background: #8FAADC !important; /* Light blue for section headers */
+    color: #1F3A5F !important;
     font-weight: bold;
     text-align: left !important;
     font-size: 1.05em;
     padding: 12px 16px !important;
-    border-top: 2px solid #b0b0b0;
-    border-bottom: 2px solid #b0b0b0;
-    border-left: 1px solid #b0b0b0;
-    border-right: 1px solid #b0b0b0;
+    border-top: 2px solid #4472C4;
+    border-bottom: 2px solid #4472C4;
+    border-left: 1px solid #4472C4;
+    border-right: 1px solid #4472C4;
 }
 
 .student-row-yellow {
@@ -393,6 +393,79 @@ body {
 
 .student-row-trial {
     background: #f0f8ff; /* Light blue background for trial students */
+}
+
+/* Attendance Sheet Metadata and Controls */
+.attendance-metadata {
+    background: #E7F2FF;
+    border: 2px solid #4472C4;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+
+.metadata-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.metadata-item label {
+    font-weight: 600;
+    color: #1F3A5F;
+    margin-bottom: 0.3rem;
+    font-size: 0.9rem;
+}
+
+.metadata-item .value {
+    color: #333;
+    font-size: 1rem;
+}
+
+.student-name-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.edit-student-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #4472C4;
+    font-size: 1rem;
+    padding: 0.2rem;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+}
+
+.edit-student-btn:hover {
+    opacity: 1;
+}
+
+.attendance-controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.add-date-btn, .move-attendance-btn {
+    padding: 0.5rem 1rem;
+    background: #4472C4;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.2s;
+}
+
+.add-date-btn:hover, .move-attendance-btn:hover {
+    background: #2B5797;
 }
 
 /* Report Form */
