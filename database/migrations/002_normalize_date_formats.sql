@@ -1,0 +1,79 @@
+-- Migration: Normalize all date values in the database to ISO format (YYYY-MM-DD)
+-- This script converts dates from MM/DD/YYYY and other formats to YYYY-MM-DD
+
+-- First, let's check what dates we have
+SELECT 'Before migration:' as status;
+SELECT id, student_id, class_id, date, status FROM attendance ORDER BY id;
+
+-- Update attendance table dates
+-- Handle MM/DD/YYYY format (e.g., 01/28/2026)
+UPDATE attendance
+SET date = 
+    CASE 
+        -- If date matches MM/DD/YYYY pattern
+        WHEN date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN
+            -- Split and reformat to YYYY-MM-DD
+            split_part(date, '/', 3) || '-' || 
+            lpad(split_part(date, '/', 1), 2, '0') || '-' || 
+            lpad(split_part(date, '/', 2), 2, '0')
+        -- If date matches DD-MM-YYYY pattern
+        WHEN date ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+            split_part(date, '-', 3) || '-' || 
+            lpad(split_part(date, '-', 2), 2, '0') || '-' || 
+            lpad(split_part(date, '-', 1), 2, '0')
+        -- Already in YYYY-MM-DD format or other, keep as is
+        ELSE date
+    END
+WHERE date !~ '^\d{4}-\d{2}-\d{2}$';
+
+-- Update lesson_reports table dates
+UPDATE lesson_reports
+SET date = 
+    CASE 
+        WHEN date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN
+            split_part(date, '/', 3) || '-' || 
+            lpad(split_part(date, '/', 1), 2, '0') || '-' || 
+            lpad(split_part(date, '/', 2), 2, '0')
+        WHEN date ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+            split_part(date, '-', 3) || '-' || 
+            lpad(split_part(date, '-', 2), 2, '0') || '-' || 
+            lpad(split_part(date, '-', 1), 2, '0')
+        ELSE date
+    END
+WHERE date !~ '^\d{4}-\d{2}-\d{2}$';
+
+-- Update makeup_lessons table dates
+UPDATE makeup_lessons
+SET scheduled_date = 
+    CASE 
+        WHEN scheduled_date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN
+            split_part(scheduled_date, '/', 3) || '-' || 
+            lpad(split_part(scheduled_date, '/', 1), 2, '0') || '-' || 
+            lpad(split_part(scheduled_date, '/', 2), 2, '0')
+        WHEN scheduled_date ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+            split_part(scheduled_date, '-', 3) || '-' || 
+            lpad(split_part(scheduled_date, '-', 2), 2, '0') || '-' || 
+            lpad(split_part(scheduled_date, '-', 1), 2, '0')
+        ELSE scheduled_date
+    END
+WHERE scheduled_date !~ '^\d{4}-\d{2}-\d{2}$';
+
+-- Update students enrollment_date
+UPDATE students
+SET enrollment_date = 
+    CASE 
+        WHEN enrollment_date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN
+            split_part(enrollment_date, '/', 3) || '-' || 
+            lpad(split_part(enrollment_date, '/', 1), 2, '0') || '-' || 
+            lpad(split_part(enrollment_date, '/', 2), 2, '0')
+        WHEN enrollment_date ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+            split_part(enrollment_date, '-', 3) || '-' || 
+            lpad(split_part(enrollment_date, '-', 2), 2, '0') || '-' || 
+            lpad(split_part(enrollment_date, '-', 1), 2, '0')
+        ELSE enrollment_date
+    END
+WHERE enrollment_date IS NOT NULL AND enrollment_date !~ '^\d{4}-\d{2}-\d{2}$';
+
+-- Show results after migration
+SELECT 'After migration:' as status;
+SELECT id, student_id, class_id, date, status FROM attendance ORDER BY id;
