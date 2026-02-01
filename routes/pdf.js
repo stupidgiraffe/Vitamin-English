@@ -197,6 +197,30 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
             return res.status(400).json({ error: 'startDate and endDate are required' });
         }
         
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+            return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+        }
+        
+        // Validate date range
+        if (startDate > endDate) {
+            return res.status(400).json({ error: 'Start date must be before or equal to end date' });
+        }
+        
+        // Check max date range (90 days to prevent performance issues)
+        const start = new Date(startDate + 'T00:00:00');
+        const end = new Date(endDate + 'T00:00:00');
+        
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            return res.status(400).json({ error: 'Invalid date values' });
+        }
+        
+        const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
+        if (daysDiff > 90) {
+            return res.status(400).json({ error: 'Date range cannot exceed 90 days' });
+        }
+        
         // Fetch class data
         const classResult = await pool.query(`
             SELECT c.*, u.full_name as teacher_name
@@ -222,8 +246,6 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
         
         // Generate date range
         const dates = [];
-        const start = new Date(startDate + 'T00:00:00');
-        const end = new Date(endDate + 'T00:00:00');
         const current = new Date(start);
         
         while (current <= end) {
@@ -258,8 +280,8 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
             endDate
         );
         
-        // Upload to R2 - sanitize filename
-        const sanitizedClassName = classData.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        // Upload to R2 - sanitize filename (only alphanumeric characters)
+        const sanitizedClassName = classData.name.replace(/[^a-zA-Z0-9]/g, '_');
         const fileName = `attendance_grid_${sanitizedClassName}_${startDate}_to_${endDate}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             type: 'attendance_grid',

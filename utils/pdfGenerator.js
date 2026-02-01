@@ -2,6 +2,19 @@ const PDFDocument = require('pdfkit');
 const { Readable } = require('stream');
 
 /**
+ * Sanitize text for PDF output to prevent PDF injection attacks
+ * @param {String} text - Text to sanitize
+ * @returns {String} Sanitized text
+ */
+function sanitizeForPDF(text) {
+    if (!text) return '';
+    // Remove control characters and special PDF syntax characters
+    return text.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+               .replace(/[<>]/g, '')
+               .substring(0, 255); // Limit length
+}
+
+/**
  * Generate a PDF for student attendance records
  * @param {Object} studentData - Student information
  * @param {Array} attendanceRecords - Array of attendance records
@@ -295,12 +308,12 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
 
 /**
  * Generate a PDF for attendance grid (multi-date view with sections)
- * @param {Object} classData - Class information
- * @param {Array} students - Array of students in the class
- * @param {Array} dates - Array of dates (ISO format)
- * @param {Object} attendanceMap - Object mapping "studentId-date" to status
- * @param {String} startDate - Start date of range
- * @param {String} endDate - End date of range
+ * @param {Object} classData - Class information (name, teacher_name, etc.)
+ * @param {Array} students - Array of student objects with id, name, student_type, color_code
+ * @param {Array} dates - Array of dates in ISO format (YYYY-MM-DD)
+ * @param {Object} attendanceMap - Object mapping "studentId-date" to status ('O', 'X', '/', or '')
+ * @param {String} startDate - Start date of range in ISO format (YYYY-MM-DD)
+ * @param {String} endDate - End date of range in ISO format (YYYY-MM-DD)
  * @returns {Promise<Buffer>} PDF buffer
  */
 async function generateAttendanceGridPDF(classData, students, dates, attendanceMap, startDate, endDate) {
@@ -330,7 +343,7 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
             // Class Information
             doc.fontSize(10)
                .font('Helvetica')
-               .text(`Class: ${classData.name}  |  Teacher: ${classData.teacher_name || 'N/A'}  |  Date Range: ${startDate} to ${endDate}`, 
+               .text(`Class: ${sanitizeForPDF(classData.name)}  |  Teacher: ${sanitizeForPDF(classData.teacher_name) || 'N/A'}  |  Date Range: ${startDate} to ${endDate}`, 
                      { align: 'center' });
             
             doc.moveDown(0.8);
@@ -435,11 +448,12 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                         doc.fillColor('black');
                     }
                     
-                    // Student name (truncate if too long)
+                    // Student name (truncate if too long and sanitize)
                     const maxNameLength = 18;
-                    const studentName = student.name.length > maxNameLength 
-                        ? student.name.substring(0, maxNameLength) + '...' 
-                        : student.name;
+                    const sanitizedName = sanitizeForPDF(student.name);
+                    const studentName = sanitizedName.length > maxNameLength 
+                        ? sanitizedName.substring(0, maxNameLength) + '...' 
+                        : sanitizedName;
                     
                     doc.text(studentName, startX + 3, currentY + 4, { 
                         width: nameColumnWidth - 6,
