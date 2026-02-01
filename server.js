@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const pool = require('./database/init');
 const { initializeDatabase, verifyDatabaseSchema } = require('./database/init-postgres');
+const { ensureSchemaColumns } = require('./database/schema-guard');
 const { seedTestData } = require('./database/seed-test-data');
 const { sanitizeInput } = require('./middleware/sanitize');
 
@@ -157,15 +158,20 @@ async function initializeTestData() {
     }
 }
 
-// Initialize database with default users
+// Initialize database with default users and ensure schema columns exist
 // Note: Errors are caught and logged but don't stop the server
 // This allows the app to start even if initialization fails (e.g., DB already has users)
 initializeDatabase().then(() => {
     if (pool) {
-        // Verify database schema and auto-load test data
-        verifyDatabaseSchema();
-        initializeTestData().catch(err => {
-            console.error('Test data initialization failed:', err);
+        // Run schema guard to ensure required columns exist (Postgres only)
+        ensureSchemaColumns().then(() => {
+            // Verify database schema and auto-load test data
+            verifyDatabaseSchema();
+            initializeTestData().catch(err => {
+                console.error('Test data initialization failed:', err);
+            });
+        }).catch(err => {
+            console.error('Schema guard failed:', err);
         });
     }
 }).catch(err => {
