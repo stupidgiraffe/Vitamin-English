@@ -42,45 +42,79 @@ async function seedTestData() {
         for (const cls of classes) {
             const result = await client.query(
                 `INSERT INTO classes (name, teacher_id, schedule, color, active) 
-                 VALUES ($1, $2, $3, $4, true) 
+                 VALUES ($1, $2, $3, $4, $5) 
                  RETURNING id, name`,
-                [cls.name, teacherId, cls.schedule, cls.color]
+                [cls.name, teacherId, cls.schedule, cls.color, true]
             );
             classIds.push(result.rows[0].id);
             console.log(`✅ Created class: ${result.rows[0].name} (ID: ${result.rows[0].id})`);
         }
         
-        // Create students with realistic English names (minimum 4, distributed across classes)
+        // Create 4 students with realistic contact info (one per class as specified)
         const students = [
             // Adult beginner class
-            { name: 'Emma Wilson', parent: 'Robert Wilson', phone: '555-0101', email: 'emma.wilson@example.com', classIdx: 0 },
-            { name: 'James Anderson', parent: 'Mary Anderson', phone: '555-0102', email: 'james.anderson@example.com', classIdx: 0 },
-            { name: 'Sophia Martinez', parent: 'Carlos Martinez', phone: '555-0103', email: 'sophia.martinez@example.com', classIdx: 0 },
+            { 
+                name: 'Emma Wilson', 
+                parent: 'Robert Wilson', 
+                phone: '555-0101', 
+                parentPhone: '555-0111',
+                email: 'emma.wilson@example.com', 
+                parentEmail: 'robert.wilson@example.com',
+                classIdx: 0 
+            },
             
             // Intermediate class
-            { name: 'Oliver Taylor', parent: 'Jennifer Taylor', phone: '555-0201', email: 'oliver.taylor@example.com', classIdx: 1 },
-            { name: 'Charlotte Brown', parent: 'David Brown', phone: '555-0202', email: 'charlotte.brown@example.com', classIdx: 1 },
-            { name: 'Liam Johnson', parent: 'Sarah Johnson', phone: '555-0203', email: 'liam.johnson@example.com', classIdx: 1 },
+            { 
+                name: 'Oliver Taylor', 
+                parent: 'Jennifer Taylor', 
+                phone: '555-0201', 
+                parentPhone: '555-0211',
+                email: 'oliver.taylor@example.com', 
+                parentEmail: 'jennifer.taylor@example.com',
+                classIdx: 1 
+            },
             
             // Advanced class
-            { name: 'Ava Davis', parent: 'Michael Davis', phone: '555-0301', email: 'ava.davis@example.com', classIdx: 2 },
-            { name: 'Noah Garcia', parent: 'Patricia Garcia', phone: '555-0302', email: 'noah.garcia@example.com', classIdx: 2 },
-            { name: 'Isabella Rodriguez', parent: 'Jose Rodriguez', phone: '555-0303', email: 'isabella.rodriguez@example.com', classIdx: 2 },
+            { 
+                name: 'Ava Davis', 
+                parent: 'Michael Davis', 
+                phone: '555-0301', 
+                parentPhone: '555-0311',
+                email: 'ava.davis@example.com', 
+                parentEmail: 'michael.davis@example.com',
+                classIdx: 2 
+            },
             
             // Young elementary class
-            { name: 'Ethan Smith', parent: 'Linda Smith', phone: '555-0401', email: 'ethan.smith@example.com', classIdx: 3 },
-            { name: 'Mia Lee', parent: 'Kevin Lee', phone: '555-0402', email: 'mia.lee@example.com', classIdx: 3 },
-            { name: 'Lucas White', parent: 'Nancy White', phone: '555-0403', email: 'lucas.white@example.com', classIdx: 3 }
+            { 
+                name: 'Ethan Smith', 
+                parent: 'Linda Smith', 
+                phone: '555-0401', 
+                parentPhone: '555-0411',
+                email: 'ethan.smith@example.com', 
+                parentEmail: 'linda.smith@example.com',
+                classIdx: 3 
+            }
         ];
         
         const studentIds = [];
         for (const student of students) {
             const classId = classIds[student.classIdx];
             const result = await client.query(
-                `INSERT INTO students (name, class_id, parent_name, parent_phone, parent_email, notes, active) 
-                 VALUES ($1, $2, $3, $4, $5, $6, true)
+                `INSERT INTO students (name, class_id, email, phone, parent_name, parent_phone, parent_email, notes, active) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                  RETURNING id, name`,
-                [student.name, classId, student.parent, student.phone, student.email, '']
+                [
+                    student.name, 
+                    classId, 
+                    student.email, 
+                    student.phone, 
+                    student.parent, 
+                    student.parentPhone, 
+                    student.parentEmail, 
+                    '',
+                    true
+                ]
             );
             studentIds.push({ id: result.rows[0].id, classIdx: student.classIdx });
             console.log(`✅ Created student: ${result.rows[0].name} (ID: ${result.rows[0].id})`);

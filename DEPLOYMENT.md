@@ -48,6 +48,26 @@ This guide covers deploying the Vitamin English application to Vercel with Neon 
 4. Click **"Run"** to create all tables and indexes
 5. Verify tables were created successfully
 
+### 4. Schema Sync for Existing Databases
+
+If you have an existing database that needs schema updates, run these SQL statements in Neon SQL Editor to ensure all required columns exist:
+
+```sql
+-- Ensure students table has all required contact columns
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_phone VARCHAR(50);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS color_code VARCHAR(50);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_name VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS parent_email VARCHAR(255);
+ALTER TABLE students ADD COLUMN IF NOT EXISTS enrollment_date VARCHAR(50);
+
+-- Ensure classes table has color column
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS color VARCHAR(50) DEFAULT '#4A90E2';
+```
+
+**Note:** The application now includes an automatic schema guard that runs on startup and adds missing columns automatically. However, running these SQL statements manually ensures the schema is correct before deployment.
+
 ## Cloudflare R2 Setup
 
 ### 1. Enable R2
@@ -203,13 +223,30 @@ If you have a small dataset:
 
 Complete reference of all environment variables:
 
+### Core Required Variables
+
+These are **required** for the application to run:
+
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user:pass@host/db` |
-| `SESSION_SECRET` | Yes | Secret for session encryption | Random 32+ char string |
-| `NODE_ENV` | Yes | Environment mode | `production` |
-| `SEED_ON_STARTUP` | No | Auto-seed empty database | `false` (default: enabled) |
-| `CORS_ORIGIN` | No | Allowed CORS origin | `https://app.vercel.app` |
+| `DATABASE_URL` | **Yes** | PostgreSQL connection string from Neon | `postgresql://user:pass@host.neon.tech/db?sslmode=require` |
+| `SESSION_SECRET` | **Yes** | Secret for session encryption (min 32 chars) | Random 32+ char string |
+| `NODE_ENV` | **Yes** | Environment mode | `production` |
+
+### Optional Configuration Variables
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `SEED_ON_STARTUP` | No | Auto-seed empty database on startup | `true` (enabled) |
+| `CORS_ORIGIN` | No | Allowed CORS origin for API calls | Same origin |
+| `COOKIE_DOMAIN` | No | Cookie domain for sessions | Auto-detected |
+
+### PDF Storage Variables (R2)
+
+Required only for PDF generation features:
+
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
 | `R2_ACCOUNT_ID` | Yes* | Cloudflare account ID | `abc123...` |
 | `R2_ACCESS_KEY_ID` | Yes* | R2 access key | `key123...` |
 | `R2_SECRET_ACCESS_KEY` | Yes* | R2 secret key | `secret123...` |
@@ -222,8 +259,8 @@ Complete reference of all environment variables:
 
 The application includes a seeding mechanism that automatically populates an empty database with test data:
 - 4 classes: Adult beginner, Intermediate, Advanced, Young elementary
-- 12 students with realistic contact information
-- Sample attendance records
+- 4 students with realistic contact information (email, phone, parent contact info)
+- Sample attendance records for the past 3 days
 
 **For Production:**
 - Set `SEED_ON_STARTUP=false` to prevent auto-seeding
