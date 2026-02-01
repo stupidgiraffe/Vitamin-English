@@ -80,6 +80,59 @@ function escapeHtml(text) {
     return text ? String(text).replace(/[&<>"']/g, m => map[m]) : '';
 }
 
+// Date normalization helper - ensures dates are in ISO format (YYYY-MM-DD)
+function normalizeToISO(dateInput) {
+    if (!dateInput) {
+        return null;
+    }
+
+    let date;
+    
+    // If already a Date object
+    if (dateInput instanceof Date) {
+        date = dateInput;
+    } 
+    // If it's a string
+    else if (typeof dateInput === 'string') {
+        // Remove any time component if present
+        const dateOnly = dateInput.split('T')[0].split(' ')[0];
+        
+        // Check if already in ISO format (YYYY-MM-DD)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+            // Validate it's a real date
+            date = new Date(dateOnly + 'T00:00:00');
+        }
+        // Check for MM/DD/YYYY format
+        else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateOnly)) {
+            const [month, day, year] = dateOnly.split('/');
+            date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+        }
+        // Check for DD-MM-YYYY format (hyphen-separated)
+        else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateOnly)) {
+            const [day, month, year] = dateOnly.split('-');
+            date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
+        }
+        // Try parsing as-is
+        else {
+            date = new Date(dateOnly);
+        }
+    } else {
+        return null;
+    }
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+        return null;
+    }
+
+    // Return in ISO format (YYYY-MM-DD)
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
+}
+
 // Calculate brightness and return appropriate text color for contrast
 function getContrastTextColor(hexColor) {
     const r = parseInt(hexColor.substring(1, 3), 16);
@@ -394,6 +447,13 @@ async function showNewAttendanceModal() {
                     return;
                 }
                 
+                // Normalize date to ISO format
+                const normalizedDate = normalizeToISO(date);
+                if (!normalizedDate) {
+                    Toast.error('Invalid date format');
+                    return;
+                }
+                
                 // Get all students in the class
                 const studentsInClass = await api(`/students?classId=${classId}`);
                 
@@ -409,7 +469,7 @@ async function showNewAttendanceModal() {
                         body: JSON.stringify({ 
                             student_id: student.id,
                             class_id: classId, 
-                            date, 
+                            date: normalizedDate, 
                             status: '', // Empty status - to be filled in
                             notes: notes || ''
                         })
@@ -451,7 +511,11 @@ async function loadAttendance() {
     try {
         container.innerHTML = '<div class="spinner"></div>';
         
-        const data = await api(`/attendance/matrix?classId=${classId}${startDate ? `&startDate=${startDate}` : ''}${endDate ? `&endDate=${endDate}` : ''}`);
+        // Normalize dates to ISO format before sending to API
+        const normalizedStartDate = startDate ? normalizeToISO(startDate) : '';
+        const normalizedEndDate = endDate ? normalizeToISO(endDate) : '';
+        
+        const data = await api(`/attendance/matrix?classId=${classId}${normalizedStartDate ? `&startDate=${normalizedStartDate}` : ''}${normalizedEndDate ? `&endDate=${normalizedEndDate}` : ''}`);
         
         if (data.students.length === 0) {
             container.innerHTML = '<p class="info-text">No students in this class</p>';
@@ -481,7 +545,26 @@ function renderAttendanceTable(data, classId) {
     let html = '<table class="attendance-table"><thead><tr><th>Student Name</th>';
     
     dates.forEach(date => {
-        const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        // Normalize date to ensure it's in ISO format
+        const normalizedDate = normalizeToISO(date) || date;
+        
+        // Safely parse date for display - handle invalid dates gracefully
+        let formattedDate;
+        try {
+            const dateObj = new Date(normalizedDate + 'T00:00:00');
+            if (!isNaN(dateObj.getTime())) {
+                formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            } else {
+                // Fallback: display raw date string if invalid
+                formattedDate = normalizedDate;
+                console.warn('Invalid date encountered:', date, '-> normalized to:', normalizedDate);
+            }
+        } catch (e) {
+            // Fallback: display raw date string if parsing fails
+            formattedDate = normalizedDate;
+            console.error('Error parsing date:', date, e);
+        }
+        
         html += `<th>${formattedDate}</th>`;
     });
     
@@ -546,12 +629,15 @@ async function toggleAttendance(cell) {
     const newStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
 
     try {
+        // Normalize date to ISO format before sending to API
+        const normalizedDate = normalizeToISO(date) || date;
+        
         await api('/attendance', {
             method: 'POST',
             body: JSON.stringify({
                 student_id: parseInt(studentId),
                 class_id: parseInt(classId),
-                date: date,
+                date: normalizedDate,
                 status: newStatus
             })
         });

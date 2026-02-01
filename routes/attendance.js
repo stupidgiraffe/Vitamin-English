@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../database/init');
+const { normalizeToISO } = require('../utils/dateUtils');
 
 // Get attendance records
 router.get('/', async (req, res) => {
@@ -29,22 +30,33 @@ router.get('/', async (req, res) => {
             paramIndex++;
         }
         
+        // Normalize date inputs to ISO format (YYYY-MM-DD)
         if (startDate) {
-            query += ` AND a.date >= $${paramIndex}`;
-            params.push(startDate);
-            paramIndex++;
+            const normalizedStartDate = normalizeToISO(startDate);
+            if (normalizedStartDate) {
+                query += ` AND a.date >= $${paramIndex}`;
+                params.push(normalizedStartDate);
+                paramIndex++;
+            }
         }
         
         if (endDate) {
-            query += ` AND a.date <= $${paramIndex}`;
-            params.push(endDate);
-            paramIndex++;
+            const normalizedEndDate = normalizeToISO(endDate);
+            if (normalizedEndDate) {
+                query += ` AND a.date <= $${paramIndex}`;
+                params.push(normalizedEndDate);
+                paramIndex++;
+            }
         }
         
         query += ' ORDER BY a.date, s.student_type, s.name';
         
         const result = await pool.query(query, params);
-        const records = result.rows;
+        const records = result.rows.map(record => ({
+            ...record,
+            // Ensure date is in ISO format
+            date: normalizeToISO(record.date) || record.date
+        }));
         res.json(records);
     } catch (error) {
         console.error('Error fetching attendance:', error);
@@ -74,22 +86,27 @@ router.get('/matrix', async (req, res) => {
         const dateParams = [classId];
         let paramIndex = 2;
         
-        if (startDate) {
+        // Normalize date inputs to ISO format (YYYY-MM-DD)
+        const normalizedStartDate = startDate ? normalizeToISO(startDate) : null;
+        const normalizedEndDate = endDate ? normalizeToISO(endDate) : null;
+        
+        if (normalizedStartDate) {
             dateQuery += ` AND date >= $${paramIndex}`;
-            dateParams.push(startDate);
+            dateParams.push(normalizedStartDate);
             paramIndex++;
         }
         
-        if (endDate) {
+        if (normalizedEndDate) {
             dateQuery += ` AND date <= $${paramIndex}`;
-            dateParams.push(endDate);
+            dateParams.push(normalizedEndDate);
             paramIndex++;
         }
         
         dateQuery += ' ORDER BY date';
         
         const datesResult = await pool.query(dateQuery, dateParams);
-        const dates = datesResult.rows.map(row => row.date);
+        // Normalize all dates to ISO format
+        const dates = datesResult.rows.map(row => normalizeToISO(row.date) || row.date);
         
         // Get attendance records
         let attendanceQuery = `
@@ -98,21 +115,22 @@ router.get('/matrix', async (req, res) => {
             WHERE class_id = $1
         `;
         paramIndex = 2;
-        if (startDate) {
+        if (normalizedStartDate) {
             attendanceQuery += ` AND date >= $${paramIndex}`;
             paramIndex++;
         }
-        if (endDate) {
+        if (normalizedEndDate) {
             attendanceQuery += ` AND date <= $${paramIndex}`;
         }
         
         const attendanceResult = await pool.query(attendanceQuery, dateParams);
         const attendanceRecords = attendanceResult.rows;
         
-        // Create attendance matrix
+        // Create attendance matrix with normalized dates
         const attendanceMap = {};
         attendanceRecords.forEach(record => {
-            const key = `${record.student_id}-${record.date}`;
+            const normalizedDate = normalizeToISO(record.date) || record.date;
+            const key = `${record.student_id}-${normalizedDate}`;
             attendanceMap[key] = record.status;
         });
         
@@ -136,11 +154,17 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'student_id, class_id, and date are required' });
         }
         
+        // Normalize date to ISO format (YYYY-MM-DD)
+        const normalizedDate = normalizeToISO(date);
+        if (!normalizedDate) {
+            return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
+        }
+        
         // Try to update existing record first
         const existingResult = await pool.query(`
             SELECT id FROM attendance 
             WHERE student_id = $1 AND class_id = $2 AND date = $3
-        `, [student_id, class_id, date]);
+        `, [student_id, class_id, normalizedDate]);
         const existing = existingResult.rows[0];
         
         if (existing) {
@@ -152,17 +176,25 @@ router.post('/', async (req, res) => {
             
             const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [existing.id]);
             const record = recordResult.rows[0];
-            res.json(record);
+            // Ensure returned date is in ISO format
+            res.json({
+                ...record,
+                date: normalizeToISO(record.date) || record.date
+            });
         } else {
             const result = await pool.query(`
                 INSERT INTO attendance (student_id, class_id, date, status, notes) 
                 VALUES ($1, $2, $3, $4, $5)
                 RETURNING id
-            `, [student_id, class_id, date, status || '', notes || '']);
+            `, [student_id, class_id, normalizedDate, status || '', notes || '']);
             
             const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [result.rows[0].id]);
             const record = recordResult.rows[0];
-            res.status(201).json(record);
+            // Ensure returned date is in ISO format
+            res.status(201).json({
+                ...record,
+                date: normalizeToISO(record.date) || record.date
+            });
         }
     } catch (error) {
         console.error('Error saving attendance:', error);
@@ -183,7 +215,11 @@ router.put('/:id', async (req, res) => {
         
         const result = await pool.query('SELECT * FROM attendance WHERE id = $1', [req.params.id]);
         const record = result.rows[0];
-        res.json(record);
+        // Ensure returned date is in ISO format
+        res.json({
+            ...record,
+            date: normalizeToISO(record.date) || record.date
+        });
     } catch (error) {
         console.error('Error updating attendance:', error);
         res.status(500).json({ error: 'Failed to update attendance' });
@@ -210,6 +246,12 @@ router.post('/bulk', async (req, res) => {
             return res.status(400).json({ error: 'class_id, date, and status are required' });
         }
         
+        // Normalize date to ISO format (YYYY-MM-DD)
+        const normalizedDate = normalizeToISO(date);
+        if (!normalizedDate) {
+            return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
+        }
+        
         // Get all students in the class
         const studentsResult = await pool.query(`
             SELECT id FROM students 
@@ -223,7 +265,7 @@ router.post('/bulk', async (req, res) => {
                 VALUES ($1, $2, $3, $4)
                 ON CONFLICT (student_id, class_id, date) 
                 DO UPDATE SET status = $4
-            `, [student.id, class_id, date, status]);
+            `, [student.id, class_id, normalizedDate, status]);
         }
         
         res.json({ message: 'Bulk attendance marked successfully' });
