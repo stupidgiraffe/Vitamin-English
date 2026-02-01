@@ -89,12 +89,19 @@ router.get('/matrix', async (req, res) => {
         
         // If date range is provided, generate all dates in range
         if (normalizedStartDate && normalizedEndDate) {
-            const start = new Date(normalizedStartDate);
-            const end = new Date(normalizedEndDate);
+            // Parse dates safely without timezone issues
+            const [startYear, startMonth, startDay] = normalizedStartDate.split('-').map(Number);
+            const [endYear, endMonth, endDay] = normalizedEndDate.split('-').map(Number);
+            
+            const start = new Date(startYear, startMonth - 1, startDay);
+            const end = new Date(endYear, endMonth - 1, endDay);
             const current = new Date(start);
             
             while (current <= end) {
-                dates.push(current.toISOString().split('T')[0]);
+                const year = current.getFullYear();
+                const month = String(current.getMonth() + 1).padStart(2, '0');
+                const day = String(current.getDate()).padStart(2, '0');
+                dates.push(`${year}-${month}-${day}`);
                 current.setDate(current.getDate() + 1);
             }
         } else {

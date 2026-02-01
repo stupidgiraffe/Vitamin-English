@@ -783,7 +783,17 @@ async function toggleAttendance(cell) {
 
     // Get time from metadata field if available
     const timeInput = document.getElementById('attendance-time');
-    const time = timeInput ? timeInput.value.trim() : null;
+    let time = timeInput ? timeInput.value.trim() : null;
+    
+    // Validate time format if provided (HH:MM or H:MM)
+    if (time) {
+        const timePattern = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
+        if (!timePattern.test(time)) {
+            Toast.error('Invalid time format. Please use HH:MM format (e.g., 14:00)');
+            cell.classList.remove('saving');
+            return;
+        }
+    }
 
     // Show saving indicator
     const originalContent = cell.textContent;
@@ -2208,10 +2218,17 @@ async function loadDatabaseTable() {
                 html += `<td>${value}</td>`;
             });
             if (hasActions) {
-                html += `<td class="actions-cell">
-                    <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${row.id})">Edit</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${row.id})">Delete</button>
-                </td>`;
+                // Sanitize ID to prevent XSS
+                const sanitizedId = parseInt(row.id);
+                if (isNaN(sanitizedId)) {
+                    console.error('Invalid row ID:', row.id);
+                    html += '<td class="actions-cell">Invalid ID</td>';
+                } else {
+                    html += `<td class="actions-cell">
+                        <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${sanitizedId})">Edit</button>
+                        <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${sanitizedId})">Delete</button>
+                    </td>`;
+                }
             }
             html += '</tr>';
         });
