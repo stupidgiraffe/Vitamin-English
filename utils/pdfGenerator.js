@@ -157,6 +157,14 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
 async function generateClassAttendancePDF(classData, students, attendanceRecords, date) {
     return new Promise((resolve, reject) => {
         try {
+            // Configuration constants
+            const ROW_HEIGHT = 22;
+            const MAX_NAME_LENGTH = 25;
+            const TRUNCATED_NAME_LENGTH = 22;
+            const MAX_NOTES_LENGTH = 30;
+            const TRUNCATED_NOTES_LENGTH = 27;
+            const PAGE_BREAK_THRESHOLD = 480;
+            
             const doc = new PDFDocument({ margin: 50, size: 'A4', layout: 'landscape' });
             const buffers = [];
             
@@ -199,7 +207,6 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                 const typeX = 300;
                 const statusX = 400;
                 const notesX = 500;
-                const rowHeight = 22; // Increased from implicit ~16
                 
                 // Blue header background (matching paper sheet)
                 doc.rect(50, tableTop - 5, doc.page.width - 100, 25)
@@ -225,7 +232,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                 
                 students.forEach((student, index) => {
                     // Check if we need a new page (leaving room for footer)
-                    if (doc.y > 480) {
+                    if (doc.y > PAGE_BREAK_THRESHOLD) {
                         doc.addPage();
                         doc.y = 50;
                     }
@@ -234,7 +241,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                     
                     // Alternate row background (yellow striping to match paper sheet)
                     if (index % 2 === 1) {
-                        doc.rect(50, rowY - 3, doc.page.width - 100, rowHeight)
+                        doc.rect(50, rowY - 3, doc.page.width - 100, ROW_HEIGHT)
                            .fill('#FFF9E6');
                         doc.fillColor('black');
                     }
@@ -247,14 +254,14 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                         : 'Not marked';
                     
                     // Truncate long names if necessary
-                    const studentName = student.name.length > 25 
-                        ? student.name.substring(0, 22) + '...' 
+                    const studentName = student.name.length > MAX_NAME_LENGTH 
+                        ? student.name.substring(0, TRUNCATED_NAME_LENGTH) + '...' 
                         : student.name;
                     
                     const studentType = student.student_type || 'regular';
                     const notes = attendance?.notes || '';
-                    const truncatedNotes = notes.length > 30 
-                        ? notes.substring(0, 27) + '...' 
+                    const truncatedNotes = notes.length > MAX_NOTES_LENGTH 
+                        ? notes.substring(0, TRUNCATED_NOTES_LENGTH) + '...' 
                         : notes;
                     
                     doc.text((index + 1).toString(), numberX, rowY, { width: 30 })
@@ -264,7 +271,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                        .text(truncatedNotes, notesX, rowY, { width: 200 });
                     
                     // Move down by fixed row height to prevent overlap
-                    doc.y = rowY + rowHeight;
+                    doc.y = rowY + ROW_HEIGHT;
                 });
                 
                 // Summary

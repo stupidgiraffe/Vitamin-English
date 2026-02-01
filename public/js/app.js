@@ -465,7 +465,7 @@ async function loadRecentDatabaseRecords() {
             return;
         }
         
-        displayDatabaseSearchResults(results, container);
+        displayDatabaseSearchResults(results, container, true);
     } catch (error) {
         console.error('Error loading recent records:', error);
         container.innerHTML = '<p class="info-text">Use filters above to search database records</p>';
@@ -473,9 +473,10 @@ async function loadRecentDatabaseRecords() {
 }
 
 // Helper function to display database search results
-function displayDatabaseSearchResults(results, container) {
+function displayDatabaseSearchResults(results, container, isRecentRecords = false) {
     let html = '<div class="search-results">';
-    html += `<h3>Recent Records (${results.totalResults} total)</h3>`;
+    const heading = isRecentRecords ? `Recent Records (${results.totalResults} total)` : `Search Results (${results.totalResults} found)`;
+    html += `<h3>${heading}</h3>`;
     
     // Display results grouped by type
     if (results.results.students && results.results.students.length > 0) {
@@ -2111,7 +2112,7 @@ async function searchDatabase() {
             return;
         }
         
-        displayDatabaseSearchResults(results, container);
+        displayDatabaseSearchResults(results, container, false);
     } catch (error) {
         container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
     }

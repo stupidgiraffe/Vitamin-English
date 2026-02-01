@@ -57,8 +57,8 @@ const i18n = {
         document.querySelectorAll('[data-i18n]').forEach(element => {
             const key = element.getAttribute('data-i18n');
             const translation = this.t(key);
-            // Only update if we have a translation (don't replace with key)
-            if (translation && translation !== key) {
+            // Only update if we have a valid translation (not undefined, not the key itself)
+            if (translation !== undefined && translation !== null && translation !== key) {
                 element.textContent = translation;
             }
         });
@@ -67,8 +67,8 @@ const i18n = {
         document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
             const key = element.getAttribute('data-i18n-placeholder');
             const translation = this.t(key);
-            // Only update if we have a translation
-            if (translation && translation !== key) {
+            // Only update if we have a valid translation
+            if (translation !== undefined && translation !== null && translation !== key) {
                 element.placeholder = translation;
             }
         });
