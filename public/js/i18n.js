@@ -21,7 +21,7 @@ const i18n = {
         }
     },
     
-    t(key) {
+    t(key, fallback = null) {
         const keys = key.split('.');
         let value = this.translations[this.currentLang];
         
@@ -29,7 +29,19 @@ const i18n = {
             value = value?.[k];
         }
         
-        return value || key;
+        // If translation not found, try English as fallback
+        if (value === undefined && this.currentLang !== 'en') {
+            let enValue = this.translations['en'];
+            for (const k of keys) {
+                enValue = enValue?.[k];
+            }
+            if (enValue !== undefined) {
+                return enValue;
+            }
+        }
+        
+        // If still not found, return provided fallback or the key itself
+        return value !== undefined ? value : (fallback || key);
     },
     
     setLanguage(lang) {

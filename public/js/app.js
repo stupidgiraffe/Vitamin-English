@@ -378,6 +378,51 @@ function navigateToPage(page) {
     // Load page-specific data
     if (page === 'dashboard') loadDashboard();
     else if (page === 'admin') loadAdminData();
+    else if (page === 'attendance') initializeAttendancePage();
+    else if (page === 'database') initializeDatabasePage();
+}
+
+// Initialize attendance page with default date range (last 6 months)
+function initializeAttendancePage() {
+    const startDateInput = document.getElementById('attendance-start-date');
+    const endDateInput = document.getElementById('attendance-end-date');
+    
+    // Only set defaults if inputs are empty
+    if (!startDateInput.value || !endDateInput.value) {
+        const today = new Date();
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        
+        startDateInput.value = sixMonthsAgo.toISOString().split('T')[0];
+        endDateInput.value = today.toISOString().split('T')[0];
+    }
+}
+
+// Initialize database page to show recent records by default
+async function initializeDatabasePage() {
+    const container = document.getElementById('db-viewer-container');
+    
+    // Check if already loaded
+    if (container.querySelector('.db-table')) {
+        return;
+    }
+    
+    // Set default date range (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    document.getElementById('db-search-start-date').value = thirtyDaysAgo.toISOString().split('T')[0];
+    document.getElementById('db-search-end-date').value = today.toISOString().split('T')[0];
+    
+    // Load recent attendance records by default
+    try {
+        container.innerHTML = '<p class="info-text">Loading recent records...</p>';
+        document.getElementById('db-search-type').value = 'attendance';
+        await searchDatabase();
+    } catch (error) {
+        console.error('Error loading initial database view:', error);
+    }
 }
 
 // Dashboard

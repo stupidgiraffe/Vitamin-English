@@ -191,26 +191,27 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
             // Attendance Table
             if (students && students.length > 0) {
                 const tableTop = doc.y;
+                const rowHeight = 20; // Fixed row height to prevent overlap
                 const numberX = 60;
                 const nameX = 100;
-                const typeX = 300;
-                const statusX = 400;
-                const notesX = 500;
+                const typeX = 280;
+                const statusX = 380;
+                const notesX = 480;
                 
                 // Blue header background
-                doc.rect(50, tableTop - 5, doc.page.width - 100, 20)
+                doc.rect(50, tableTop - 5, doc.page.width - 100, rowHeight + 2)
                    .fillAndStroke('#4472C4', '#2B5797');
                 
                 doc.font('Helvetica-Bold')
                    .fontSize(11)
                    .fillColor('white')
-                   .text('#', numberX, tableTop)
-                   .text('Student Name', nameX, tableTop)
-                   .text('Type', typeX, tableTop)
-                   .text('Status', statusX, tableTop)
-                   .text('Notes', notesX, tableTop);
+                   .text('#', numberX, tableTop, { width: 30 })
+                   .text('Student Name', nameX, tableTop, { width: 170 })
+                   .text('Type', typeX, tableTop, { width: 90 })
+                   .text('Status', statusX, tableTop, { width: 90 })
+                   .text('Notes', notesX, tableTop, { width: 200 });
                 
-                doc.moveDown(0.5);
+                doc.moveDown(1.2);
                 
                 // Reset fill color for body
                 doc.fillColor('black');
@@ -220,6 +221,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                    .fontSize(10);
                 
                 students.forEach((student, index) => {
+                    // Check for page break
                     if (doc.y > 500) {
                         doc.addPage();
                         doc.y = 50;
@@ -229,7 +231,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                     
                     // Alternate row background (yellow striping)
                     if (index % 2 === 1) {
-                        doc.rect(50, rowY - 2, doc.page.width - 100, 16)
+                        doc.rect(50, rowY - 3, doc.page.width - 100, rowHeight)
                            .fill('#FFF9E6');
                         doc.fillColor('black');
                     }
@@ -241,17 +243,22 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                            attendance.status === '/' ? 'Late' : 'Not marked')
                         : 'Not marked';
                     
-                    doc.text((index + 1).toString(), numberX, rowY)
-                       .text(student.name, nameX, rowY, { width: 180 })
-                       .text(student.student_type || 'regular', typeX, rowY)
-                       .text(statusText, statusX, rowY)
-                       .text(attendance?.notes || '', notesX, rowY, { width: 200 });
+                    // Measure text to ensure it fits
+                    const studentName = student.name.length > 25 ? student.name.substring(0, 25) + '...' : student.name;
+                    const notes = attendance?.notes || '';
+                    const notesText = notes.length > 30 ? notes.substring(0, 30) + '...' : notes;
                     
-                    doc.moveDown(0.7);
+                    doc.text((index + 1).toString(), numberX, rowY, { width: 30, height: rowHeight })
+                       .text(studentName, nameX, rowY, { width: 170, height: rowHeight })
+                       .text(student.student_type || 'regular', typeX, rowY, { width: 90, height: rowHeight })
+                       .text(statusText, statusX, rowY, { width: 90, height: rowHeight })
+                       .text(notesText, notesX, rowY, { width: 200, height: rowHeight });
+                    
+                    doc.moveDown(1.0); // Consistent spacing between rows
                 });
                 
                 // Summary
-                doc.moveDown(0.5);
+                doc.moveDown(1);
                 const presentCount = attendanceRecords.filter(a => a.status === 'O').length;
                 const absentCount = attendanceRecords.filter(a => a.status === 'X').length;
                 const lateCount = attendanceRecords.filter(a => a.status === '/').length;
