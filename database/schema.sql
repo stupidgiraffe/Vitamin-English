@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     student_id INTEGER NOT NULL,
     class_id INTEGER NOT NULL,
     date TEXT NOT NULL,
+    time TEXT,
     status TEXT DEFAULT '' CHECK(status IN ('O', 'X', '/', '')),
     notes TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

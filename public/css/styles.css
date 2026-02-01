@@ -377,6 +377,26 @@ body {
     background: #fffbf0;
 }
 
+.attendance-cell.saving {
+    opacity: 0.6;
+    animation: pulse 1s infinite;
+}
+
+.attendance-cell.saved {
+    animation: flash-green 0.5s;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+@keyframes flash-green {
+    0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); }
+    50% { box-shadow: 0 0 10px 5px rgba(40, 167, 69, 0.4); }
+    100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+}
+
 .student-type-header {
     background: #8FAADC !important; /* Light blue for section headers */
     color: #1F3A5F !important;
@@ -933,6 +953,14 @@ body {
 
 .db-table tr:hover {
     background: #f8f9fa;
+}
+
+.db-table .actions-cell {
+    white-space: nowrap;
+}
+
+.db-table .actions-cell .btn {
+    margin-right: 0.5rem;
 }
 
 /* Make-up Lessons */

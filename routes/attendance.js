@@ -148,7 +148,7 @@ router.get('/matrix', async (req, res) => {
 // Create or update attendance record
 router.post('/', async (req, res) => {
     try {
-        const { student_id, class_id, date, status, notes } = req.body;
+        const { student_id, class_id, date, status, notes, time } = req.body;
         
         if (!student_id || !class_id || !date) {
             return res.status(400).json({ error: 'student_id, class_id, and date are required' });
@@ -170,9 +170,9 @@ router.post('/', async (req, res) => {
         if (existing) {
             await pool.query(`
                 UPDATE attendance 
-                SET status = $1, notes = $2
-                WHERE id = $3
-            `, [status || '', notes || '', existing.id]);
+                SET status = $1, notes = $2, time = $3
+                WHERE id = $4
+            `, [status || '', notes || '', time || null, existing.id]);
             
             const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [existing.id]);
             const record = recordResult.rows[0];
@@ -183,10 +183,10 @@ router.post('/', async (req, res) => {
             });
         } else {
             const result = await pool.query(`
-                INSERT INTO attendance (student_id, class_id, date, status, notes) 
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO attendance (student_id, class_id, date, status, notes, time) 
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING id
-            `, [student_id, class_id, normalizedDate, status || '', notes || '']);
+            `, [student_id, class_id, normalizedDate, status || '', notes || '', time || null]);
             
             const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [result.rows[0].id]);
             const record = recordResult.rows[0];
