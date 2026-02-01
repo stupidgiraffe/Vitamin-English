@@ -625,7 +625,7 @@ function renderAttendanceTable(data, classId) {
             html += `<tr class="${rowClass}"><td class="student-name">
                 <div class="student-name-cell">
                     <span>${student.name}</span>
-                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student">✏️</button>
+                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${student.name}">✏️</button>
                 </div>
             </td>`;
             
@@ -651,7 +651,7 @@ function renderAttendanceTable(data, classId) {
             html += `<tr class="student-row-trial"><td class="student-name">
                 <div class="student-name-cell">
                     <span>${student.name}</span>
-                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student">✏️</button>
+                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${student.name}">✏️</button>
                 </div>
             </td>`;
             
@@ -940,7 +940,7 @@ function showMoveAttendanceModal() {
                 <label>To Date *</label>
                 <input type="date" id="move-to-date" class="form-control" required>
             </div>
-            <div style="background: #fff3cd; border: 1px solid #ffc107; padding: 1rem; border-radius: 6px; margin: 1rem 0;">
+            <div class="warning-box">
                 <strong>⚠️ Warning:</strong> This will move ALL attendance records from the source date to the target date for this class. The source date records will be deleted. This action cannot be undone.
             </div>
             <button type="submit" class="btn btn-primary">Move Attendance</button>

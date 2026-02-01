@@ -277,6 +277,11 @@ router.post('/bulk', async (req, res) => {
 
 // Move attendance records from one date to another
 router.post('/move', async (req, res) => {
+    // Authentication check
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    
     try {
         const { class_id, from_date, to_date } = req.body;
         

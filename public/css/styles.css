@@ -468,6 +468,15 @@ body {
     background: #2B5797;
 }
 
+/* Warning box for modal dialogs */
+.warning-box {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    padding: 1rem;
+    border-radius: 6px;
+    margin: 1rem 0;
+}
+
 /* Report Form */
 .report-form {
     background: white;
