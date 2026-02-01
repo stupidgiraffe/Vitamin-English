@@ -167,13 +167,15 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
             });
             doc.on('error', reject);
             
-            // Header
+            // Header with blue background
             doc.fontSize(20)
                .font('Helvetica-Bold')
+               .fillColor('#1F3A5F')
                .text('Vitamin English School', { align: 'center' });
             
             doc.moveDown(0.3);
             doc.fontSize(16)
+               .fillColor('#1F3A5F')
                .text('Class Attendance Sheet', { align: 'center' });
             
             doc.moveDown(0.8);
@@ -181,6 +183,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
             // Class Information
             doc.fontSize(12)
                .font('Helvetica')
+               .fillColor('black')
                .text(`Class: ${classData.name}`, { indent: 50 })
                .text(`Teacher: ${classData.teacher_name || 'N/A'}`, { indent: 50 })
                .text(`Schedule: ${classData.schedule || 'N/A'}`, { indent: 50 })
@@ -196,9 +199,10 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                 const typeX = 300;
                 const statusX = 400;
                 const notesX = 500;
+                const rowHeight = 22; // Increased from implicit ~16
                 
-                // Blue header background
-                doc.rect(50, tableTop - 5, doc.page.width - 100, 20)
+                // Blue header background (matching paper sheet)
+                doc.rect(50, tableTop - 5, doc.page.width - 100, 25)
                    .fillAndStroke('#4472C4', '#2B5797');
                 
                 doc.font('Helvetica-Bold')
@@ -210,26 +214,27 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                    .text('Status', statusX, tableTop)
                    .text('Notes', notesX, tableTop);
                 
-                doc.moveDown(0.5);
+                doc.moveDown(1);
                 
                 // Reset fill color for body
                 doc.fillColor('black');
                 
-                // Table rows
+                // Table rows with proper spacing
                 doc.font('Helvetica')
                    .fontSize(10);
                 
                 students.forEach((student, index) => {
-                    if (doc.y > 500) {
+                    // Check if we need a new page (leaving room for footer)
+                    if (doc.y > 480) {
                         doc.addPage();
                         doc.y = 50;
                     }
                     
                     const rowY = doc.y;
                     
-                    // Alternate row background (yellow striping)
+                    // Alternate row background (yellow striping to match paper sheet)
                     if (index % 2 === 1) {
-                        doc.rect(50, rowY - 2, doc.page.width - 100, 16)
+                        doc.rect(50, rowY - 3, doc.page.width - 100, rowHeight)
                            .fill('#FFF9E6');
                         doc.fillColor('black');
                     }
@@ -241,13 +246,25 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                            attendance.status === '/' ? 'Late' : 'Not marked')
                         : 'Not marked';
                     
-                    doc.text((index + 1).toString(), numberX, rowY)
-                       .text(student.name, nameX, rowY, { width: 180 })
-                       .text(student.student_type || 'regular', typeX, rowY)
-                       .text(statusText, statusX, rowY)
-                       .text(attendance?.notes || '', notesX, rowY, { width: 200 });
+                    // Truncate long names if necessary
+                    const studentName = student.name.length > 25 
+                        ? student.name.substring(0, 22) + '...' 
+                        : student.name;
                     
-                    doc.moveDown(0.7);
+                    const studentType = student.student_type || 'regular';
+                    const notes = attendance?.notes || '';
+                    const truncatedNotes = notes.length > 30 
+                        ? notes.substring(0, 27) + '...' 
+                        : notes;
+                    
+                    doc.text((index + 1).toString(), numberX, rowY, { width: 30 })
+                       .text(studentName, nameX, rowY, { width: 180 })
+                       .text(studentType, typeX, rowY, { width: 80 })
+                       .text(statusText, statusX, rowY, { width: 80 })
+                       .text(truncatedNotes, notesX, rowY, { width: 200 });
+                    
+                    // Move down by fixed row height to prevent overlap
+                    doc.y = rowY + rowHeight;
                 });
                 
                 // Summary
@@ -268,6 +285,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
             // Footer
             doc.fontSize(9)
                .font('Helvetica')
+               .fillColor('#666')
                .text(`Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 
                      50, doc.page.height - 50, { align: 'center' });
             

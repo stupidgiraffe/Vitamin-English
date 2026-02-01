@@ -378,6 +378,8 @@ function navigateToPage(page) {
     // Load page-specific data
     if (page === 'dashboard') loadDashboard();
     else if (page === 'admin') loadAdminData();
+    else if (page === 'database') loadRecentDatabaseRecords();
+    else if (page === 'attendance') initializeAttendancePage();
 }
 
 // Dashboard
@@ -412,6 +414,186 @@ async function loadDashboard() {
     } catch (error) {
         recentActivityDiv.innerHTML = '<p>Unable to load recent activity</p>';
     }
+}
+
+// Initialize attendance page with default date range (last 6 months)
+async function initializeAttendancePage() {
+    const startDateInput = document.getElementById('attendance-start-date');
+    const endDateInput = document.getElementById('attendance-end-date');
+    
+    // Only set defaults if fields are empty
+    if (!startDateInput.value) {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        startDateInput.value = sixMonthsAgo.toISOString().split('T')[0];
+    }
+    
+    if (!endDateInput.value) {
+        const today = new Date();
+        endDateInput.value = today.toISOString().split('T')[0];
+    }
+}
+
+// Load recent database records by default (Database View UX improvement)
+async function loadRecentDatabaseRecords() {
+    const container = document.getElementById('db-viewer-container');
+    
+    try {
+        // Set default date range to last 30 days
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        
+        const startDateStr = startDate.toISOString().split('T')[0];
+        const endDateStr = endDate.toISOString().split('T')[0];
+        
+        // Update the date inputs to show what we're searching
+        document.getElementById('db-search-start-date').value = startDateStr;
+        document.getElementById('db-search-end-date').value = endDateStr;
+        
+        container.innerHTML = '<p class="info-text">Loading recent records...</p>';
+        
+        // Search without query to get recent records based on dates
+        const params = new URLSearchParams();
+        params.append('startDate', startDateStr);
+        params.append('endDate', endDateStr);
+        
+        const results = await api(`/database/search?${params.toString()}`);
+        
+        if (!results || results.totalResults === 0) {
+            container.innerHTML = '<p class="info-text">No recent records found. Use filters above to search.</p>';
+            return;
+        }
+        
+        displayDatabaseSearchResults(results, container);
+    } catch (error) {
+        console.error('Error loading recent records:', error);
+        container.innerHTML = '<p class="info-text">Use filters above to search database records</p>';
+    }
+}
+
+// Helper function to display database search results
+function displayDatabaseSearchResults(results, container) {
+    let html = '<div class="search-results">';
+    html += `<h3>Recent Records (${results.totalResults} total)</h3>`;
+    
+    // Display results grouped by type
+    if (results.results.students && results.results.students.length > 0) {
+        html += `<h4>Students (${results.results.students.length})</h4>`;
+        html += '<table class="db-table"><thead><tr>';
+        const studentCols = Object.keys(results.results.students[0]);
+        studentCols.forEach(col => html += `<th>${col}</th>`);
+        html += '</tr></thead><tbody>';
+        results.results.students.forEach(row => {
+            html += '<tr>';
+            studentCols.forEach(col => {
+                let value = row[col];
+                if (value === null) value = '<em>null</em>';
+                else if (typeof value === 'object') value = JSON.stringify(value);
+                html += `<td>${escapeHtml(String(value))}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table><br>';
+    }
+    
+    if (results.results.teachers && results.results.teachers.length > 0) {
+        html += `<h4>Teachers (${results.results.teachers.length})</h4>`;
+        html += '<table class="db-table"><thead><tr>';
+        const teacherCols = Object.keys(results.results.teachers[0]);
+        teacherCols.forEach(col => html += `<th>${col}</th>`);
+        html += '</tr></thead><tbody>';
+        results.results.teachers.forEach(row => {
+            html += '<tr>';
+            teacherCols.forEach(col => {
+                let value = row[col];
+                if (value === null) value = '<em>null</em>';
+                else if (typeof value === 'object') value = JSON.stringify(value);
+                html += `<td>${escapeHtml(String(value))}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table><br>';
+    }
+    
+    if (results.results.classes && results.results.classes.length > 0) {
+        html += `<h4>Classes (${results.results.classes.length})</h4>`;
+        html += '<table class="db-table"><thead><tr>';
+        const classCols = Object.keys(results.results.classes[0]);
+        classCols.forEach(col => html += `<th>${col}</th>`);
+        html += '</tr></thead><tbody>';
+        results.results.classes.forEach(row => {
+            html += '<tr>';
+            classCols.forEach(col => {
+                let value = row[col];
+                if (value === null) value = '<em>null</em>';
+                else if (typeof value === 'object') value = JSON.stringify(value);
+                html += `<td>${escapeHtml(String(value))}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table><br>';
+    }
+    
+    if (results.results.attendance && results.results.attendance.length > 0) {
+        html += `<h4>Attendance (${results.results.attendance.length})</h4>`;
+        html += '<table class="db-table"><thead><tr>';
+        const attendanceCols = Object.keys(results.results.attendance[0]);
+        attendanceCols.forEach(col => html += `<th>${col}</th>`);
+        html += '</tr></thead><tbody>';
+        results.results.attendance.forEach(row => {
+            html += '<tr>';
+            attendanceCols.forEach(col => {
+                let value = row[col];
+                if (value === null) value = '<em>null</em>';
+                else if (typeof value === 'object') value = JSON.stringify(value);
+                html += `<td>${escapeHtml(String(value))}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table><br>';
+    }
+    
+    if (results.results.reports && results.results.reports.length > 0) {
+        html += `<h4>Lesson Reports (${results.results.reports.length})</h4>`;
+        html += '<table class="db-table"><thead><tr>';
+        const reportCols = Object.keys(results.results.reports[0]);
+        reportCols.forEach(col => html += `<th>${col}</th>`);
+        html += '</tr></thead><tbody>';
+        results.results.reports.forEach(row => {
+            html += '<tr>';
+            reportCols.forEach(col => {
+                let value = row[col];
+                if (value === null) value = '<em>null</em>';
+                else if (typeof value === 'object') value = JSON.stringify(value);
+                html += `<td>${escapeHtml(String(value))}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table><br>';
+    }
+    
+    if (results.results.makeup_lessons && results.results.makeup_lessons.length > 0) {
+        html += `<h4>Make-up Lessons (${results.results.makeup_lessons.length})</h4>`;
+        html += '<table class="db-table"><thead><tr>';
+        const makeupCols = Object.keys(results.results.makeup_lessons[0]);
+        makeupCols.forEach(col => html += `<th>${col}</th>`);
+        html += '</tr></thead><tbody>';
+        results.results.makeup_lessons.forEach(row => {
+            html += '<tr>';
+            makeupCols.forEach(col => {
+                let value = row[col];
+                if (value === null) value = '<em>null</em>';
+                else if (typeof value === 'object') value = JSON.stringify(value);
+                html += `<td>${escapeHtml(String(value))}</td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table><br>';
+    }
+    
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 // Attendance Management
@@ -1911,145 +2093,25 @@ async function searchDatabase() {
     const endDate = document.getElementById('db-search-end-date').value;
     const container = document.getElementById('db-viewer-container');
     
-    if (!query) {
-        Toast.error('Please enter a search query');
-        return;
-    }
+    // Query is now optional - can search by type and/or date only
     
     try {
         container.innerHTML = '<p class="info-text">Searching...</p>';
         
-        const params = new URLSearchParams({ query });
+        const params = new URLSearchParams();
+        if (query) params.append('query', query);
         if (type) params.append('type', type);
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
         
         const results = await api(`/database/search?${params.toString()}`);
         
-        if (!results || Object.keys(results).length === 0) {
+        if (!results || results.totalResults === 0) {
             container.innerHTML = '<p class="info-text">No results found</p>';
             return;
         }
         
-        let html = '<div class="search-results">';
-        
-        // Display results grouped by type
-        if (results.students && results.students.length > 0) {
-            html += `<h3>Students (${results.students.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const studentCols = Object.keys(results.students[0]);
-            studentCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.students.forEach(row => {
-                html += '<tr>';
-                studentCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
-        }
-        
-        if (results.teachers && results.teachers.length > 0) {
-            html += `<h3>Teachers (${results.teachers.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const teacherCols = Object.keys(results.teachers[0]);
-            teacherCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.teachers.forEach(row => {
-                html += '<tr>';
-                teacherCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
-        }
-        
-        if (results.classes && results.classes.length > 0) {
-            html += `<h3>Classes (${results.classes.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const classCols = Object.keys(results.classes[0]);
-            classCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.classes.forEach(row => {
-                html += '<tr>';
-                classCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
-        }
-        
-        if (results.attendance && results.attendance.length > 0) {
-            html += `<h3>Attendance (${results.attendance.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const attendanceCols = Object.keys(results.attendance[0]);
-            attendanceCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.attendance.forEach(row => {
-                html += '<tr>';
-                attendanceCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
-        }
-        
-        if (results.reports && results.reports.length > 0) {
-            html += `<h3>Lesson Reports (${results.reports.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const reportCols = Object.keys(results.reports[0]);
-            reportCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.reports.forEach(row => {
-                html += '<tr>';
-                reportCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
-        }
-        
-        if (results.makeup_lessons && results.makeup_lessons.length > 0) {
-            html += `<h3>Make-up Lessons (${results.makeup_lessons.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const makeupCols = Object.keys(results.makeup_lessons[0]);
-            makeupCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.makeup_lessons.forEach(row => {
-                html += '<tr>';
-                makeupCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
-        }
-        
-        html += '</div>';
-        container.innerHTML = html;
+        displayDatabaseSearchResults(results, container);
     } catch (error) {
         container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
     }

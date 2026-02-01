@@ -18,6 +18,8 @@ const i18n = {
             this.translations[lang] = await response.json();
         } catch (error) {
             console.error(`Failed to load ${lang} translations:`, error);
+            // Fallback to empty object to prevent crashes
+            this.translations[lang] = {};
         }
     },
     
@@ -29,6 +31,17 @@ const i18n = {
             value = value?.[k];
         }
         
+        // If translation not found in current language, try English as fallback
+        if (!value && this.currentLang !== 'en') {
+            let fallbackValue = this.translations['en'];
+            for (const k of keys) {
+                fallbackValue = fallbackValue?.[k];
+            }
+            // Return fallback or the key itself if nothing found
+            return fallbackValue || key;
+        }
+        
+        // Return value or key if nothing found (prevents undefined/null display)
         return value || key;
     },
     
@@ -43,13 +56,21 @@ const i18n = {
         // Update all elements with data-i18n attribute
         document.querySelectorAll('[data-i18n]').forEach(element => {
             const key = element.getAttribute('data-i18n');
-            element.textContent = this.t(key);
+            const translation = this.t(key);
+            // Only update if we have a translation (don't replace with key)
+            if (translation && translation !== key) {
+                element.textContent = translation;
+            }
         });
         
         // Update all placeholders with data-i18n-placeholder
         document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
             const key = element.getAttribute('data-i18n-placeholder');
-            element.placeholder = this.t(key);
+            const translation = this.t(key);
+            // Only update if we have a translation
+            if (translation && translation !== key) {
+                element.placeholder = translation;
+            }
         });
         
         // Update page title
