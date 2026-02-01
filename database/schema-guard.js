@@ -84,8 +84,9 @@ async function ensureColumnExists(client, tableName, columnName, columnType, def
         }
         
         // Validate default value against allowlist (only allow NULL or specific safe values)
+        // Use != null to catch both null and undefined
         const allowedDefaults = ['NULL', "'#4A90E2'"];
-        if (defaultValue !== null && !allowedDefaults.includes(defaultValue)) {
+        if (defaultValue != null && !allowedDefaults.includes(defaultValue)) {
             console.error(`❌ Invalid default value: ${defaultValue}`);
             return;
         }
@@ -102,7 +103,8 @@ async function ensureColumnExists(client, tableName, columnName, columnType, def
             console.log(`⚠️  Column ${tableName}.${columnName} missing - adding...`);
             
             // Safe to use validated table/column names and default values in SQL
-            const defaultClause = defaultValue !== null ? `DEFAULT ${defaultValue}` : '';
+            // Use != null to catch both null and undefined
+            const defaultClause = (defaultValue != null) ? `DEFAULT ${defaultValue}` : '';
             const alterSQL = `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType} ${defaultClause}`;
             
             await client.query(alterSQL);
