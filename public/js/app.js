@@ -63,7 +63,12 @@ const AttendanceSaveQueue = {
         } catch (error) {
             console.error('Error saving attendance:', error);
             Toast.error('Failed to save some attendance changes');
-            this.updateSaveStatus('saved'); // Still hide the badge even on error
+            // Show error state and keep it visible
+            this.updateSaveStatus('error');
+            // Hide badge after 4 seconds to give user time to see error
+            setTimeout(() => {
+                this.hideSaveStatus();
+            }, 4000);
         }
     },
     
@@ -84,6 +89,9 @@ const AttendanceSaveQueue = {
         } else if (status === 'saved') {
             icon.textContent = '✓';
             text.textContent = 'Saved';
+        } else if (status === 'error') {
+            icon.textContent = '✕';
+            text.textContent = 'Save Failed';
         }
     },
     
@@ -911,8 +919,8 @@ async function toggleAttendance(cell) {
         AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, time);
         
     } catch (error) {
-        console.error('Error queueing attendance update:', error);
-        Toast.error('Failed to queue attendance update');
+        console.error('Error updating attendance:', error);
+        Toast.error('Failed to update attendance');
     }
 }
 

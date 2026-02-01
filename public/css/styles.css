@@ -526,6 +526,12 @@ body {
     color: #155724;
 }
 
+.save-status-badge.error {
+    background: #F8D7DA;
+    border: 1px solid #DC3545;
+    color: #721C24;
+}
+
 .save-status-badge .status-icon {
     font-size: 1rem;
 }
