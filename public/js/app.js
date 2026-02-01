@@ -955,20 +955,29 @@ async function exportAttendancePDF() {
         return;
     }
     
-    if (!startDate) {
-        Toast.error('Please select a start date');
+    if (!startDate || !endDate) {
+        Toast.error('Please select both start and end dates');
         return;
     }
     
     try {
-        // Note: Backend API generates PDF for a single date. Using start date from the selected range.
-        const date = startDate;
+        // Normalize dates to ISO format before sending to API
+        const normalizedStartDate = normalizeToISO(startDate);
+        const normalizedEndDate = normalizeToISO(endDate);
+        
+        if (!normalizedStartDate || !normalizedEndDate) {
+            Toast.error('Invalid date format');
+            return;
+        }
         
         Toast.info('Generating PDF...', 'Please wait');
         
-        const response = await api(`/pdf/class-attendance/${classId}`, {
+        const response = await api(`/pdf/attendance-grid/${classId}`, {
             method: 'POST',
-            body: JSON.stringify({ date })
+            body: JSON.stringify({ 
+                startDate: normalizedStartDate, 
+                endDate: normalizedEndDate 
+            })
         });
         
         if (response.success && response.downloadUrl) {
