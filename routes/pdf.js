@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../database/init');
 const { generateStudentAttendancePDF, generateClassAttendancePDF, generateAttendanceGridPDF, generateLessonReportPDF } = require('../utils/pdfGenerator');
 const { uploadPDF, getDownloadUrl, listPDFs, isConfigured } = require('../utils/r2Storage');
+const { normalizeToISO } = require('../utils/dateUtils');
 
 // Middleware to check if R2 is configured
 const checkR2Config = (req, res, next) => {
@@ -263,10 +264,12 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
             WHERE class_id = $1 AND date >= $2 AND date <= $3
         `, [classId, startDate, endDate]);
         
-        // Create attendance map
+        // Create attendance map with normalized dates to ensure key consistency
         const attendanceMap = {};
         attendanceResult.rows.forEach(record => {
-            const key = `${record.student_id}-${record.date}`;
+            // Normalize the date from DB to ISO format (YYYY-MM-DD) to match dates array
+            const normalizedDate = normalizeToISO(record.date) || record.date;
+            const key = `${record.student_id}-${normalizedDate}`;
             attendanceMap[key] = record.status;
         });
         
