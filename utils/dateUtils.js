@@ -34,7 +34,7 @@ function normalizeToISO(dateInput) {
             const [month, day, year] = dateOnly.split('/');
             date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);
         }
-        // Check for DD/MM/YYYY format (less common in this app but good to support)
+        // Check for DD-MM-YYYY format (hyphen-separated)
         else if (/^\d{1,2}-\d{1,2}-\d{4}$/.test(dateOnly)) {
             const [day, month, year] = dateOnly.split('-');
             date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`);

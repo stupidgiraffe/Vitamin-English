@@ -1,10 +1,6 @@
 -- Migration: Normalize all date values in the database to ISO format (YYYY-MM-DD)
 -- This script converts dates from MM/DD/YYYY and other formats to YYYY-MM-DD
 
--- First, let's check what dates we have
-SELECT 'Before migration:' as status;
-SELECT id, student_id, class_id, date, status FROM attendance ORDER BY id;
-
 -- Update attendance table dates
 -- Handle MM/DD/YYYY format (e.g., 01/28/2026)
 UPDATE attendance
@@ -73,7 +69,3 @@ SET enrollment_date =
         ELSE enrollment_date
     END
 WHERE enrollment_date IS NOT NULL AND enrollment_date !~ '^\d{4}-\d{2}-\d{2}$';
-
--- Show results after migration
-SELECT 'After migration:' as status;
-SELECT id, student_id, class_id, date, status FROM attendance ORDER BY id;
