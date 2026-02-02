@@ -796,6 +796,10 @@ body {
     font-size: 2rem;
     cursor: pointer;
     color: #6c757d;
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: 1;
 }
 
 .modal-close:hover {
