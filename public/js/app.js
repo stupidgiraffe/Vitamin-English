@@ -694,7 +694,7 @@ function loadWeeklySchedule() {
     if (daysWithClasses.length === 0) {
         weeklyScheduleDiv.innerHTML = `
             <p class="info-text">No scheduled classes found. Add schedules to classes in Admin.</p>
-            <button class="btn btn-small btn-secondary" onclick="navigateToPage('admin'); document.querySelector('[data-tab=classes]')?.click();">
+            <button class="btn btn-small btn-secondary" onclick="goToClassScheduleAdmin()">
                 Edit Class Schedules
             </button>
         `;
@@ -727,22 +727,46 @@ function loadWeeklySchedule() {
     `;
 }
 
+// Helper function to navigate to admin classes tab
+function goToClassScheduleAdmin() {
+    navigateToPage('admin');
+    // Use requestAnimationFrame to ensure page is rendered before clicking tab
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const classesTab = document.querySelector('[data-tab="classes"]');
+            if (classesTab) {
+                classesTab.click();
+            }
+        });
+    });
+}
+
 // Quick action functions for dashboard
 function quickMarkAttendance(classId, date) {
     document.getElementById('attendance-class-select').value = classId;
     document.getElementById('attendance-start-date').value = date;
     document.getElementById('attendance-end-date').value = date;
     navigateToPage('attendance');
-    setTimeout(() => loadAttendance(), 100);
+    // Use requestAnimationFrame to ensure DOM is updated before loading attendance
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => loadAttendance());
+    });
 }
 
 function quickNewReport(classId, date) {
     navigateToPage('reports');
-    setTimeout(() => {
-        document.getElementById('reports-class-select').value = classId;
-        document.getElementById('report-date').value = date;
-        showNewReport();
-    }, 100);
+    // Use requestAnimationFrame to ensure page navigation completes before setting values
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const classSelect = document.getElementById('reports-class-select');
+            const reportDate = document.getElementById('report-date');
+            if (classSelect && reportDate) {
+                classSelect.value = classId;
+                reportDate.value = date;
+                showNewReport();
+            }
+        });
+    });
 }
 
 // Attendance Management
@@ -1168,6 +1192,7 @@ function renderAttendanceGridView(data, classId) {
                             const key = `${student.id}-${date}`;
                             const status = attendance[key] || '';
                             const statusClass = status === 'O' ? 'present' : status === 'X' ? 'absent' : status === '/' ? 'partial' : 'empty';
+                            // Append 'T00:00:00' to parse date as local midnight, avoiding timezone shifts
                             const dateObj = new Date(date + 'T00:00:00');
                             const shortDate = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
                             return `<span class="date-cell ${statusClass}" title="${shortDate}: ${status || 'N/A'}">${status || '·'}</span>`;
