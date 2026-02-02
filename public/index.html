@@ -91,11 +91,11 @@
                 <h2>Dashboard</h2>
                 <div class="dashboard-grid">
                     <div class="dashboard-card">
-                        <h3>Today's Classes</h3>
+                        <h3>📅 Today's Classes</h3>
                         <div id="today-classes"></div>
                     </div>
                     <div class="dashboard-card">
-                        <h3>Quick Actions</h3>
+                        <h3>⚡ Quick Actions</h3>
                         <div class="quick-actions">
                             <button class="btn btn-primary" onclick="navigateToPage('attendance')">📊 Mark Attendance</button>
                             <button class="btn btn-primary" onclick="navigateToPage('reports')">📝 Add Lesson Report</button>
@@ -103,14 +103,18 @@
                         </div>
                     </div>
                     <div class="dashboard-card">
-                        <h3>Make-up Lessons</h3>
+                        <h3>📆 Weekly Schedule</h3>
+                        <div id="weekly-schedule"></div>
+                    </div>
+                    <div class="dashboard-card">
+                        <h3>🔄 Make-up Lessons</h3>
                         <div id="makeup-lessons-dashboard">
                             <p class="info-text">Loading make-up lessons...</p>
                         </div>
                         <button class="btn btn-primary btn-small" onclick="showMakeupLessonForm()">+ Schedule Make-up Lesson</button>
                     </div>
                     <div class="dashboard-card">
-                        <h3>Recent Activity</h3>
+                        <h3>📋 Recent Activity</h3>
                         <div id="recent-activity"></div>
                     </div>
                 </div>
@@ -141,7 +145,7 @@
                     <button id="use-schedule-btn" class="btn btn-secondary" title="Auto-fill dates based on class schedule">📅 Use Schedule</button>
                     <button id="load-attendance-btn" class="btn btn-primary">Load Attendance</button>
                     <button id="export-attendance-btn" class="btn btn-secondary">Export CSV</button>
-                    <button id="export-attendance-pdf-btn" class="btn btn-secondary">Export PDF</button>
+                    <button id="export-attendance-pdf-btn" class="btn btn-secondary">📄 Export PDF</button>
                 </div>
 
                 <!-- Attendance Metadata -->
@@ -159,6 +163,10 @@
                         <div class="value" id="metadata-teacher">-</div>
                     </div>
                     <div class="metadata-item">
+                        <label>Students:</label>
+                        <div class="value" id="metadata-student-count">-</div>
+                    </div>
+                    <div class="metadata-item">
                         <label>Class Time:</label>
                         <input type="text" id="attendance-time" class="form-control" placeholder="e.g., 14:00">
                     </div>
@@ -172,6 +180,11 @@
 
                 <!-- Attendance Controls -->
                 <div id="attendance-controls" class="attendance-controls" style="display: none;">
+                    <div class="view-toggle-group">
+                        <span class="view-toggle-label">View:</span>
+                        <button id="view-list-btn" class="view-toggle-btn active" title="List View">📋 List</button>
+                        <button id="view-grid-btn" class="view-toggle-btn" title="Grid View">📊 Grid</button>
+                    </div>
                     <button id="add-date-btn" class="add-date-btn">➕ Add Date</button>
                     <button id="move-attendance-btn" class="move-attendance-btn">📅 Move Attendance</button>
                     <div id="save-status-badge" class="save-status-badge" style="display: none;">

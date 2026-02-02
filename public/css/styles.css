@@ -327,6 +327,225 @@ body {
     gap: 1rem;
 }
 
+/* Today's Classes - Enhanced Styles */
+.today-classes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.today-class-card {
+    background: #f8f9fa;
+    padding: 0.875rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.today-class-card:hover {
+    background: #e9ecef;
+    transform: translateX(2px);
+}
+
+.today-class-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.today-class-name {
+    font-weight: 600;
+    font-size: 1.05rem;
+}
+
+.today-class-time {
+    background: #667eea;
+    color: white;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.today-class-details {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.875rem;
+    color: #555;
+}
+
+.today-class-teacher,
+.today-class-schedule {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.today-class-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.today-class-actions .btn-small {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+}
+
+.no-classes-today {
+    color: #6c757d;
+    font-style: italic;
+    text-align: center;
+    padding: 1rem 0;
+}
+
+.other-classes-section {
+    margin-top: 1rem;
+    border-top: 1px solid #e1e8ed;
+    padding-top: 0.75rem;
+}
+
+.other-classes-section summary {
+    cursor: pointer;
+    color: #667eea;
+    font-weight: 500;
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
+}
+
+.other-classes-section summary:hover {
+    color: #5568d3;
+}
+
+.other-classes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.other-class-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+.other-class-item small {
+    color: #6c757d;
+}
+
+/* Weekly Schedule Styles */
+.weekly-schedule-container {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.schedule-day {
+    flex: 1;
+    min-width: 80px;
+    max-width: 120px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.schedule-day.today {
+    background: #e7f2ff;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+.day-header {
+    padding: 0.5rem;
+    text-align: center;
+    background: #e9ecef;
+    font-weight: 600;
+    font-size: 0.8rem;
+    color: #495057;
+}
+
+.day-header.today {
+    background: #667eea;
+    color: white;
+}
+
+.day-name {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.today-badge {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.day-classes {
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-height: 60px;
+}
+
+.schedule-class-item {
+    padding: 0.4rem 0.5rem;
+    background: white;
+    border-radius: 4px;
+    border-left: 3px solid #667eea;
+    font-size: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.schedule-class-name {
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.schedule-class-time {
+    color: #6c757d;
+    font-size: 0.7rem;
+}
+
+/* Recent Activity - Enhanced Styles */
+.recent-activity-item {
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #e1e8ed;
+}
+
+.recent-activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-date {
+    font-weight: 600;
+    color: #667eea;
+    font-size: 0.9rem;
+}
+
+.activity-class {
+    font-size: 0.95rem;
+    margin: 0.25rem 0;
+}
+
+.activity-teacher {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
 /* Controls */
 .controls {
     background: white;
@@ -484,6 +703,305 @@ body {
     background: #f0f8ff; /* Light blue background for trial students */
 }
 
+/* Attendance Grid View Styles */
+.attendance-grid-view {
+    padding: 1rem;
+}
+
+.grid-legend {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.legend-color {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    font-weight: bold;
+    font-size: 0.85rem;
+}
+
+.legend-color.present {
+    background: #d4edda;
+    color: #155724;
+}
+
+.legend-color.absent {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.legend-color.partial {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.grid-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.grid-section {
+    margin-bottom: 0.5rem;
+}
+
+.grid-section-title {
+    color: #1F3A5F;
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #8FAADC;
+}
+
+.grid-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1rem;
+}
+
+.student-grid-card {
+    background: white;
+    border: 1px solid #e1e8ed;
+    border-radius: 10px;
+    padding: 1rem;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.student-grid-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transform: translateY(-2px);
+}
+
+.student-card-yellow {
+    background: #fffbf0;
+    border-color: #ffc107;
+}
+
+.student-card-blue {
+    background: #f0f8ff;
+    border-color: #4472C4;
+}
+
+.student-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.student-card-name {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #333;
+}
+
+.student-card-rate {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+}
+
+.student-card-rate.good {
+    background: #d4edda;
+    color: #155724;
+}
+
+.student-card-rate.warning {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.student-card-rate.poor {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.student-card-stats {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.85rem;
+}
+
+.student-card-stats .stat {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.student-card-stats .stat.present {
+    color: #28a745;
+}
+
+.student-card-stats .stat.absent {
+    color: #dc3545;
+}
+
+.student-card-stats .stat.partial {
+    color: #ffc107;
+}
+
+.student-card-dates {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+
+.student-card-dates .date-cell {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: bold;
+    border-radius: 3px;
+    cursor: default;
+}
+
+.student-card-dates .date-cell.present {
+    background: #d4edda;
+    color: #155724;
+}
+
+.student-card-dates .date-cell.absent {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.student-card-dates .date-cell.partial {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.student-card-dates .date-cell.empty {
+    background: #f1f3f5;
+    color: #adb5bd;
+}
+
+.student-card-dates .more-dates {
+    font-size: 0.75rem;
+    color: #6c757d;
+    padding-left: 0.25rem;
+}
+
+.student-card-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.student-card-actions .btn-small {
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+}
+
+.grid-summary {
+    display: flex;
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    flex-wrap: wrap;
+}
+
+.summary-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem 1rem;
+}
+
+.summary-stat.present .summary-value {
+    color: #28a745;
+}
+
+.summary-stat.absent .summary-value {
+    color: #dc3545;
+}
+
+.summary-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+}
+
+.summary-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #333;
+}
+
+/* Student Detail Modal */
+.student-detail-modal {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.student-info-summary {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid #e1e8ed;
+}
+
+.student-info-summary p {
+    margin: 0.25rem 0;
+}
+
+.attendance-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.history-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0.75rem;
+    border-radius: 6px;
+    background: #f8f9fa;
+}
+
+.history-item.present {
+    background: #d4edda;
+}
+
+.history-item.absent {
+    background: #f8d7da;
+}
+
+.history-item.partial {
+    background: #fff3cd;
+}
+
+.history-date {
+    font-weight: 500;
+}
+
+.history-status {
+    font-weight: 600;
+}
+
 /* Attendance Sheet Metadata and Controls */
 .attendance-metadata {
     background: #E7F2FF;
@@ -540,6 +1058,45 @@ body {
     gap: 0.5rem;
     margin-bottom: 1rem;
     flex-wrap: wrap;
+    align-items: center;
+}
+
+/* View Toggle Group */
+.view-toggle-group {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    background: #f1f3f5;
+    padding: 0.25rem;
+    border-radius: 6px;
+    margin-right: 0.5rem;
+}
+
+.view-toggle-label {
+    font-size: 0.85rem;
+    color: #555;
+    margin-right: 0.25rem;
+    padding-left: 0.5rem;
+}
+
+.view-toggle-btn {
+    padding: 0.4rem 0.75rem;
+    background: transparent;
+    color: #555;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.view-toggle-btn:hover {
+    background: #e9ecef;
+}
+
+.view-toggle-btn.active {
+    background: #667eea;
+    color: white;
 }
 
 .add-date-btn, .move-attendance-btn {

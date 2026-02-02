@@ -540,34 +540,233 @@ async function initializeDatabasePage() {
 async function loadDashboard() {
     const todayClassesDiv = document.getElementById('today-classes');
     const recentActivityDiv = document.getElementById('recent-activity');
+    const today = new Date();
+    const todayISO = today.toISOString().split('T')[0];
 
-    // Today's classes
-    todayClassesDiv.innerHTML = classes.map(cls => `
-        <div style="padding: 0.5rem 0; border-bottom: 1px solid #e1e8ed;">
-            <strong style="color: ${cls.color}">${cls.name}</strong>
-            <br>
-            <small>${cls.teacher_name || 'No teacher assigned'}</small>
-            <br>
-            <small>${cls.schedule || 'No schedule'}</small>
-        </div>
-    `).join('') || '<p>No classes available</p>';
+    // Get today's day of week for schedule matching
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const todayDayName = dayNames[today.getDay()].toLowerCase();
+    const todayDayAbbr = dayAbbr[today.getDay()].toLowerCase();
+    
+    // Helper function to check if class is scheduled for today
+    function isScheduledForToday(schedule) {
+        if (!schedule) return false;
+        const scheduleLower = schedule.toLowerCase();
+        return scheduleLower.includes(todayDayName) || scheduleLower.includes(todayDayAbbr);
+    }
+    
+    // Helper function to extract time from schedule string
+    function extractTimeFromSchedule(schedule) {
+        if (!schedule) return null;
+        // Look for time patterns like "10:00", "10:00-11:30", "10am", etc.
+        const timeMatch = schedule.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+        if (timeMatch) {
+            return timeMatch[0];
+        }
+        return null;
+    }
+    
+    // Filter and sort classes scheduled for today
+    const todayScheduledClasses = classes
+        .filter(cls => isScheduledForToday(cls.schedule))
+        .sort((a, b) => {
+            const timeA = extractTimeFromSchedule(a.schedule) || '';
+            const timeB = extractTimeFromSchedule(b.schedule) || '';
+            return timeA.localeCompare(timeB);
+        });
+    
+    const otherClasses = classes.filter(cls => !isScheduledForToday(cls.schedule));
+    
+    // Render today's classes with improved styling
+    if (todayScheduledClasses.length > 0) {
+        todayClassesDiv.innerHTML = `
+            <div class="today-classes-list">
+                ${todayScheduledClasses.map(cls => `
+                    <div class="today-class-card" style="border-left: 4px solid ${cls.color || '#667eea'}">
+                        <div class="today-class-header">
+                            <span class="today-class-name" style="color: ${cls.color || '#667eea'}">${escapeHtml(cls.name)}</span>
+                            <span class="today-class-time">${extractTimeFromSchedule(cls.schedule) || ''}</span>
+                        </div>
+                        <div class="today-class-details">
+                            <span class="today-class-teacher">👤 ${escapeHtml(cls.teacher_name || 'No teacher')}</span>
+                            <span class="today-class-schedule">📅 ${escapeHtml(cls.schedule || 'No schedule')}</span>
+                        </div>
+                        <div class="today-class-actions">
+                            <button class="btn btn-small btn-primary" onclick="quickMarkAttendance(${cls.id}, '${todayISO}')">📊 Attendance</button>
+                            <button class="btn btn-small btn-secondary" onclick="quickNewReport(${cls.id}, '${todayISO}')">📝 Report</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            ${otherClasses.length > 0 ? `
+                <details class="other-classes-section">
+                    <summary>Other Classes (${otherClasses.length})</summary>
+                    <div class="other-classes-list">
+                        ${otherClasses.map(cls => `
+                            <div class="other-class-item">
+                                <span style="color: ${cls.color || '#667eea'}">${escapeHtml(cls.name)}</span>
+                                <small>${escapeHtml(cls.schedule || 'No schedule')}</small>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            ` : ''}
+        `;
+    } else {
+        todayClassesDiv.innerHTML = `
+            <p class="no-classes-today">No classes scheduled for ${dayNames[today.getDay()]}</p>
+            ${classes.length > 0 ? `
+                <details class="other-classes-section" open>
+                    <summary>All Classes (${classes.length})</summary>
+                    <div class="other-classes-list">
+                        ${classes.map(cls => `
+                            <div class="other-class-item">
+                                <span style="color: ${cls.color || '#667eea'}">${escapeHtml(cls.name)}</span>
+                                <small>${escapeHtml(cls.schedule || 'No schedule')}</small>
+                            </div>
+                        `).join('')}
+                    </div>
+                </details>
+            ` : '<p>No classes available</p>'}
+        `;
+    }
+
+    // Load weekly schedule view
+    loadWeeklySchedule();
 
     // Recent activity
     try {
-        const today = new Date().toISOString().split('T')[0];
         const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const reports = await api(`/reports?startDate=${weekAgo}&endDate=${today}`);
+        const reports = await api(`/reports?startDate=${weekAgo}&endDate=${todayISO}`);
         
         recentActivityDiv.innerHTML = reports.slice(0, 5).map(report => `
-            <div style="padding: 0.5rem 0; border-bottom: 1px solid #e1e8ed;">
-                <strong>${report.date}</strong> - ${report.class_name}
-                <br>
-                <small>${report.teacher_name}</small>
+            <div class="recent-activity-item">
+                <div class="activity-date">${escapeHtml(report.date)}</div>
+                <div class="activity-class">${escapeHtml(report.class_name)}</div>
+                <div class="activity-teacher">by ${escapeHtml(report.teacher_name)}</div>
             </div>
-        `).join('') || '<p>No recent activity</p>';
+        `).join('') || '<p class="info-text">No recent activity</p>';
     } catch (error) {
-        recentActivityDiv.innerHTML = '<p>Unable to load recent activity</p>';
+        recentActivityDiv.innerHTML = '<p class="info-text">Unable to load recent activity</p>';
     }
+}
+
+// Load weekly schedule showing classes organized by day
+function loadWeeklySchedule() {
+    const weeklyScheduleDiv = document.getElementById('weekly-schedule');
+    if (!weeklyScheduleDiv) return;
+    
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayAbbr = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+    
+    // Helper function to check if class is scheduled for a specific day
+    function isScheduledForDay(schedule, dayIndex) {
+        if (!schedule) return false;
+        const scheduleLower = schedule.toLowerCase();
+        return scheduleLower.includes(dayNames[dayIndex].toLowerCase()) || 
+               scheduleLower.includes(dayAbbr[dayIndex]);
+    }
+    
+    // Helper function to extract time from schedule string
+    function extractTimeFromSchedule(schedule) {
+        if (!schedule) return null;
+        const timeMatch = schedule.match(/(\d{1,2}):?(\d{2})?\s*(am|pm)?/i);
+        if (timeMatch) return timeMatch[0];
+        return null;
+    }
+    
+    // Organize classes by day
+    const classesByDay = {};
+    dayNames.forEach((day, index) => {
+        classesByDay[day] = classes
+            .filter(cls => isScheduledForDay(cls.schedule, index))
+            .sort((a, b) => {
+                const timeA = extractTimeFromSchedule(a.schedule) || '';
+                const timeB = extractTimeFromSchedule(b.schedule) || '';
+                return timeA.localeCompare(timeB);
+            });
+    });
+    
+    // Only show days with classes
+    const daysWithClasses = dayNames.filter(day => classesByDay[day].length > 0);
+    
+    if (daysWithClasses.length === 0) {
+        weeklyScheduleDiv.innerHTML = `
+            <p class="info-text">No scheduled classes found. Add schedules to classes in Admin.</p>
+            <button class="btn btn-small btn-secondary" onclick="goToClassScheduleAdmin()">
+                Edit Class Schedules
+            </button>
+        `;
+        return;
+    }
+    
+    // Get current day for highlighting
+    const today = new Date();
+    const todayDayName = dayNames[today.getDay()];
+    
+    weeklyScheduleDiv.innerHTML = `
+        <div class="weekly-schedule-container">
+            ${daysWithClasses.map(day => `
+                <div class="schedule-day ${day === todayDayName ? 'today' : ''}">
+                    <div class="day-header ${day === todayDayName ? 'today' : ''}">
+                        <span class="day-name">${day.substring(0, 3)}</span>
+                        ${day === todayDayName ? '<span class="today-badge">Today</span>' : ''}
+                    </div>
+                    <div class="day-classes">
+                        ${classesByDay[day].map(cls => `
+                            <div class="schedule-class-item" style="border-left-color: ${cls.color || '#667eea'}">
+                                <span class="schedule-class-name">${escapeHtml(cls.name)}</span>
+                                <span class="schedule-class-time">${escapeHtml(extractTimeFromSchedule(cls.schedule) || '')}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// Helper function to navigate to admin classes tab
+function goToClassScheduleAdmin() {
+    navigateToPage('admin');
+    // Use requestAnimationFrame to ensure page is rendered before clicking tab
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const classesTab = document.querySelector('[data-tab="classes"]');
+            if (classesTab) {
+                classesTab.click();
+            }
+        });
+    });
+}
+
+// Quick action functions for dashboard
+function quickMarkAttendance(classId, date) {
+    document.getElementById('attendance-class-select').value = classId;
+    document.getElementById('attendance-start-date').value = date;
+    document.getElementById('attendance-end-date').value = date;
+    navigateToPage('attendance');
+    // Use requestAnimationFrame to ensure DOM is updated before loading attendance
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => loadAttendance());
+    });
+}
+
+function quickNewReport(classId, date) {
+    navigateToPage('reports');
+    // Use requestAnimationFrame to ensure page navigation completes before setting values
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+            const classSelect = document.getElementById('reports-class-select');
+            const reportDate = document.getElementById('report-date');
+            if (classSelect && reportDate) {
+                classSelect.value = classId;
+                reportDate.value = date;
+                showNewReport();
+            }
+        });
+    });
 }
 
 // Attendance Management
@@ -578,6 +777,33 @@ document.getElementById('new-attendance-btn')?.addEventListener('click', showNew
 document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
 document.getElementById('use-schedule-btn')?.addEventListener('click', useScheduleForDates);
+
+// View Toggle for Attendance
+let currentAttendanceView = 'list'; // 'list' or 'grid'
+let lastAttendanceData = null; // Store last loaded attendance data
+let lastAttendanceClassId = null;
+
+document.getElementById('view-list-btn')?.addEventListener('click', () => {
+    if (currentAttendanceView !== 'list') {
+        currentAttendanceView = 'list';
+        document.getElementById('view-list-btn').classList.add('active');
+        document.getElementById('view-grid-btn').classList.remove('active');
+        if (lastAttendanceData && lastAttendanceClassId) {
+            renderAttendanceTable(lastAttendanceData, lastAttendanceClassId);
+        }
+    }
+});
+
+document.getElementById('view-grid-btn')?.addEventListener('click', () => {
+    if (currentAttendanceView !== 'grid') {
+        currentAttendanceView = 'grid';
+        document.getElementById('view-grid-btn').classList.add('active');
+        document.getElementById('view-list-btn').classList.remove('active');
+        if (lastAttendanceData && lastAttendanceClassId) {
+            renderAttendanceGridView(lastAttendanceData, lastAttendanceClassId);
+        }
+    }
+});
 
 // Use class schedule to auto-fill dates
 async function useScheduleForDates() {
@@ -775,10 +1001,27 @@ async function loadAttendance() {
                     : 'All dates';
         document.getElementById('metadata-date-range').textContent = dateRangeText;
         
+        // Update student count metadata
+        const regularCount = data.students.filter(s => s.student_type === 'regular').length;
+        const trialCount = data.students.filter(s => s.student_type !== 'regular').length;
+        const studentCountText = trialCount > 0 
+            ? `${data.students.length} (${regularCount} regular, ${trialCount} trial/makeup)`
+            : `${data.students.length}`;
+        document.getElementById('metadata-student-count').textContent = studentCountText;
+        
         metadataDiv.style.display = 'grid';
         controlsDiv.style.display = 'flex';
 
-        renderAttendanceTable(data, classId);
+        // Store data for view switching
+        lastAttendanceData = data;
+        lastAttendanceClassId = classId;
+
+        // Render based on current view mode
+        if (currentAttendanceView === 'grid') {
+            renderAttendanceGridView(data, classId);
+        } else {
+            renderAttendanceTable(data, classId);
+        }
     } catch (error) {
         console.error('Error loading attendance:', error);
         container.innerHTML = '<p class="info-text">Unable to load attendance. Please try again.</p>';
@@ -878,6 +1121,158 @@ function renderAttendanceTable(data, classId) {
 
     html += '</tbody></table>';
     container.innerHTML = html;
+}
+
+// Render attendance data in a compact grid view optimized for multi-date display
+function renderAttendanceGridView(data, classId) {
+    const container = document.getElementById('attendance-container');
+    const { students, dates, attendance } = data;
+
+    // Separate regular and trial students
+    const regularStudents = students.filter(s => s.student_type === 'regular');
+    const trialStudents = students.filter(s => s.student_type !== 'regular');
+
+    // Calculate attendance statistics
+    const getStats = (studentList) => {
+        return studentList.map(student => {
+            let present = 0, absent = 0, partial = 0, unmarked = 0;
+            dates.forEach(date => {
+                const key = `${student.id}-${date}`;
+                const status = attendance[key] || '';
+                if (status === 'O') present++;
+                else if (status === 'X') absent++;
+                else if (status === '/') partial++;
+                else unmarked++;
+            });
+            const total = dates.length;
+            const attendanceRate = total > 0 ? Math.round((present / total) * 100) : 0;
+            return { ...student, present, absent, partial, unmarked, total, attendanceRate };
+        });
+    };
+
+    const regularWithStats = getStats(regularStudents);
+    const trialWithStats = getStats(trialStudents);
+
+    let html = `
+        <div class="attendance-grid-view">
+            <div class="grid-legend">
+                <span class="legend-item"><span class="legend-color present">O</span> Present</span>
+                <span class="legend-item"><span class="legend-color absent">X</span> Absent</span>
+                <span class="legend-item"><span class="legend-color partial">/</span> Partial</span>
+            </div>
+            <div class="grid-container">
+    `;
+
+    // Function to render student grid cards
+    const renderStudentCards = (studentList, sectionTitle) => {
+        if (studentList.length === 0) return '';
+        
+        let sectionHtml = `
+            <div class="grid-section">
+                <h4 class="grid-section-title">${sectionTitle}</h4>
+                <div class="grid-cards">
+        `;
+        
+        studentList.forEach(student => {
+            const rateClass = student.attendanceRate >= 80 ? 'good' : student.attendanceRate >= 60 ? 'warning' : 'poor';
+            
+            sectionHtml += `
+                <div class="student-grid-card ${student.color_code ? `student-card-${student.color_code}` : ''}">
+                    <div class="student-card-header">
+                        <span class="student-card-name">${escapeHtml(student.name)}</span>
+                        <span class="student-card-rate ${rateClass}">${student.attendanceRate}%</span>
+                    </div>
+                    <div class="student-card-stats">
+                        <span class="stat present" title="Present">${student.present} ✓</span>
+                        <span class="stat absent" title="Absent">${student.absent} ✗</span>
+                        <span class="stat partial" title="Partial">${student.partial} ~</span>
+                    </div>
+                    <div class="student-card-dates">
+                        ${dates.slice(0, 10).map(date => {
+                            const key = `${student.id}-${date}`;
+                            const status = attendance[key] || '';
+                            const statusClass = status === 'O' ? 'present' : status === 'X' ? 'absent' : status === '/' ? 'partial' : 'empty';
+                            // Append 'T00:00:00' to parse date as local midnight, avoiding timezone shifts
+                            const dateObj = new Date(date + 'T00:00:00');
+                            const shortDate = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
+                            return `<span class="date-cell ${statusClass}" title="${shortDate}: ${status || 'N/A'}">${status || '·'}</span>`;
+                        }).join('')}
+                        ${dates.length > 10 ? `<span class="more-dates">+${dates.length - 10}</span>` : ''}
+                    </div>
+                    <div class="student-card-actions">
+                        <button class="btn btn-small btn-secondary" onclick="viewStudentDetail(${student.id}, '${classId}')" title="View details">📊</button>
+                        <button class="btn btn-small btn-secondary" onclick="editStudentFromAttendance(${student.id})" title="Edit student">✏️</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        sectionHtml += '</div></div>';
+        return sectionHtml;
+    };
+
+    html += renderStudentCards(regularWithStats, 'Regular Students');
+    html += renderStudentCards(trialWithStats, 'Make-up / Trial Students');
+
+    // Summary section
+    const totalPresent = [...regularWithStats, ...trialWithStats].reduce((sum, s) => sum + s.present, 0);
+    const totalAbsent = [...regularWithStats, ...trialWithStats].reduce((sum, s) => sum + s.absent, 0);
+    const totalPartial = [...regularWithStats, ...trialWithStats].reduce((sum, s) => sum + s.partial, 0);
+
+    html += `
+            </div>
+            <div class="grid-summary">
+                <div class="summary-stat">
+                    <span class="summary-label">Total Students</span>
+                    <span class="summary-value">${students.length}</span>
+                </div>
+                <div class="summary-stat">
+                    <span class="summary-label">Date Range</span>
+                    <span class="summary-value">${dates.length} days</span>
+                </div>
+                <div class="summary-stat present">
+                    <span class="summary-label">Present Records</span>
+                    <span class="summary-value">${totalPresent}</span>
+                </div>
+                <div class="summary-stat absent">
+                    <span class="summary-label">Absent Records</span>
+                    <span class="summary-value">${totalAbsent}</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+// View student attendance detail (popup with full history)
+async function viewStudentDetail(studentId, classId) {
+    try {
+        const student = students.find(s => s.id == studentId) || await api(`/students/${studentId}`);
+        const attendanceData = await api(`/attendance?studentId=${studentId}&classId=${classId}`);
+        
+        const sortedAttendance = attendanceData.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        showModal(`Attendance History: ${escapeHtml(student.name)}`, `
+            <div class="student-detail-modal">
+                <div class="student-info-summary">
+                    <p><strong>Class:</strong> ${escapeHtml(student.class_name || 'N/A')}</p>
+                    <p><strong>Type:</strong> ${escapeHtml(student.student_type || 'regular')}</p>
+                </div>
+                <div class="attendance-history-list">
+                    ${sortedAttendance.length > 0 ? sortedAttendance.map(record => `
+                        <div class="history-item ${record.status === 'O' ? 'present' : record.status === 'X' ? 'absent' : record.status === '/' ? 'partial' : ''}">
+                            <span class="history-date">${escapeHtml(record.date)}</span>
+                            <span class="history-status">${record.status === 'O' ? 'Present' : record.status === 'X' ? 'Absent' : record.status === '/' ? 'Partial' : 'N/A'}</span>
+                        </div>
+                    `).join('') : '<p class="info-text">No attendance records found</p>'}
+                </div>
+            </div>
+        `);
+    } catch (error) {
+        console.error('Error loading student detail:', error);
+        Toast.error('Failed to load student details');
+    }
 }
 
 async function toggleAttendance(cell) {
