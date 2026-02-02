@@ -1,6 +1,6 @@
 {
   "name": "vitamin-english-management",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Web application for managing student attendance and teacher reports at Vitamin English School",
   "main": "server.js",
   "scripts": {
@@ -15,15 +15,20 @@
   ],
   "author": "Vitamin English School",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.478.0",
-    "@aws-sdk/s3-request-presigner": "^3.478.0",
-    "bcrypt": "^5.1.1",
+    "@aws-sdk/client-s3": "^3.980.0",
+    "@aws-sdk/s3-request-presigner": "^3.980.0",
+    "bcrypt": "^6.0.0",
     "body-parser": "^1.20.3",
     "connect-pg-simple": "^9.0.1",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.2.1",
     "express-session": "^1.17.3",
+    "helmet": "^8.1.0",
     "pdfkit": "^0.14.0",
     "pg": "^8.11.3"
   },
