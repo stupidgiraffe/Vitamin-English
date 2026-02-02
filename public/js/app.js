@@ -480,6 +480,7 @@ function navigateToPage(page) {
     else if (page === 'admin') loadAdminData();
     else if (page === 'attendance') initializeAttendancePage();
     else if (page === 'database') initializeDatabasePage();
+    else if (page === 'reports') initMultiClassView();
 }
 
 // Initialize attendance page with default date range (last 6 months)
@@ -1800,6 +1801,197 @@ async function loadReportById(id) {
         Toast.error('Error loading report: ' + error.message);
     }
 }
+
+// Multi-Class Report View Functions
+let selectedClasses = [];
+let multiClassReports = [];
+
+async function initMultiClassView() {
+    try {
+        const classes = await api('/classes');
+        const container = document.getElementById('multi-class-selector');
+        
+        const colors = ['blue', 'green', 'purple', 'orange', 'teal'];
+        
+        container.innerHTML = classes.map((cls, index) => `
+            <div class="multi-select-item" data-class-id="${cls.id}" data-color="${colors[index % colors.length]}">
+                <input type="checkbox" id="class-${cls.id}" value="${cls.id}">
+                <label for="class-${cls.id}">${cls.name}</label>
+            </div>
+        `).join('');
+        
+        // Add event listeners to checkboxes
+        container.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                const classId = parseInt(this.value);
+                const item = this.closest('.multi-select-item');
+                
+                if (this.checked) {
+                    selectedClasses.push({
+                        id: classId,
+                        name: this.nextElementSibling.textContent,
+                        color: item.dataset.color
+                    });
+                    item.classList.add('selected');
+                } else {
+                    selectedClasses = selectedClasses.filter(c => c.id !== classId);
+                    item.classList.remove('selected');
+                }
+            });
+        });
+        
+        // Set default date range (last 30 days)
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - 30);
+        
+        document.getElementById('multi-start-date').value = startDate.toISOString().split('T')[0];
+        document.getElementById('multi-end-date').value = endDate.toISOString().split('T')[0];
+        
+    } catch (error) {
+        console.error('Error initializing multi-class view:', error);
+        Toast.error('Error loading classes: ' + error.message);
+    }
+}
+
+async function loadMultiClassReports() {
+    if (selectedClasses.length === 0) {
+        Toast.warning('Please select at least one class');
+        return;
+    }
+    
+    const startDate = document.getElementById('multi-start-date').value;
+    const endDate = document.getElementById('multi-end-date').value;
+    
+    if (!startDate || !endDate) {
+        Toast.warning('Please select date range');
+        return;
+    }
+    
+    try {
+        const grid = document.getElementById('multi-class-grid');
+        grid.innerHTML = '<p class="info-text">Loading reports...</p>';
+        
+        // Fetch reports for all selected classes
+        const reportsPromises = selectedClasses.map(cls => 
+            api(`/reports?class_id=${cls.id}&start_date=${startDate}&end_date=${endDate}`)
+                .then(reports => ({ classInfo: cls, reports }))
+        );
+        
+        const classReports = await Promise.all(reportsPromises);
+        multiClassReports = classReports;
+        
+        renderMultiClassGrid(classReports);
+        
+        // Show export button if we have reports
+        const hasReports = classReports.some(cr => cr.reports.length > 0);
+        document.getElementById('export-multi-pdf-btn').style.display = hasReports ? 'inline-block' : 'none';
+        
+    } catch (error) {
+        console.error('Error loading multi-class reports:', error);
+        Toast.error('Error loading reports: ' + error.message);
+        document.getElementById('multi-class-grid').innerHTML = 
+            '<p class="info-text">Error loading reports. Please try again.</p>';
+    }
+}
+
+function renderMultiClassGrid(classReports) {
+    const grid = document.getElementById('multi-class-grid');
+    
+    if (classReports.length === 0 || classReports.every(cr => cr.reports.length === 0)) {
+        grid.innerHTML = '<p class="info-text">No reports found for selected classes in this date range</p>';
+        return;
+    }
+    
+    grid.innerHTML = classReports.map(({ classInfo, reports }) => {
+        const sortedReports = reports.sort((a, b) => new Date(b.date) - new Date(a.date));
+        const recentReports = sortedReports.slice(0, 5);
+        
+        return `
+            <div class="class-card">
+                <div class="class-card-header ${classInfo.color}">
+                    <span class="class-name">${classInfo.name}</span>
+                    <span class="report-count">${reports.length} report${reports.length !== 1 ? 's' : ''}</span>
+                </div>
+                <div class="class-card-body">
+                    <h4>Recent Reports:</h4>
+                    <ul class="report-mini-list">
+                        ${recentReports.length > 0 ? recentReports.map(report => `
+                            <li class="report-mini-item ${!report.target_topic ? 'no-topic' : ''}" 
+                                onclick="viewReportDetails(${report.id})">
+                                <div class="report-mini-date">📅 ${report.date}</div>
+                                <div class="report-mini-topic">
+                                    ${report.target_topic || 'No topic specified'}
+                                </div>
+                            </li>
+                        `).join('') : '<li class="info-text">No recent reports</li>'}
+                    </ul>
+                </div>
+                <div class="class-card-footer">
+                    <span style="font-size: 12px; color: var(--text-secondary);">
+                        Teacher: ${reports[0]?.teacher_name || 'N/A'}
+                    </span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function viewReportDetails(reportId) {
+    // Switch to single report tab and load the report
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+    
+    document.querySelector('[data-tab="single-report"]').classList.add('active');
+    document.getElementById('single-report-tab').classList.add('active');
+    
+    loadReportById(reportId);
+}
+
+async function exportMultiClassPDF() {
+    if (multiClassReports.length === 0) {
+        Toast.warning('No reports to export');
+        return;
+    }
+    
+    const startDate = document.getElementById('multi-start-date').value;
+    const endDate = document.getElementById('multi-end-date').value;
+    
+    try {
+        const btn = document.getElementById('export-multi-pdf-btn');
+        btn.disabled = true;
+        btn.textContent = '⏳ Generating PDF...';
+        
+        const response = await api('/pdf/multi-class-reports', {
+            method: 'POST',
+            body: JSON.stringify({
+                classes: selectedClasses.map(c => c.id),
+                startDate,
+                endDate
+            })
+        });
+        
+        if (response.downloadUrl) {
+            window.open(response.downloadUrl, '_blank');
+            Toast.success(`PDF generated successfully! (${(response.size / 1024).toFixed(2)} KB)`);
+        }
+    } catch (error) {
+        console.error('Error exporting multi-class PDF:', error);
+        if (error.message.includes('not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
+        } else {
+            Toast.error('Error generating PDF: ' + error.message);
+        }
+    } finally {
+        const btn = document.getElementById('export-multi-pdf-btn');
+        btn.disabled = false;
+        btn.textContent = '📄 Export All as PDF';
+    }
+}
+
+// Event listeners for multi-class view
+document.getElementById('load-multi-reports-btn')?.addEventListener('click', loadMultiClassReports);
+document.getElementById('export-multi-pdf-btn')?.addEventListener('click', exportMultiClassPDF);
 
 // Initialize reports list
 document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
