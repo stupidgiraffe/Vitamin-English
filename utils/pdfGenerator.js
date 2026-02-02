@@ -745,9 +745,257 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
     });
 }
 
+/**
+ * Generate a combined PDF for multiple classes' lesson reports
+ * @param {Array} classReportsData - Array of objects with classData, reports, and students
+ * @param {String} startDate - Start date for the report range
+ * @param {String} endDate - End date for the report range
+ * @returns {Promise<Buffer>} PDF buffer
+ */
+async function generateMultiClassReportPDF(classReportsData, startDate, endDate) {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({ margin: 50 });
+            const buffers = [];
+            
+            doc.on('data', (chunk) => buffers.push(chunk));
+            doc.on('end', () => {
+                const pdfBuffer = Buffer.concat(buffers);
+                resolve(pdfBuffer);
+            });
+            doc.on('error', reject);
+            
+            // Cover Page
+            doc.rect(0, 0, doc.page.width, 120)
+               .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+            
+            doc.fontSize(32)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.white)
+               .text('🍊 Vitamin English School', 50, 30, { align: 'center' });
+            
+            doc.fontSize(22)
+               .fillColor(THEME.colors.accentYellow)
+               .text('Multi-Class Lesson Reports', 50, 75, { align: 'center' });
+            
+            doc.moveDown(4);
+            doc.fillColor(THEME.colors.textDark);
+            
+            // Summary Section
+            const summaryY = doc.y;
+            doc.rect(50, summaryY, doc.page.width - 100, 30)
+               .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+            
+            doc.fontSize(14)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.textDark)
+               .text('Report Summary', 60, summaryY + 9);
+            
+            doc.moveDown(2);
+            
+            // Yellow background for summary details
+            const detailsY = doc.y;
+            const totalReports = classReportsData.reduce((sum, cr) => sum + cr.reports.length, 0);
+            const totalClasses = classReportsData.length;
+            
+            doc.rect(50, detailsY - 5, doc.page.width - 100, 85)
+               .fill(THEME.colors.accentYellow);
+            doc.fillColor(THEME.colors.textDark);
+            
+            doc.fontSize(11)
+               .font('Helvetica')
+               .text(`Date Range: ${startDate} to ${endDate}`, 60, detailsY)
+               .text(`Total Classes: ${totalClasses}`, 60, detailsY + 20)
+               .text(`Total Reports: ${totalReports}`, 60, detailsY + 40)
+               .text(`Classes Covered:`, 60, detailsY + 60);
+            
+            const classNames = classReportsData.map(cr => sanitizeForPDF(cr.classData.name)).join(', ');
+            doc.fontSize(10)
+               .text(classNames, 140, detailsY + 60, { width: doc.page.width - 200 });
+            
+            doc.moveDown(3);
+            
+            // Table of Contents
+            doc.fontSize(13)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.primaryBlue)
+               .text('Table of Contents', 50, doc.y);
+            
+            doc.moveDown(0.5);
+            doc.fontSize(10)
+               .font('Helvetica')
+               .fillColor(THEME.colors.textDark);
+            
+            classReportsData.forEach((cr, index) => {
+                doc.text(`${index + 1}. ${sanitizeForPDF(cr.classData.name)} - ${cr.reports.length} report(s)`, 
+                         60, doc.y);
+                doc.moveDown(0.3);
+            });
+            
+            // Loop through each class and add reports
+            classReportsData.forEach((classReportData, classIndex) => {
+                const { classData, reports, students } = classReportData;
+                
+                // Start new page for each class
+                doc.addPage();
+                
+                // Class Header
+                doc.rect(0, 0, doc.page.width, 80)
+                   .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+                
+                doc.fontSize(22)
+                   .font('Helvetica-Bold')
+                   .fillColor(THEME.colors.white)
+                   .text(sanitizeForPDF(classData.name), 50, 25, { align: 'center' });
+                
+                doc.fontSize(12)
+                   .fillColor(THEME.colors.accentYellow)
+                   .text(`${reports.length} Report${reports.length !== 1 ? 's' : ''}`, 50, 55, { align: 'center' });
+                
+                doc.moveDown(3);
+                doc.fillColor(THEME.colors.textDark);
+                
+                // Student List for this class
+                if (students && students.length > 0) {
+                    const studentsY = doc.y;
+                    doc.rect(50, studentsY, doc.page.width - 100, 25)
+                       .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+                    
+                    doc.fontSize(12)
+                       .font('Helvetica-Bold')
+                       .fillColor(THEME.colors.textDark)
+                       .text(`Students (${students.length})`, 60, studentsY + 7);
+                    
+                    doc.moveDown(1.5);
+                    
+                    // Two-column layout for student names
+                    const studentStartY = doc.y;
+                    const leftColumnX = 60;
+                    const rightColumnX = 320;
+                    let currentY = studentStartY;
+                    
+                    doc.fontSize(9)
+                       .font('Helvetica');
+                    
+                    students.forEach((student, index) => {
+                        const isLeftColumn = index % 2 === 0;
+                        const x = isLeftColumn ? leftColumnX : rightColumnX;
+                        
+                        if (!isLeftColumn) {
+                            currentY = studentStartY + Math.floor(index / 2) * 14;
+                        } else if (index > 0) {
+                            currentY = studentStartY + Math.floor(index / 2) * 14;
+                        }
+                        
+                        const studentName = sanitizeForPDF(student.name);
+                        const displayName = studentName.length > 28 
+                            ? studentName.substring(0, 28) + '...' 
+                            : studentName;
+                        
+                        doc.text(`• ${displayName}`, x, currentY);
+                    });
+                    
+                    const rowsNeeded = Math.ceil(students.length / 2);
+                    doc.y = studentStartY + (rowsNeeded * 14) + 10;
+                    doc.moveDown(1);
+                }
+                
+                // Reports for this class
+                if (reports.length === 0) {
+                    doc.fontSize(11)
+                       .font('Helvetica')
+                       .fillColor(THEME.colors.textSecondary)
+                       .text('No reports found for this class in the selected date range.', 60, doc.y);
+                } else {
+                    // Sort reports by date
+                    const sortedReports = reports.sort((a, b) => new Date(a.date) - new Date(b.date));
+                    
+                    sortedReports.forEach((report, reportIndex) => {
+                        // Check for page break
+                        if (doc.y > doc.page.height - 200) {
+                            doc.addPage();
+                            doc.y = 50;
+                        }
+                        
+                        // Report divider
+                        if (reportIndex > 0) {
+                            doc.moveDown(0.5);
+                            doc.moveTo(50, doc.y)
+                               .lineTo(doc.page.width - 50, doc.y)
+                               .stroke('#CCCCCC');
+                            doc.moveDown(0.5);
+                        }
+                        
+                        // Report date header
+                        const reportHeaderY = doc.y;
+                        doc.rect(50, reportHeaderY, doc.page.width - 100, 22)
+                           .fill(THEME.colors.accentYellow);
+                        
+                        doc.fontSize(11)
+                           .font('Helvetica-Bold')
+                           .fillColor(THEME.colors.textDark)
+                           .text(`📅 ${report.date} - ${sanitizeForPDF(report.teacher_name) || 'N/A'}`, 
+                                 60, reportHeaderY + 6);
+                        
+                        doc.moveDown(1.2);
+                        
+                        // Report fields
+                        const addField = (label, content) => {
+                            if (!content) return;
+                            
+                            if (doc.y > doc.page.height - 100) {
+                                doc.addPage();
+                                doc.y = 50;
+                            }
+                            
+                            doc.fontSize(10)
+                               .font('Helvetica-Bold')
+                               .fillColor(THEME.colors.primaryBlue)
+                               .text(label, 60, doc.y);
+                            
+                            doc.moveDown(0.2);
+                            doc.fontSize(9)
+                               .font('Helvetica')
+                               .fillColor(THEME.colors.textDark)
+                               .text(sanitizeForPDF(content), 60, doc.y, { 
+                                   width: doc.page.width - 120,
+                                   align: 'left'
+                               });
+                            
+                            doc.moveDown(0.5);
+                        };
+                        
+                        addField('Target Topic:', report.target_topic);
+                        addField('Vocabulary:', report.vocabulary);
+                        addField('Mistakes:', report.mistakes);
+                        addField('Strengths:', report.strengths);
+                        addField('Comments/Homework:', report.comments);
+                        
+                        doc.moveDown(0.3);
+                    });
+                }
+            });
+            
+            // Final footer on last page
+            doc.fontSize(9)
+               .font('Helvetica')
+               .fillColor('#666666')
+               .text(`Multi-Class Report | ${classReportsData.length} Classes | ${classReportsData.reduce((sum, cr) => sum + cr.reports.length, 0)} Reports`, 
+                     50, doc.page.height - 70, { align: 'center' })
+               .text(`Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 
+                     50, doc.page.height - 50, { align: 'center' });
+            
+            doc.end();
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
 module.exports = {
     generateStudentAttendancePDF,
     generateClassAttendancePDF,
     generateAttendanceGridPDF,
-    generateLessonReportPDF
+    generateLessonReportPDF,
+    generateMultiClassReportPDF
 };

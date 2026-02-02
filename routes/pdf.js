@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../database/init');
-const { generateStudentAttendancePDF, generateClassAttendancePDF, generateAttendanceGridPDF, generateLessonReportPDF } = require('../utils/pdfGenerator');
+const { generateStudentAttendancePDF, generateClassAttendancePDF, generateAttendanceGridPDF, generateLessonReportPDF, generateMultiClassReportPDF } = require('../utils/pdfGenerator');
 const { uploadPDF, getDownloadUrl, listPDFs, isConfigured } = require('../utils/r2Storage');
 const { normalizeToISO } = require('../utils/dateUtils');
 
@@ -495,6 +495,128 @@ router.get('/download/:pdfId', async (req, res) => {
         console.error('Error getting download URL:', error);
         res.status(500).json({ 
             error: 'Failed to get download URL',
+            message: error.message
+        });
+    }
+});
+
+// Generate multi-class reports PDF
+router.post('/multi-class-reports', checkR2Config, async (req, res) => {
+    try {
+        const { classes, startDate, endDate } = req.body;
+        
+        if (!classes || !Array.isArray(classes) || classes.length === 0) {
+            return res.status(400).json({ error: 'At least one class must be selected' });
+        }
+        
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'Start date and end date are required' });
+        }
+        
+        // Validate date format
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+            return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+        }
+        
+        // Fetch data for each class
+        const classReportsData = [];
+        
+        for (const classId of classes) {
+            // Get class data
+            const classResult = await pool.query(`
+                SELECT c.*, u.full_name as teacher_name
+                FROM classes c
+                LEFT JOIN users u ON c.teacher_id = u.id
+                WHERE c.id = $1
+            `, [classId]);
+            
+            if (classResult.rows.length === 0) {
+                continue; // Skip if class not found
+            }
+            
+            const classData = classResult.rows[0];
+            
+            // Get students for this class
+            const studentsResult = await pool.query(`
+                SELECT id, name, student_type FROM students
+                WHERE class_id = $1 AND active = true
+                ORDER BY student_type, name
+            `, [classId]);
+            
+            const students = studentsResult.rows;
+            
+            // Get reports for this class within date range
+            const reportsResult = await pool.query(`
+                SELECT lr.*, u.full_name as teacher_name
+                FROM lesson_reports lr
+                LEFT JOIN users u ON lr.teacher_id = u.id
+                WHERE lr.class_id = $1 AND lr.date >= $2 AND lr.date <= $3
+                ORDER BY lr.date ASC
+            `, [classId, startDate, endDate]);
+            
+            const reports = reportsResult.rows;
+            
+            classReportsData.push({
+                classData,
+                students,
+                reports
+            });
+        }
+        
+        if (classReportsData.length === 0) {
+            return res.status(404).json({ error: 'No classes found' });
+        }
+        
+        // Generate PDF
+        const pdfBuffer = await generateMultiClassReportPDF(classReportsData, startDate, endDate);
+        
+        // Create filename
+        const classCount = classReportsData.length;
+        const fileName = `multi_class_reports_${classCount}_classes_${startDate}_to_${endDate}.pdf`;
+        
+        // Upload to R2
+        const uploadResult = await uploadPDF(pdfBuffer, fileName, {
+            type: 'multi_class_reports',
+            classCount: classCount.toString(),
+            startDate: startDate,
+            endDate: endDate
+        });
+        
+        // Save to pdf_history table
+        const historyResult = await pool.query(`
+            INSERT INTO pdf_history (filename, type, r2_key, r2_url, file_size, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+        `, [
+            fileName,
+            'multi_class_reports',
+            uploadResult.key,
+            uploadResult.url,
+            uploadResult.size,
+            req.session.userId
+        ]);
+        
+        const pdfId = historyResult.rows[0].id;
+        
+        // Generate signed download URL
+        const downloadUrl = await getDownloadUrl(uploadResult.key);
+        
+        res.json({
+            success: true,
+            pdfId,
+            fileName,
+            downloadUrl,
+            size: uploadResult.size,
+            classCount: classReportsData.length,
+            totalReports: classReportsData.reduce((sum, cr) => sum + cr.reports.length, 0),
+            message: 'Multi-class reports PDF generated successfully'
+        });
+        
+    } catch (error) {
+        console.error('Error generating multi-class reports PDF:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate PDF',
             message: error.message
         });
     }
