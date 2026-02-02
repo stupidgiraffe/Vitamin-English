@@ -2001,10 +2001,18 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         const tab = e.target.dataset.tab;
         
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        // Update tab buttons
+        document.querySelectorAll('.tab-btn').forEach(b => {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+        });
+        
+        // Update tab content
         document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         
+        // Activate selected tab
         e.target.classList.add('active');
+        e.target.setAttribute('aria-selected', 'true');
         document.getElementById(`${tab}-tab`).classList.add('active');
     });
 });

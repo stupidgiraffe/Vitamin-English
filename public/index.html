@@ -203,13 +203,13 @@
                 <h2>Teacher Lesson Reports</h2>
                 
                 <!-- Tab Navigation -->
-                <div class="tab-navigation">
-                    <button class="tab-btn active" data-tab="single-report">Single Report</button>
-                    <button class="tab-btn" data-tab="multi-class">Multi-Class View</button>
+                <div class="tab-navigation" role="tablist" aria-label="Report view options">
+                    <button class="tab-btn active" data-tab="single-report" role="tab" aria-selected="true" aria-controls="single-report-tab">Single Report</button>
+                    <button class="tab-btn" data-tab="multi-class" role="tab" aria-selected="false" aria-controls="multi-class-tab">Multi-Class View</button>
                 </div>
                 
                 <!-- Single Report Tab -->
-                <div id="single-report-tab" class="tab-content active">
+                <div id="single-report-tab" class="tab-content active" role="tabpanel" aria-labelledby="single-report-tab">
                     <div class="controls">
                         <div class="control-group">
                             <label>Class:</label>
@@ -283,7 +283,7 @@
                 </div>
                 
                 <!-- Multi-Class View Tab -->
-                <div id="multi-class-tab" class="tab-content">
+                <div id="multi-class-tab" class="tab-content" role="tabpanel" aria-labelledby="multi-class-tab">
                     <div class="controls">
                         <div class="control-group">
                             <label>Select Classes:</label>

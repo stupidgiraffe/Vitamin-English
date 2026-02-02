@@ -10,6 +10,7 @@ const THEME = {
         accentYellow: '#FFF9E6',
         brightYellow: '#FFB800',
         textDark: '#333333',
+        textSecondary: '#6c757d',
         white: '#FFFFFF'
     }
 };
