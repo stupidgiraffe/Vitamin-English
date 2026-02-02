@@ -359,8 +359,17 @@ router.post('/lesson-report/:reportId', checkR2Config, async (req, res) => {
         
         const classData = classResult.rows[0];
         
-        // Generate PDF
-        const pdfBuffer = await generateLessonReportPDF(report, classData);
+        // Fetch students in the class
+        const studentsResult = await pool.query(`
+            SELECT id, name, student_type FROM students
+            WHERE class_id = $1 AND active = true
+            ORDER BY student_type, name
+        `, [report.class_id]);
+        
+        const students = studentsResult.rows;
+        
+        // Generate PDF with students
+        const pdfBuffer = await generateLessonReportPDF(report, classData, students);
         
         // Upload to R2 - sanitize filename
         const sanitizedClassName = report.class_name.replace(/[^a-zA-Z0-9_-]/g, '_');

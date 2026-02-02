@@ -1,6 +1,19 @@
 const PDFDocument = require('pdfkit');
 const { Readable } = require('stream');
 
+// Theme constants for consistent styling across PDFs
+const THEME = {
+    colors: {
+        primaryBlue: '#4472C4',
+        secondaryBlue: '#2B5797',
+        lightBlue: '#8FAADC',
+        accentYellow: '#FFF9E6',
+        brightYellow: '#FFB800',
+        textDark: '#333333',
+        white: '#FFFFFF'
+    }
+};
+
 /**
  * Sanitize text for PDF output to prevent PDF injection attacks
  * @param {String} text - Text to sanitize
@@ -563,9 +576,10 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
  * Generate a PDF for lesson report
  * @param {Object} reportData - Lesson report data
  * @param {Object} classData - Class information
+ * @param {Array} students - Optional array of students in the class
  * @returns {Promise<Buffer>} PDF buffer
  */
-async function generateLessonReportPDF(reportData, classData) {
+async function generateLessonReportPDF(reportData, classData, students = null) {
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 50 });
@@ -578,84 +592,151 @@ async function generateLessonReportPDF(reportData, classData) {
             });
             doc.on('error', reject);
             
-            // Header
-            doc.fontSize(24)
-               .font('Helvetica-Bold')
-               .text('Vitamin English School', { align: 'center' });
+            // Professional Header with Branding
+            doc.rect(0, 0, doc.page.width, 100)
+               .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
             
-            doc.moveDown(0.5);
+            doc.fontSize(28)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.white)
+               .text('🍊 Vitamin English School', 50, 30, { align: 'center' });
+            
             doc.fontSize(18)
-               .text('Lesson Report', { align: 'center' });
+               .fillColor(THEME.colors.accentYellow)
+               .text('Lesson Report', 50, 65, { align: 'center' });
             
-            doc.moveDown(1);
+            doc.moveDown(3);
+            doc.fillColor(THEME.colors.textDark);
             
-            // Class and Report Information
-            doc.fontSize(12)
+            // Class Information Section with Blue Header
+            const classInfoY = doc.y;
+            doc.rect(50, classInfoY, doc.page.width - 100, 25)
+               .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+            
+            doc.fontSize(13)
                .font('Helvetica-Bold')
-               .text('Class Information:', { underline: true });
+               .fillColor(THEME.colors.textDark)
+               .text('Class Information', 60, classInfoY + 7);
             
-            doc.moveDown(0.5);
-            doc.font('Helvetica')
-               .text(`Class: ${classData.name || 'N/A'}`, { indent: 20 })
-               .text(`Teacher: ${reportData.teacher_name || 'N/A'}`, { indent: 20 })
-               .text(`Date: ${reportData.date || 'N/A'}`, { indent: 20 });
+            doc.moveDown(1.5);
+            doc.fillColor(THEME.colors.textDark);
             
-            doc.moveDown(1);
+            // Yellow background for class details
+            const detailsY = doc.y;
+            doc.rect(50, detailsY - 5, doc.page.width - 100, 65)
+               .fill(THEME.colors.accentYellow);
+            doc.fillColor(THEME.colors.textDark);
             
-            // Lesson Details
-            doc.fontSize(12)
+            doc.fontSize(11)
+               .font('Helvetica')
+               .text(`Class: ${sanitizeForPDF(classData.name) || 'N/A'}`, 60, detailsY)
+               .text(`Teacher: ${sanitizeForPDF(reportData.teacher_name) || 'N/A'}`, 60, detailsY + 20)
+               .text(`Date: ${reportData.date || 'N/A'}`, 60, detailsY + 40);
+            
+            doc.moveDown(3);
+            
+            // Student Names Section (if provided)
+            if (students && students.length > 0) {
+                const studentsY = doc.y;
+                doc.rect(50, studentsY, doc.page.width - 100, 25)
+                   .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+                
+                doc.fontSize(13)
+                   .font('Helvetica-Bold')
+                   .fillColor(THEME.colors.textDark)
+                   .text('Students in Class', 60, studentsY + 7);
+                
+                doc.moveDown(1.5);
+                
+                // Two-column layout for student names
+                const studentStartY = doc.y;
+                const leftColumnX = 60;
+                const rightColumnX = 320;
+                const columnWidth = 240;
+                let currentY = studentStartY;
+                
+                doc.fontSize(10)
+                   .font('Helvetica');
+                
+                students.forEach((student, index) => {
+                    const isLeftColumn = index % 2 === 0;
+                    const x = isLeftColumn ? leftColumnX : rightColumnX;
+                    
+                    if (!isLeftColumn) {
+                        // Right column - same Y as previous left column entry
+                        currentY = studentStartY + Math.floor(index / 2) * 18;
+                    } else if (index > 0) {
+                        // Left column - advance Y
+                        currentY = studentStartY + Math.floor(index / 2) * 18;
+                    }
+                    
+                    const studentName = sanitizeForPDF(student.name);
+                    const displayName = studentName.length > 30 
+                        ? studentName.substring(0, 30) + '...' 
+                        : studentName;
+                    
+                    doc.text(`• ${displayName}`, x, currentY, { width: columnWidth });
+                });
+                
+                // Move down based on number of rows needed
+                const rowsNeeded = Math.ceil(students.length / 2);
+                doc.y = studentStartY + (rowsNeeded * 18) + 10;
+                doc.moveDown(1);
+            }
+            
+            // Lesson Details Section
+            const lessonY = doc.y;
+            doc.rect(50, lessonY, doc.page.width - 100, 25)
+               .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+            
+            doc.fontSize(13)
                .font('Helvetica-Bold')
-               .text('Lesson Details:', { underline: true });
+               .fillColor(THEME.colors.textDark)
+               .text('Lesson Details', 60, lessonY + 7);
             
-            doc.moveDown(0.5);
+            doc.moveDown(1.5);
             
-            if (reportData.target_topic) {
-                doc.font('Helvetica-Bold')
-                   .text('Target Topic:', { indent: 20 });
-                doc.font('Helvetica')
-                   .text(reportData.target_topic, { indent: 40 });
-                doc.moveDown(0.5);
-            }
+            // Helper function to add a field with proper styling
+            const addField = (label, content) => {
+                if (!content) return;
+                
+                // Check for page break
+                if (doc.y > doc.page.height - 150) {
+                    doc.addPage();
+                    doc.y = 50;
+                }
+                
+                const fieldY = doc.y;
+                doc.fontSize(11)
+                   .font('Helvetica-Bold')
+                   .fillColor(THEME.colors.primaryBlue)
+                   .text(label, 60, fieldY);
+                
+                doc.moveDown(0.3);
+                doc.fontSize(10)
+                   .font('Helvetica')
+                   .fillColor(THEME.colors.textDark)
+                   .text(sanitizeForPDF(content), 60, doc.y, { 
+                       width: doc.page.width - 120,
+                       align: 'left'
+                   });
+                
+                doc.moveDown(0.8);
+            };
             
-            if (reportData.vocabulary) {
-                doc.font('Helvetica-Bold')
-                   .text('New Vocabulary/Phrases:', { indent: 20 });
-                doc.font('Helvetica')
-                   .text(reportData.vocabulary, { indent: 40 });
-                doc.moveDown(0.5);
-            }
-            
-            if (reportData.mistakes) {
-                doc.font('Helvetica-Bold')
-                   .text('Common Mistakes:', { indent: 20 });
-                doc.font('Helvetica')
-                   .text(reportData.mistakes, { indent: 40 });
-                doc.moveDown(0.5);
-            }
-            
-            if (reportData.strengths) {
-                doc.font('Helvetica-Bold')
-                   .text('Student Strengths:', { indent: 20 });
-                doc.font('Helvetica')
-                   .text(reportData.strengths, { indent: 40 });
-                doc.moveDown(0.5);
-            }
-            
-            if (reportData.comments) {
-                doc.font('Helvetica-Bold')
-                   .text('Comments/Homework:', { indent: 20 });
-                doc.font('Helvetica')
-                   .text(reportData.comments, { indent: 40 });
-                doc.moveDown(0.5);
-            }
+            addField('Target Topic:', reportData.target_topic);
+            addField('New Vocabulary/Phrases:', reportData.vocabulary);
+            addField('Common Mistakes:', reportData.mistakes);
+            addField('Student Strengths:', reportData.strengths);
+            addField('Comments/Homework:', reportData.comments);
             
             // Footer
-            doc.fontSize(10)
+            doc.fontSize(9)
                .font('Helvetica')
+               .fillColor('#666666')
                .text(`Report ID: ${reportData.id}`, 50, doc.page.height - 70, { align: 'left' })
-               .text(`Generated on: ${new Date().toLocaleDateString()}`, 50, doc.page.height - 50, { 
-                   align: 'center' 
-               });
+               .text(`Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 
+                     50, doc.page.height - 50, { align: 'center' });
             
             doc.end();
         } catch (error) {
