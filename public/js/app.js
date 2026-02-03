@@ -2747,8 +2747,44 @@ document.getElementById('change-username-form')?.addEventListener('submit', asyn
 
 // Database Viewer Functions
 document.getElementById('db-load-btn')?.addEventListener('click', loadDatabaseTable);
-document.getElementById('db-export-btn')?.addEventListener('click', exportDatabaseTable);
-document.getElementById('db-search-btn')?.addEventListener('click', searchDatabase);
+document.getElementById('db-export-csv-btn')?.addEventListener('click', exportDatabaseTable);
+
+// Store current search results globally for PDF export
+let currentSearchResults = null;
+
+// Auto-search with debounce
+let searchTimeout;
+document.getElementById('db-search-input')?.addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        searchDatabase();
+    }, 300); // 300ms debounce
+});
+
+// Filter pill functionality
+document.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', function() {
+        // Remove active class from all pills
+        document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+        // Add active class to clicked pill
+        this.classList.add('active');
+        // Update hidden type field
+        const type = this.getAttribute('data-type');
+        document.getElementById('db-search-type').value = type;
+        // Trigger search
+        searchDatabase();
+    });
+});
+
+// Advanced options toggle
+document.getElementById('db-advanced-toggle')?.addEventListener('click', function() {
+    const advancedOptions = document.getElementById('db-advanced-options');
+    advancedOptions.classList.toggle('show');
+    this.textContent = advancedOptions.classList.contains('show') ? 'Advanced ▲' : 'Advanced ▼';
+});
+
+// PDF Export functionality
+document.getElementById('db-export-pdf-btn')?.addEventListener('click', exportDatabasePDF);
 
 // Helper function to render clean database tables
 function renderCleanTable(data, type, options = {}) {
@@ -2890,18 +2926,35 @@ async function searchDatabase() {
     const endDate = document.getElementById('db-search-end-date').value;
     const container = document.getElementById('db-viewer-container');
     
+    // If no query and no type selected, show placeholder
+    if (!query && !type && !startDate && !endDate) {
+        container.innerHTML = '<p class="info-text">Start typing to search...</p>';
+        currentSearchResults = null;
+        return;
+    }
+    
     try {
         container.innerHTML = '<p class="info-text">Searching...</p>';
         
         const params = new URLSearchParams();
         if (query) params.append('query', query);
-        if (type) params.append('type', type);
+        
+        // Smart default: if query exists but no type filter, default to students first
+        let searchType = type;
+        if (query && !type) {
+            searchType = 'students';
+        }
+        
+        if (searchType) params.append('type', searchType);
         if (startDate) params.append('startDate', startDate);
         if (endDate) params.append('endDate', endDate);
         
         const results = await api(`/database/search?${params.toString()}`);
         
-        if (!results || Object.keys(results).length === 0) {
+        // Store results for PDF export
+        currentSearchResults = results?.results || null;
+        
+        if (!results || !results.results || Object.keys(results.results).length === 0) {
             container.innerHTML = '<p class="info-text">No results found</p>';
             return;
         }
@@ -2910,57 +2963,61 @@ async function searchDatabase() {
         let totalResults = 0;
         
         // Display results grouped by type using clean table rendering
-        if (results.students && results.students.length > 0) {
-            totalResults += results.students.length;
-            html += `<h3>Students (${results.students.length})</h3>`;
-            html += renderCleanTable(results.students, 'students');
+        if (results.results.students && results.results.students.length > 0) {
+            totalResults += results.results.students.length;
+            html += `<h3>Students (${results.results.students.length})</h3>`;
+            html += renderCleanTable(results.results.students, 'students');
             html += '<br>';
         }
         
-        if (results.teachers && results.teachers.length > 0) {
-            totalResults += results.teachers.length;
-            html += `<h3>Teachers (${results.teachers.length})</h3>`;
-            html += renderCleanTable(results.teachers, 'teachers');
+        if (results.results.teachers && results.results.teachers.length > 0) {
+            totalResults += results.results.teachers.length;
+            html += `<h3>Teachers (${results.results.teachers.length})</h3>`;
+            html += renderCleanTable(results.results.teachers, 'teachers');
             html += '<br>';
         }
         
-        if (results.classes && results.classes.length > 0) {
-            totalResults += results.classes.length;
-            html += `<h3>Classes (${results.classes.length})</h3>`;
-            html += renderCleanTable(results.classes, 'classes');
+        if (results.results.classes && results.results.classes.length > 0) {
+            totalResults += results.results.classes.length;
+            html += `<h3>Classes (${results.results.classes.length})</h3>`;
+            html += renderCleanTable(results.results.classes, 'classes');
             html += '<br>';
         }
         
-        if (results.attendance && results.attendance.length > 0) {
-            totalResults += results.attendance.length;
-            html += `<h3>Attendance (${results.attendance.length})</h3>`;
-            html += renderCleanTable(results.attendance, 'attendance');
+        if (results.results.attendance && results.results.attendance.length > 0) {
+            totalResults += results.results.attendance.length;
+            html += `<h3>Attendance (${results.results.attendance.length})</h3>`;
+            html += renderCleanTable(results.results.attendance, 'attendance');
             html += '<br>';
         }
         
-        if (results.reports && results.reports.length > 0) {
-            totalResults += results.reports.length;
-            html += `<h3>Lesson Reports (${results.reports.length})</h3>`;
-            html += renderCleanTable(results.reports, 'reports');
+        if (results.results.reports && results.results.reports.length > 0) {
+            totalResults += results.results.reports.length;
+            html += `<h3>Lesson Reports (${results.results.reports.length})</h3>`;
+            html += renderCleanTable(results.results.reports, 'reports');
             html += '<br>';
         }
         
-        if (results.makeup_lessons && results.makeup_lessons.length > 0) {
-            totalResults += results.makeup_lessons.length;
-            html += `<h3>Make-up Lessons (${results.makeup_lessons.length})</h3>`;
-            html += renderCleanTable(results.makeup_lessons, 'makeup_lessons');
+        if (results.results.makeup_lessons && results.results.makeup_lessons.length > 0) {
+            totalResults += results.results.makeup_lessons.length;
+            html += `<h3>Make-up Lessons (${results.results.makeup_lessons.length})</h3>`;
+            html += renderCleanTable(results.results.makeup_lessons, 'makeup_lessons');
             html += '<br>';
         }
         
         // Add clean results summary at the bottom
         if (totalResults > 0) {
             html += `<div class="results-summary">${totalResults} total result${totalResults !== 1 ? 's' : ''}</div>`;
+        } else {
+            container.innerHTML = '<p class="info-text">No results found</p>';
+            return;
         }
         
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
         container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
+        currentSearchResults = null;
     }
 }
 
@@ -3060,6 +3117,79 @@ function exportDatabaseTable() {
     a.click();
     window.URL.revokeObjectURL(url);
 }
+
+async function exportDatabasePDF() {
+    const type = document.getElementById('db-search-type').value;
+    
+    // Check if we have search results
+    if (!currentSearchResults) {
+        Toast.error('Please perform a search first before exporting to PDF');
+        return;
+    }
+    
+    try {
+        // For students, use student attendance PDF endpoint
+        if (type === 'students' && currentSearchResults.students?.length > 0) {
+            Toast.info('Generating PDF for students...', 'Please wait');
+            
+            // Get the first student (or we could add a selection UI)
+            const student = currentSearchResults.students[0];
+            
+            if (!student || !student.id) {
+                Toast.error('No student selected');
+                return;
+            }
+            
+            const response = await api(`/pdf/student-attendance/${student.id}`, {
+                method: 'POST'
+            });
+            
+            if (response.downloadUrl) {
+                window.open(response.downloadUrl, '_blank');
+                Toast.success('PDF generated successfully!');
+            } else {
+                Toast.error('Failed to generate PDF');
+            }
+            return;
+        }
+        
+        // For reports, use lesson report PDF endpoint
+        if (type === 'reports' && currentSearchResults.reports?.length > 0) {
+            Toast.info('Generating PDF for reports...', 'Please wait');
+            
+            const report = currentSearchResults.reports[0];
+            
+            if (!report || !report.id) {
+                Toast.error('No report selected');
+                return;
+            }
+            
+            const response = await api(`/pdf/lesson-report/${report.id}`, {
+                method: 'POST'
+            });
+            
+            if (response.downloadUrl) {
+                window.open(response.downloadUrl, '_blank');
+                Toast.success('PDF generated successfully!');
+            } else {
+                Toast.error('Failed to generate PDF');
+            }
+            return;
+        }
+        
+        // For other types or multiple results, show info message
+        Toast.info('PDF export is available for individual students and reports. Please filter to a specific type first.', 'Export Info');
+        
+    } catch (error) {
+        console.error('Error exporting database PDF:', error);
+        if (error.message.includes('PDF storage not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
+        } else {
+            Toast.error('Error generating PDF: ' + error.message);
+        }
+    }
+}
+
 
 // Student Profiles Functions
 let allStudentsForProfile = [];
