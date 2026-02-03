@@ -2731,6 +2731,17 @@ let currentSearchState = {
     limit: 25
 };
 
+// Configuration for which entity types support actions
+// Note: Database IDs start at 1 in this system (auto-increment primary keys)
+const ENTITY_ACTION_CONFIG = {
+    student: true,   // Supports view details and PDF export (student attendance)
+    teacher: false,  // Teachers don't have individual PDFs
+    class: true,     // Supports class attendance PDFs
+    attendance: false, // Individual attendance records don't have PDFs
+    report: true,    // Supports lesson report PDFs
+    makeup: false    // Make-up lessons don't have individual PDFs
+};
+
 async function searchDatabase(page = 1) {
     const query = document.getElementById('db-search-input').value.trim();
     const type = document.getElementById('db-search-type').value;
@@ -2778,22 +2789,12 @@ async function searchDatabase(page = 1) {
         // Display results grouped by type
         const results = data.results;
         
-        // Configuration for which entity types support actions
-        const ACTION_CONFIG = {
-            student: true,   // Supports view details and PDF export
-            teacher: false,  // Teachers don't have individual PDFs
-            class: true,     // Supports class attendance PDFs
-            attendance: false, // Individual attendance records don't have PDFs
-            report: true,    // Supports lesson report PDFs
-            makeup: false    // Make-up lessons don't have individual PDFs
-        };
-        
         // Helper function to render a table with clickable rows and actions
         function renderTable(title, rows, entityType, showActions = true) {
             if (!rows || rows.length === 0) return '';
             
             // Override showActions based on entity config
-            showActions = ACTION_CONFIG[entityType] !== false && showActions;
+            showActions = ENTITY_ACTION_CONFIG[entityType] !== false && showActions;
             
             let html = `<h3>${title} (${rows.length})</h3>`;
             html += '<table class="db-table clickable-table"><thead><tr>';

@@ -85,7 +85,7 @@ router.get('/table/:tableName', async (req, res) => {
 // Advanced search across all records
 router.get('/search', async (req, res) => {
     try {
-        const { query, type, startDate, endDate, page = '1', limit = '25' } = req.query;
+        const { query, type, startDate, endDate, page, limit } = req.query;
         
         // Validate type parameter (whitelist)
         const VALID_TYPES = ['students', 'teachers', 'classes', 'attendance', 'reports', 'makeup_lessons'];
@@ -111,6 +111,7 @@ router.get('/search', async (req, res) => {
         }
         
         // Validate and sanitize pagination parameters
+        // Note: req.query values are strings, so we provide string defaults for clarity
         let pageNum = 1;
         let limitNum = 25;
         
