@@ -2791,7 +2791,7 @@ document.getElementById('db-export-pdf-btn')?.addEventListener('click', exportDa
 function renderCleanTable(data, type, options = {}) {
     if (!data || data.length === 0) return '';
     
-    const { includeActions = false } = options;
+    const { includeActions = false, includeSelection = false } = options;
     
     // Define column configurations for each type
     const columnConfig = {
@@ -2860,16 +2860,37 @@ function renderCleanTable(data, type, options = {}) {
     }
     
     let html = '<table class="db-table-clean"><thead><tr>';
+    
+    // Add select-all checkbox in header
+    if (includeSelection) {
+        html += '<th><input type="checkbox" class="select-all-checkbox" data-type="' + type + '" onchange="toggleSelectAll(this, \'' + type + '\')"></th>';
+    }
+    
     config.headers.forEach(header => {
         html += `<th>${header}</th>`;
     });
-    if (includeActions) {
+    
+    // Add Actions header for students and reports
+    if (includeActions || type === 'students' || type === 'reports') {
         html += '<th>Actions</th>';
     }
+    
     html += '</tr></thead><tbody>';
     
     data.forEach(row => {
-        html += '<tr>';
+        const sanitizedId = parseInt(row.id);
+        const rowClass = (type === 'students' || type === 'reports' || type === 'attendance') ? 'clickable-row' : '';
+        const rowAttrs = (type === 'students' || type === 'reports' || type === 'attendance') 
+            ? `data-type="${type}" data-id="${sanitizedId}"` 
+            : '';
+        
+        html += `<tr class="${rowClass}" ${rowAttrs} onclick="handleRowClick(event, '${type}', ${sanitizedId})">`;
+        
+        // Add individual checkbox
+        if (includeSelection) {
+            html += `<td onclick="event.stopPropagation();"><input type="checkbox" class="row-checkbox" data-type="${type}" data-id="${sanitizedId}"></td>`;
+        }
+        
         config.columns.forEach((col, idx) => {
             let value = row[col];
             
@@ -2895,16 +2916,33 @@ function renderCleanTable(data, type, options = {}) {
             html += `<td>${value}</td>`;
         });
         
-        // Add actions column if needed
+        // Add actions column - either original edit/delete or new view/pdf buttons
         if (includeActions) {
-            const sanitizedId = parseInt(row.id);
+            // Original behavior for lesson_reports table
             if (!isNaN(sanitizedId)) {
                 html += `<td class="actions-cell">
-                    <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${sanitizedId})">Edit</button>
-                    <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${sanitizedId})">Delete</button>
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); editReportFromDatabase(${sanitizedId})">Edit</button>
+                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteReportFromDatabase(${sanitizedId})">Delete</button>
                 </td>`;
             } else {
                 html += '<td class="actions-cell">Invalid ID</td>';
+            }
+        } else if (type === 'students' || type === 'reports') {
+            // New view/PDF buttons for search results
+            if (!isNaN(sanitizedId)) {
+                html += `<td class="actions-cell">
+                    <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewSearchResult('${type}', ${sanitizedId})" title="View Details">
+                        👁️
+                    </button>`;
+                if (type === 'students' || type === 'reports') {
+                    html += `
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); exportSinglePDF('${type}', ${sanitizedId})" title="Export PDF">
+                        📄
+                    </button>`;
+                }
+                html += `</td>`;
+            } else {
+                html += '<td class="actions-cell"></td>';
             }
         }
         
@@ -2976,7 +3014,7 @@ async function searchDatabase() {
         if (results.results.students && results.results.students.length > 0) {
             totalResults += results.results.students.length;
             html += `<h3>Students (${results.results.students.length})</h3>`;
-            html += renderCleanTable(results.results.students, 'students');
+            html += renderCleanTable(results.results.students, 'students', { includeSelection: true });
             html += '<br>';
         }
         
@@ -3004,7 +3042,7 @@ async function searchDatabase() {
         if (results.results.reports && results.results.reports.length > 0) {
             totalResults += results.results.reports.length;
             html += `<h3>Lesson Reports (${results.results.reports.length})</h3>`;
-            html += renderCleanTable(results.results.reports, 'reports');
+            html += renderCleanTable(results.results.reports, 'reports', { includeSelection: true });
             html += '<br>';
         }
         
@@ -3133,7 +3171,7 @@ function exportDatabaseTable() {
 }
 
 async function exportDatabasePDF() {
-    const type = document.getElementById('db-search-type').value;
+    const activeType = document.querySelector('.filter-pill.active')?.dataset.type || '';
     
     // Check if we have search results
     if (!currentSearchResults) {
@@ -3141,66 +3179,307 @@ async function exportDatabasePDF() {
         return;
     }
     
+    // Get selected items (if any checkboxes are checked)
+    const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
+    const selectedIds = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.id));
+    
+    // If items are selected, export them
+    if (selectedIds.length > 0) {
+        const selectedType = selectedCheckboxes[0]?.dataset.type || activeType;
+        await exportSelectedItems(selectedType, selectedIds);
+        return;
+    }
+    
+    // If nothing selected, show options for the active type or first available type
+    let exportType = activeType;
+    if (!exportType) {
+        // Find the first type with results
+        if (currentSearchResults.students?.length > 0) exportType = 'students';
+        else if (currentSearchResults.reports?.length > 0) exportType = 'reports';
+    }
+    
+    if (exportType) {
+        showExportOptionsModal(exportType);
+    } else {
+        Toast.error('No items to export');
+    }
+}
+
+// Toggle select all checkboxes
+function toggleSelectAll(checkbox, type) {
+    const checkboxes = document.querySelectorAll(`.row-checkbox[data-type="${type}"]`);
+    checkboxes.forEach(cb => {
+        cb.checked = checkbox.checked;
+    });
+}
+
+// Handle row click to view details
+function handleRowClick(event, type, id) {
+    // Don't trigger if clicking on a button or checkbox
+    if (event.target.tagName === 'BUTTON' || event.target.tagName === 'INPUT') {
+        return;
+    }
+    viewSearchResult(type, id);
+}
+
+// View search result detail
+async function viewSearchResult(type, id) {
+    switch(type) {
+        case 'students':
+            await showStudentDetail(id);
+            break;
+        case 'reports':
+            await viewReportDetail(id);
+            break;
+        case 'attendance':
+            await viewAttendanceDetail(id);
+            break;
+        default:
+            Toast.info('Detail view not available for this type');
+    }
+}
+
+// View report detail modal
+async function viewReportDetail(reportId) {
     try {
-        // For students, use student attendance PDF endpoint
-        if (type === 'students' && currentSearchResults.students?.length > 0) {
-            // Get the first student (showing which one is being exported)
-            const student = currentSearchResults.students[0];
-            
-            if (!student || !student.id) {
-                Toast.error('No student selected');
-                return;
-            }
-            
-            Toast.info(`Generating PDF for ${student.name}...`, 'Please wait');
-            
-            const response = await api(`/pdf/student-attendance/${student.id}`, {
-                method: 'POST'
-            });
-            
-            if (response.downloadUrl) {
-                window.open(response.downloadUrl, '_blank');
-                Toast.success(`PDF generated for ${student.name}!`);
-            } else {
-                Toast.error('Failed to generate PDF');
-            }
-            return;
-        }
+        const report = await api(`/reports/${reportId}`);
         
-        // For reports, use lesson report PDF endpoint
-        if (type === 'reports' && currentSearchResults.reports?.length > 0) {
-            const report = currentSearchResults.reports[0];
-            
-            if (!report || !report.id) {
-                Toast.error('No report selected');
-                return;
-            }
-            
-            const reportDate = report.date ? new Date(report.date).toLocaleDateString() : 'Unknown';
-            Toast.info(`Generating PDF for report from ${reportDate}...`, 'Please wait');
-            
-            const response = await api(`/pdf/lesson-report/${report.id}`, {
-                method: 'POST'
-            });
-            
-            if (response.downloadUrl) {
-                window.open(response.downloadUrl, '_blank');
-                Toast.success(`PDF generated for report from ${reportDate}!`);
-            } else {
-                Toast.error('Failed to generate PDF');
-            }
-            return;
-        }
-        
-        // For other types or multiple results, show info message
-        Toast.info('PDF export is available for individual students and reports. Please use a filter to select students or reports.', 'Export Info');
-        
+        showModal(`Lesson Report - ${report.class_name}`, `
+            <div class="report-detail">
+                <p><strong>Date:</strong> ${formatDisplayDate(report.date)}</p>
+                <p><strong>Class:</strong> ${report.class_name}</p>
+                <p><strong>Teacher:</strong> ${report.teacher_name}</p>
+                <p><strong>Topic:</strong> ${report.target_topic || 'N/A'}</p>
+                <p><strong>Vocabulary:</strong> ${report.vocabulary || 'N/A'}</p>
+                <p><strong>Mistakes:</strong> ${report.mistakes || 'N/A'}</p>
+                <p><strong>Strengths:</strong> ${report.strengths || 'N/A'}</p>
+                <p><strong>Comments:</strong> ${report.comments || 'N/A'}</p>
+                
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="exportSingleReportPDF(${reportId})">
+                        📄 Export as PDF
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                </div>
+            </div>
+        `);
     } catch (error) {
-        console.error('Error exporting database PDF:', error);
+        Toast.error('Failed to load report: ' + error.message);
+    }
+}
+
+// View attendance detail modal
+async function viewAttendanceDetail(attendanceId) {
+    try {
+        // Attendance records don't have individual IDs in the search results
+        // Just show a simple message
+        Toast.info('Attendance record details are shown in the table');
+    } catch (error) {
+        Toast.error('Failed to load attendance: ' + error.message);
+    }
+}
+
+// Export single PDF
+async function exportSinglePDF(type, id) {
+    Toast.info('Generating PDF...');
+    
+    try {
+        let endpoint;
+        if (type === 'students') {
+            endpoint = `/pdf/student-attendance/${id}`;
+        } else if (type === 'reports') {
+            endpoint = `/pdf/lesson-report/${id}`;
+        } else {
+            Toast.error('PDF export not available for this type');
+            return;
+        }
+        
+        const response = await api(endpoint, { method: 'POST' });
+        
+        if (response.downloadUrl) {
+            window.open(response.downloadUrl, '_blank');
+            Toast.success('PDF generated!');
+        }
+    } catch (error) {
         if (error.message.includes('PDF storage not configured')) {
             Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
         } else {
-            Toast.error('Error generating PDF: ' + error.message);
+            Toast.error('Failed to generate PDF: ' + error.message);
+        }
+    }
+}
+
+// Export single report PDF (from modal)
+async function exportSingleReportPDF(reportId) {
+    closeModal();
+    await exportSinglePDF('reports', reportId);
+}
+
+// Export selected items
+async function exportSelectedItems(type, selectedIds) {
+    if (selectedIds.length === 0) {
+        Toast.error('No items selected');
+        return;
+    }
+    
+    Toast.info(`Exporting ${selectedIds.length} PDFs...`);
+    
+    let successCount = 0;
+    for (const id of selectedIds) {
+        try {
+            if (type === 'students') {
+                const response = await api(`/pdf/student-attendance/${id}`, { method: 'POST' });
+                if (response.downloadUrl) {
+                    window.open(response.downloadUrl, '_blank');
+                    successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            } else if (type === 'reports') {
+                const response = await api(`/pdf/lesson-report/${id}`, { method: 'POST' });
+                if (response.downloadUrl) {
+                    window.open(response.downloadUrl, '_blank');
+                    successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to export ${type} ${id}:`, error);
+        }
+    }
+    
+    Toast.success(`Exported ${successCount} of ${selectedIds.length} PDFs`);
+}
+
+// Show export options modal
+function showExportOptionsModal(type) {
+    const results = currentSearchResults?.results || currentSearchResults;
+    const items = results[type] || results.students || [];
+    
+    if (items.length === 0) {
+        Toast.error('No items to export');
+        return;
+    }
+    
+    const typeLabel = type === 'students' ? 'students' : 'reports';
+    
+    showModal('Export Options', `
+        <div class="export-options">
+            <p>Found ${items.length} ${typeLabel} to export:</p>
+            
+            <div class="export-option">
+                <button class="btn btn-primary" onclick="exportAllAsSeparate('${type}')">
+                    📄 Export Each Separately (${items.length} PDFs)
+                </button>
+                <p class="option-desc">Download each item as a separate PDF file</p>
+            </div>
+            
+            ${type === 'reports' ? `
+            <div class="export-option">
+                <button class="btn btn-secondary" onclick="exportAllAsCombined('${type}')">
+                    📑 Export All as One Combined PDF
+                </button>
+                <p class="option-desc">Combine all ${items.length} reports into a single PDF document</p>
+            </div>
+            ` : ''}
+            
+            <div class="export-option">
+                <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    `);
+}
+
+// Export all items separately
+async function exportAllAsSeparate(type) {
+    closeModal();
+    const results = currentSearchResults?.results || currentSearchResults;
+    const items = results[type] || [];
+    
+    if (items.length === 0) {
+        Toast.error('No items to export');
+        return;
+    }
+    
+    Toast.info(`Exporting ${items.length} PDFs...`);
+    
+    let successCount = 0;
+    for (const item of items) {
+        try {
+            if (type === 'students') {
+                const response = await api(`/pdf/student-attendance/${item.id}`, { method: 'POST' });
+                if (response.downloadUrl) {
+                    window.open(response.downloadUrl, '_blank');
+                    successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            } else if (type === 'reports') {
+                const response = await api(`/pdf/lesson-report/${item.id}`, { method: 'POST' });
+                if (response.downloadUrl) {
+                    window.open(response.downloadUrl, '_blank');
+                    successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            }
+        } catch (error) {
+            console.error(`Failed to export ${type} ${item.id}:`, error);
+        }
+    }
+    
+    Toast.success(`Exported ${successCount} of ${items.length} PDFs`);
+}
+
+// Export all reports as one combined PDF
+async function exportAllAsCombined(type) {
+    closeModal();
+    
+    if (type !== 'reports') {
+        Toast.error('Combined export only available for reports');
+        return;
+    }
+    
+    const results = currentSearchResults?.results || currentSearchResults;
+    const reports = results.reports || [];
+    
+    if (reports.length === 0) {
+        Toast.error('No reports to export');
+        return;
+    }
+    
+    // Get date range from search params or use report dates
+    const startDate = document.getElementById('db-search-start-date')?.value || 
+                      (reports.length > 0 && reports[0].date ? reports.reduce((min, r) => (r.date && r.date < min ? r.date : min), reports[0].date) : null);
+    const endDate = document.getElementById('db-search-end-date')?.value ||
+                    (reports.length > 0 && reports[0].date ? reports.reduce((max, r) => (r.date && r.date > max ? r.date : max), reports[0].date) : null);
+    
+    // Get unique class IDs from the reports
+    const classIds = [...new Set(reports.map(r => r.class_id))];
+    
+    Toast.info('Generating combined PDF...');
+    
+    try {
+        // Use existing multi-class report endpoint
+        const response = await api('/pdf/multi-class-reports', {
+            method: 'POST',
+            body: JSON.stringify({
+                classIds,
+                startDate,
+                endDate
+            })
+        });
+        
+        if (response.downloadUrl) {
+            window.open(response.downloadUrl, '_blank');
+            Toast.success('Combined PDF generated!');
+        }
+    } catch (error) {
+        if (error.message.includes('PDF storage not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
+        } else {
+            Toast.error('Failed to generate combined PDF: ' + error.message);
         }
     }
 }
