@@ -265,6 +265,12 @@ function formatAttendanceStatus(status) {
     return statusMap[status] || statusMap[''];
 }
 
+// Get all attendance status icons for export filtering
+function getAttendanceIcons() {
+    const statuses = ['O', 'X', '/', ''];
+    return statuses.map(s => formatAttendanceStatus(s).icon);
+}
+
 // API Helper
 async function api(endpoint, options = {}) {
     // Show loading spinner on button if applicable
@@ -2745,8 +2751,10 @@ document.getElementById('db-export-btn')?.addEventListener('click', exportDataba
 document.getElementById('db-search-btn')?.addEventListener('click', searchDatabase);
 
 // Helper function to render clean database tables
-function renderCleanTable(data, type) {
+function renderCleanTable(data, type, options = {}) {
     if (!data || data.length === 0) return '';
+    
+    const { includeActions = false } = options;
     
     // Define column configurations for each type
     const columnConfig = {
@@ -2780,6 +2788,13 @@ function renderCleanTable(data, type) {
                 active: (val) => val ? 'Yes' : 'No'
             }
         },
+        lesson_reports: {
+            columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
+            headers: ['Date', 'Class', 'Teacher', 'Topic'],
+            formatters: {
+                date: formatDisplayDate
+            }
+        },
         reports: {
             columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
             headers: ['Date', 'Class', 'Teacher', 'Topic'],
@@ -2802,7 +2817,7 @@ function renderCleanTable(data, type) {
         const allCols = Object.keys(data[0]);
         config = {
             columns: allCols,
-            headers: allCols.map(c => c.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())),
+            headers: allCols.map(c => toTitleCase(c.replace(/_/g, ' '))),
             formatters: {}
         };
     }
@@ -2811,6 +2826,9 @@ function renderCleanTable(data, type) {
     config.headers.forEach(header => {
         html += `<th>${header}</th>`;
     });
+    if (includeActions) {
+        html += '<th>Actions</th>';
+    }
     html += '</tr></thead><tbody>';
     
     data.forEach(row => {
@@ -2839,11 +2857,30 @@ function renderCleanTable(data, type) {
             
             html += `<td>${value}</td>`;
         });
+        
+        // Add actions column if needed
+        if (includeActions) {
+            const sanitizedId = parseInt(row.id);
+            if (!isNaN(sanitizedId)) {
+                html += `<td class="actions-cell">
+                    <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${sanitizedId})">Edit</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${sanitizedId})">Delete</button>
+                </td>`;
+            } else {
+                html += '<td class="actions-cell">Invalid ID</td>';
+            }
+        }
+        
         html += '</tr>';
     });
     
     html += '</tbody></table>';
     return html;
+}
+
+// Helper function to convert text to title case
+function toTitleCase(text) {
+    return text.replace(/\b\w/g, l => l.toUpperCase());
 }
 
 async function searchDatabase() {
@@ -2941,25 +2978,9 @@ async function loadDatabaseTable() {
         }
         
         const hasActions = tableName === 'lesson_reports';
-        let html = '';
         
-        // Use clean table rendering
-        html += renderCleanTable(result.data, tableName);
-        
-        // Add actions for lesson reports if needed
-        if (hasActions) {
-            html = html.replace('</thead>', '<th>Actions</th></thead>');
-            result.data.forEach((row, idx) => {
-                const sanitizedId = parseInt(row.id);
-                if (!isNaN(sanitizedId)) {
-                    const actionHtml = `<td class="actions-cell">
-                        <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${sanitizedId})">Edit</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${sanitizedId})">Delete</button>
-                    </td>`;
-                    html = html.replace(new RegExp(`</tr>`, idx + 2), `${actionHtml}</tr>`);
-                }
-            });
-        }
+        // Use clean table rendering with optional actions
+        let html = renderCleanTable(result.data, tableName, { includeActions: hasActions });
         
         // Add results summary
         html += `<div class="results-summary">${result.data.length} record${result.data.length !== 1 ? 's' : ''}</div>`;
@@ -3011,6 +3032,9 @@ function exportDatabaseTable() {
         return;
     }
     
+    const attendanceIcons = getAttendanceIcons();
+    const iconRegex = new RegExp(`[${attendanceIcons.join('')}]`, 'g');
+    
     let csv = '';
     const rows = table.querySelectorAll('tr');
     
@@ -3019,7 +3043,7 @@ function exportDatabaseTable() {
         const rowData = Array.from(cells).map(cell => {
             let text = cell.textContent.trim();
             // Remove emoji icons for cleaner export
-            text = text.replace(/[✓✗⏰—]/g, '').trim();
+            text = text.replace(iconRegex, '').trim();
             if (text.includes(',') || text.includes('"')) {
                 text = '"' + text.replace(/"/g, '""') + '"';
             }
