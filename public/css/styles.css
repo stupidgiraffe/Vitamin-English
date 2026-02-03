@@ -1428,7 +1428,10 @@ body {
     }
 
     .dashboard-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 100%;
+        gap: 1rem; /* Reduced from 2rem for mobile */
+        overflow-x: hidden;
+        box-sizing: border-box;
     }
 
     .form-row {
@@ -1438,6 +1441,53 @@ body {
     .btn {
         font-size: 0.9rem;
         padding: 0.6rem 1rem;
+    }
+    
+    /* Mobile Dashboard Fixes */
+    .container {
+        padding: 1rem;
+        box-sizing: border-box;
+    }
+    
+    .dashboard-card {
+        padding: 1rem;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    /* Fix Quick Actions overflow */
+    .quick-actions {
+        box-sizing: border-box;
+        width: 100%;
+    }
+    
+    .quick-actions .btn {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        white-space: normal;
+        word-wrap: break-word;
+        text-align: center;
+        display: block;
+    }
+    
+    /* Fix Weekly Schedule overflow */
+    .weekly-schedule-container {
+        overflow-x: auto;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Prevent page-level horizontal scroll */
+    body {
+        overflow-x: hidden;
+    }
+    
+    .page {
+        overflow-x: hidden;
     }
 }
 
@@ -1952,25 +2002,6 @@ body {
     border: 2px solid #4285f4;
     border-radius: 4px;
     outline: none;
-}
-
-/* Responsive Navbar Fixes */
-@media (max-width: 768px) {
-    .navbar {
-        flex-direction: column;
-        align-items: stretch;
-    }
-    
-    .nav-menu {
-        flex-direction: column;
-        width: 100%;
-    }
-    
-    .nav-user {
-        justify-content: center;
-        width: 100%;
-        padding: 10px 0;
-    }
 }
 
 /* ================================================
