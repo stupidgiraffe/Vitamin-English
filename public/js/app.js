@@ -2721,14 +2721,35 @@ document.getElementById('db-load-btn')?.addEventListener('click', loadDatabaseTa
 document.getElementById('db-export-btn')?.addEventListener('click', exportDatabaseTable);
 document.getElementById('db-search-btn')?.addEventListener('click', searchDatabase);
 
-async function searchDatabase() {
+// Store current search state for pagination
+let currentSearchState = {
+    query: '',
+    type: '',
+    startDate: '',
+    endDate: '',
+    page: 1,
+    limit: 25
+};
+
+async function searchDatabase(page = 1) {
     const query = document.getElementById('db-search-input').value.trim();
     const type = document.getElementById('db-search-type').value;
     const startDate = document.getElementById('db-search-start-date').value;
     const endDate = document.getElementById('db-search-end-date').value;
     const container = document.getElementById('db-viewer-container');
     
+    // Update search state
+    currentSearchState = { query, type, startDate, endDate, page, limit: 25 };
+    
     try {
+        // Disable search button during request
+        const searchBtn = document.getElementById('db-search-btn');
+        const originalText = searchBtn ? searchBtn.textContent : '';
+        if (searchBtn) {
+            searchBtn.disabled = true;
+            searchBtn.textContent = 'Searching...';
+        }
+        
         container.innerHTML = '<p class="info-text">Searching...</p>';
         
         const params = new URLSearchParams();
@@ -2736,135 +2757,165 @@ async function searchDatabase() {
         if (type) params.append('type', type);
         if (startDate) params.append('startDate', startDate);
         if (endDate) params.append('endDate', endDate);
+        params.append('page', page);
+        params.append('limit', currentSearchState.limit);
         
-        const results = await api(`/database/search?${params.toString()}`);
+        const data = await api(`/database/search?${params.toString()}`);
         
-        if (!results || Object.keys(results).length === 0) {
-            container.innerHTML = '<p class="info-text">No results found</p>';
+        // Re-enable search button
+        if (searchBtn) {
+            searchBtn.disabled = false;
+            searchBtn.textContent = originalText;
+        }
+        
+        if (!data || !data.results || Object.keys(data.results).length === 0) {
+            container.innerHTML = '<p class="info-text">No results found. Try adjusting your search criteria.</p>';
             return;
         }
         
         let html = '<div class="search-results">';
         
         // Display results grouped by type
-        if (results.students && results.students.length > 0) {
-            html += `<h3>Students (${results.students.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const studentCols = Object.keys(results.students[0]);
-            studentCols.forEach(col => html += `<th>${col}</th>`);
+        const results = data.results;
+        
+        // Helper function to render a table with clickable rows and actions
+        function renderTable(title, rows, entityType, showActions = true) {
+            if (!rows || rows.length === 0) return '';
+            
+            let html = `<h3>${title} (${rows.length})</h3>`;
+            html += '<table class="db-table clickable-table"><thead><tr>';
+            const cols = Object.keys(rows[0]);
+            cols.forEach(col => html += `<th>${col}</th>`);
+            if (showActions) {
+                html += '<th class="actions-header">Actions</th>';
+            }
             html += '</tr></thead><tbody>';
-            results.students.forEach(row => {
-                html += '<tr>';
-                studentCols.forEach(col => {
+            
+            rows.forEach(row => {
+                const rowId = row.id;
+                html += `<tr class="clickable-row" data-type="${entityType}" data-id="${rowId}" onclick="openDetailModal('${entityType}', ${rowId})">`;
+                cols.forEach(col => {
                     let value = row[col];
                     if (value === null) value = '<em>null</em>';
                     else if (typeof value === 'object') value = JSON.stringify(value);
                     html += `<td>${escapeHtml(String(value))}</td>`;
                 });
+                
+                if (showActions) {
+                    html += `<td class="table-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-sm btn-primary" onclick="openDetailModal('${entityType}', ${rowId})" title="View Details">👁️ View</button>
+                        <button class="btn btn-sm btn-secondary" onclick="exportToPDF('${entityType}', ${rowId})" title="Export as PDF">📄 PDF</button>
+                    </td>`;
+                }
                 html += '</tr>';
             });
             html += '</tbody></table><br>';
+            return html;
+        }
+        
+        // Render each entity type
+        if (results.students && results.students.length > 0) {
+            html += renderTable('Students', results.students, 'student');
         }
         
         if (results.teachers && results.teachers.length > 0) {
-            html += `<h3>Teachers (${results.teachers.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const teacherCols = Object.keys(results.teachers[0]);
-            teacherCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.teachers.forEach(row => {
-                html += '<tr>';
-                teacherCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderTable('Teachers', results.teachers, 'teacher', false);
         }
         
         if (results.classes && results.classes.length > 0) {
-            html += `<h3>Classes (${results.classes.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const classCols = Object.keys(results.classes[0]);
-            classCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.classes.forEach(row => {
-                html += '<tr>';
-                classCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderTable('Classes', results.classes, 'class');
         }
         
         if (results.attendance && results.attendance.length > 0) {
-            html += `<h3>Attendance (${results.attendance.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const attendanceCols = Object.keys(results.attendance[0]);
-            attendanceCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.attendance.forEach(row => {
-                html += '<tr>';
-                attendanceCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderTable('Attendance', results.attendance, 'attendance', false);
         }
         
         if (results.reports && results.reports.length > 0) {
-            html += `<h3>Lesson Reports (${results.reports.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const reportCols = Object.keys(results.reports[0]);
-            reportCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.reports.forEach(row => {
-                html += '<tr>';
-                reportCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderTable('Lesson Reports', results.reports, 'report');
         }
         
         if (results.makeup_lessons && results.makeup_lessons.length > 0) {
-            html += `<h3>Make-up Lessons (${results.makeup_lessons.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const makeupCols = Object.keys(results.makeup_lessons[0]);
-            makeupCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.makeup_lessons.forEach(row => {
-                html += '<tr>';
-                makeupCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderTable('Make-up Lessons', results.makeup_lessons, 'makeup', false);
+        }
+        
+        // Add pagination controls if available
+        if (data.pagination) {
+            const { page, totalPages, total, counts } = data.pagination;
+            
+            html += '<div class="pagination-info">';
+            html += `<p>Showing page ${page} of ${totalPages} (${total} total results)</p>`;
+            if (counts) {
+                const countDetails = [];
+                if (counts.students > 0) countDetails.push(`Students: ${counts.students}`);
+                if (counts.teachers > 0) countDetails.push(`Teachers: ${counts.teachers}`);
+                if (counts.classes > 0) countDetails.push(`Classes: ${counts.classes}`);
+                if (counts.attendance > 0) countDetails.push(`Attendance: ${counts.attendance}`);
+                if (counts.reports > 0) countDetails.push(`Reports: ${counts.reports}`);
+                if (counts.makeup_lessons > 0) countDetails.push(`Make-up: ${counts.makeup_lessons}`);
+                if (countDetails.length > 0) {
+                    html += `<p class="count-details">${countDetails.join(' • ')}</p>`;
+                }
+            }
+            html += '</div>';
+            
+            // Pagination controls
+            if (totalPages > 1) {
+                html += '<div class="pagination">';
+                
+                // Previous button
+                html += `<button class="pagination-btn" ${page <= 1 ? 'disabled' : ''} 
+                    onclick="searchDatabase(${page - 1})">« Previous</button>`;
+                
+                // Page numbers
+                const maxPageButtons = 5;
+                let startPage = Math.max(1, page - Math.floor(maxPageButtons / 2));
+                let endPage = Math.min(totalPages, startPage + maxPageButtons - 1);
+                
+                // Adjust start if we're near the end
+                if (endPage - startPage < maxPageButtons - 1) {
+                    startPage = Math.max(1, endPage - maxPageButtons + 1);
+                }
+                
+                if (startPage > 1) {
+                    html += `<button class="pagination-btn" onclick="searchDatabase(1)">1</button>`;
+                    if (startPage > 2) {
+                        html += '<span class="pagination-ellipsis">...</span>';
+                    }
+                }
+                
+                for (let i = startPage; i <= endPage; i++) {
+                    html += `<button class="pagination-btn ${i === page ? 'active' : ''}" 
+                        ${i === page ? 'disabled' : ''} 
+                        onclick="searchDatabase(${i})">${i}</button>`;
+                }
+                
+                if (endPage < totalPages) {
+                    if (endPage < totalPages - 1) {
+                        html += '<span class="pagination-ellipsis">...</span>';
+                    }
+                    html += `<button class="pagination-btn" onclick="searchDatabase(${totalPages})">${totalPages}</button>`;
+                }
+                
+                // Next button
+                html += `<button class="pagination-btn" ${page >= totalPages ? 'disabled' : ''} 
+                    onclick="searchDatabase(${page + 1})">Next »</button>`;
+                
+                html += '</div>';
+            }
         }
         
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
-        container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
+        console.error('Search error:', error);
+        container.innerHTML = `<p class="info-text error">Error: ${escapeHtml(error.message)}</p>`;
+        
+        // Re-enable search button on error
+        const searchBtn = document.getElementById('db-search-btn');
+        if (searchBtn) {
+            searchBtn.disabled = false;
+            searchBtn.textContent = 'Search';
+        }
     }
 }
 
@@ -2988,6 +3039,148 @@ function exportDatabaseTable() {
     a.download = `${tableName}_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
+}
+
+// Detail Modal Functions
+async function openDetailModal(type, id) {
+    try {
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        
+        if (!modal || !modalTitle || !modalBody) {
+            console.error('Modal elements not found');
+            return;
+        }
+        
+        // Show loading state
+        modalTitle.textContent = 'Loading...';
+        modalBody.innerHTML = '<p class="info-text">Loading details...</p>';
+        modal.classList.add('active');
+        
+        // Fetch details based on type
+        let data = null;
+        let title = '';
+        
+        switch(type) {
+            case 'student':
+                data = await api(`/students/${id}`);
+                title = `Student: ${data.name || 'Unknown'}`;
+                modalBody.innerHTML = renderStudentDetails(data);
+                break;
+            case 'class':
+                data = await api(`/classes/${id}`);
+                title = `Class: ${data.name || 'Unknown'}`;
+                modalBody.innerHTML = renderClassDetails(data);
+                break;
+            case 'report':
+                data = await api(`/reports/${id}`);
+                title = `Lesson Report - ${data.date || 'Unknown'}`;
+                modalBody.innerHTML = renderReportDetails(data);
+                break;
+            default:
+                modalBody.innerHTML = `<p class="info-text">Details not available for ${type}</p>`;
+                title = 'Details';
+        }
+        
+        modalTitle.textContent = title;
+        
+        // Add export PDF button for supported types
+        if (['student', 'class', 'report'].includes(type)) {
+            const exportBtn = document.createElement('button');
+            exportBtn.className = 'btn btn-secondary';
+            exportBtn.textContent = '📄 Export as PDF';
+            exportBtn.onclick = () => {
+                modal.classList.remove('active');
+                exportToPDF(type, id);
+            };
+            modalBody.appendChild(exportBtn);
+        }
+        
+    } catch (error) {
+        console.error('Error opening detail modal:', error);
+        const modalBody = document.getElementById('modal-body');
+        if (modalBody) {
+            modalBody.innerHTML = `<p class="info-text error">Error loading details: ${escapeHtml(error.message)}</p>`;
+        }
+    }
+}
+
+// Helper functions to render entity details
+function renderStudentDetails(student) {
+    return `
+        <div class="detail-view">
+            <div class="detail-row"><strong>Name:</strong> ${escapeHtml(student.name || 'N/A')}</div>
+            <div class="detail-row"><strong>Class:</strong> ${escapeHtml(student.class_name || 'N/A')}</div>
+            <div class="detail-row"><strong>Active:</strong> ${student.active ? 'Yes' : 'No'}</div>
+            <div class="detail-row"><strong>Type:</strong> ${escapeHtml(student.student_type || 'Regular')}</div>
+            <div class="detail-row"><strong>Color:</strong> ${escapeHtml(student.color || 'None')}</div>
+            ${student.notes ? `<div class="detail-row"><strong>Notes:</strong> ${escapeHtml(student.notes)}</div>` : ''}
+            ${student.parent_name ? `<div class="detail-row"><strong>Parent:</strong> ${escapeHtml(student.parent_name)}</div>` : ''}
+            ${student.contact_email ? `<div class="detail-row"><strong>Email:</strong> ${escapeHtml(student.contact_email)}</div>` : ''}
+            ${student.contact_phone ? `<div class="detail-row"><strong>Phone:</strong> ${escapeHtml(student.contact_phone)}</div>` : ''}
+        </div>
+    `;
+}
+
+function renderClassDetails(classData) {
+    return `
+        <div class="detail-view">
+            <div class="detail-row"><strong>Name:</strong> ${escapeHtml(classData.name || 'N/A')}</div>
+            <div class="detail-row"><strong>Teacher:</strong> ${escapeHtml(classData.teacher_name || 'N/A')}</div>
+            <div class="detail-row"><strong>Schedule:</strong> ${escapeHtml(classData.schedule || 'N/A')}</div>
+            <div class="detail-row"><strong>Active:</strong> ${classData.active ? 'Yes' : 'No'}</div>
+            ${classData.description ? `<div class="detail-row"><strong>Description:</strong> ${escapeHtml(classData.description)}</div>` : ''}
+        </div>
+    `;
+}
+
+function renderReportDetails(report) {
+    return `
+        <div class="detail-view">
+            <div class="detail-row"><strong>Date:</strong> ${escapeHtml(report.date || 'N/A')}</div>
+            <div class="detail-row"><strong>Class:</strong> ${escapeHtml(report.class_name || 'N/A')}</div>
+            <div class="detail-row"><strong>Teacher:</strong> ${escapeHtml(report.teacher_name || 'N/A')}</div>
+            ${report.target_topic ? `<div class="detail-row"><strong>Target/Topic:</strong> ${escapeHtml(report.target_topic)}</div>` : ''}
+            ${report.vocabulary ? `<div class="detail-row"><strong>Vocabulary:</strong> ${escapeHtml(report.vocabulary)}</div>` : ''}
+            ${report.mistakes ? `<div class="detail-row"><strong>Mistakes:</strong> ${escapeHtml(report.mistakes)}</div>` : ''}
+            ${report.strengths ? `<div class="detail-row"><strong>Strengths:</strong> ${escapeHtml(report.strengths)}</div>` : ''}
+            ${report.comments ? `<div class="detail-row"><strong>Comments:</strong> ${escapeHtml(report.comments)}</div>` : ''}
+        </div>
+    `;
+}
+
+// PDF Export Function
+async function exportToPDF(type, id) {
+    try {
+        let endpoint = '';
+        
+        // Map entity types to PDF endpoints
+        switch(type) {
+            case 'student':
+                endpoint = `/api/pdf/student-attendance/${id}`;
+                break;
+            case 'class':
+                endpoint = `/api/pdf/class-attendance/${id}`;
+                break;
+            case 'report':
+                endpoint = `/api/pdf/lesson-report/${id}`;
+                break;
+            default:
+                Toast.error(`PDF export not available for ${type}`);
+                return;
+        }
+        
+        // Show loading toast
+        Toast.info('Generating PDF...');
+        
+        // Open PDF in new tab
+        window.open(endpoint, '_blank');
+        
+    } catch (error) {
+        console.error('Error exporting to PDF:', error);
+        Toast.error('Failed to export PDF: ' + error.message);
+    }
 }
 
 // Student Profiles Functions
