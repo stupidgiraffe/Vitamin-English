@@ -362,49 +362,60 @@
             <div id="database-page" class="page">
                 <h2>Database Viewer</h2>
                 
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Search:</label>
-                        <input type="text" id="db-search-input" class="form-control" placeholder="Search across all records...">
+                <!-- Simplified Search Container -->
+                <div class="search-container">
+                    <div class="search-input-wrapper">
+                        <input type="text" id="db-search-input" class="form-control search-input" placeholder="Search students, classes, reports..." aria-label="Search database">
                     </div>
-                    <div class="control-group">
-                        <label>Type:</label>
-                        <select id="db-search-type" class="form-control">
-                            <option value="">All Types</option>
+                    <button id="db-advanced-toggle" class="btn btn-secondary">Advanced ▼</button>
+                </div>
+
+                <!-- Filter Pills -->
+                <div class="search-filter-pills">
+                    <button class="filter-pill active" data-type="" aria-label="Filter by all types">All</button>
+                    <button class="filter-pill" data-type="students" aria-label="Filter by students">👨‍🎓 Students</button>
+                    <button class="filter-pill" data-type="classes" aria-label="Filter by classes">📚 Classes</button>
+                    <button class="filter-pill" data-type="reports" aria-label="Filter by reports">📝 Reports</button>
+                    <button class="filter-pill" data-type="attendance" aria-label="Filter by attendance">✓ Attendance</button>
+                    <button class="filter-pill" data-type="makeup_lessons" aria-label="Filter by make-up lessons">🔄 Make-up</button>
+                </div>
+
+                <!-- Advanced Search Options (Hidden by Default) -->
+                <div id="db-advanced-options" class="advanced-search-options">
+                    <div class="controls">
+                        <div class="control-group">
+                            <label>Start Date:</label>
+                            <input type="date" id="db-search-start-date" class="form-control">
+                        </div>
+                        <div class="control-group">
+                            <label>End Date:</label>
+                            <input type="date" id="db-search-end-date" class="form-control">
+                        </div>
+                    </div>
+                    <div class="controls" style="margin-top: 10px;">
+                        <select id="db-table-select" class="form-control">
                             <option value="students">Students</option>
-                            <option value="teachers">Teachers</option>
                             <option value="classes">Classes</option>
                             <option value="attendance">Attendance</option>
-                            <option value="reports">Reports</option>
+                            <option value="lesson_reports">Lesson Reports</option>
                             <option value="makeup_lessons">Make-up Lessons</option>
+                            <option value="users">Users</option>
                         </select>
+                        <button id="db-load-btn" class="btn btn-primary">Load Table</button>
                     </div>
-                    <div class="control-group">
-                        <label>Start Date:</label>
-                        <input type="date" id="db-search-start-date" class="form-control">
-                    </div>
-                    <div class="control-group">
-                        <label>End Date:</label>
-                        <input type="date" id="db-search-end-date" class="form-control">
-                    </div>
-                    <button id="db-search-btn" class="btn btn-primary">Search</button>
                 </div>
 
-                <div class="controls" style="margin-top: 10px;">
-                    <select id="db-table-select" class="form-control">
-                        <option value="students">Students</option>
-                        <option value="classes">Classes</option>
-                        <option value="attendance">Attendance</option>
-                        <option value="lesson_reports">Lesson Reports</option>
-                        <option value="makeup_lessons">Make-up Lessons</option>
-                        <option value="users">Users</option>
-                    </select>
-                    <button id="db-load-btn" class="btn btn-primary">Load Data</button>
-                    <button id="db-export-btn" class="btn btn-secondary">Export CSV</button>
+                <!-- Export Buttons -->
+                <div class="export-buttons" style="margin-top: 12px; margin-bottom: 12px;">
+                    <button id="db-export-csv-btn" class="btn btn-secondary">📊 Export CSV</button>
+                    <button id="db-export-pdf-btn" class="btn btn-secondary">📄 Export PDF</button>
                 </div>
+
+                <!-- Hidden Search Type (Used by JS) -->
+                <input type="hidden" id="db-search-type" value="">
 
                 <div id="db-viewer-container" class="db-viewer">
-                    <p class="info-text">Use search above or select a table and click Load Data</p>
+                    <p class="info-text">Start typing to search...</p>
                 </div>
             </div>
 
