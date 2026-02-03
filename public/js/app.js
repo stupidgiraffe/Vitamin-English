@@ -242,6 +242,35 @@ function getContrastTextColor(hexColor) {
     return brightness > 128 ? '#000' : '#fff';
 }
 
+// Date formatting helper for display
+function formatDisplayDate(isoDate) {
+    if (!isoDate) return 'N/A';
+    const date = new Date(isoDate);
+    if (isNaN(date.getTime())) return 'Invalid Date';
+    return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+}
+
+// Attendance status display formatter
+function formatAttendanceStatus(status) {
+    const statusMap = {
+        'O': { text: 'Present', class: 'status-present', icon: '✓' },
+        'X': { text: 'Absent', class: 'status-absent', icon: '✗' },
+        '/': { text: 'Late/Partial', class: 'status-late', icon: '⏰' },
+        '': { text: 'Not Marked', class: 'status-unmarked', icon: '—' }
+    };
+    return statusMap[status] || statusMap[''];
+}
+
+// Get all attendance status icons for export filtering
+function getAttendanceIcons() {
+    const statuses = ['O', 'X', '/', ''];
+    return statuses.map(s => formatAttendanceStatus(s).icon);
+}
+
 // API Helper
 async function api(endpoint, options = {}) {
     // Show loading spinner on button if applicable
@@ -513,7 +542,7 @@ async function initializeDatabasePage() {
     const container = document.getElementById('db-viewer-container');
     
     // Check if already loaded
-    if (container.querySelector('.db-table')) {
+    if (container.querySelector('.db-table-clean') || container.querySelector('.db-table')) {
         return;
     }
     
@@ -2721,6 +2750,139 @@ document.getElementById('db-load-btn')?.addEventListener('click', loadDatabaseTa
 document.getElementById('db-export-btn')?.addEventListener('click', exportDatabaseTable);
 document.getElementById('db-search-btn')?.addEventListener('click', searchDatabase);
 
+// Helper function to render clean database tables
+function renderCleanTable(data, type, options = {}) {
+    if (!data || data.length === 0) return '';
+    
+    const { includeActions = false } = options;
+    
+    // Define column configurations for each type
+    const columnConfig = {
+        attendance: {
+            columns: ['date', 'student_name', 'class_name', 'status'],
+            headers: ['Date', 'Student', 'Class', 'Status'],
+            formatters: {
+                date: formatDisplayDate,
+                status: (val) => {
+                    const s = formatAttendanceStatus(val);
+                    return `<span class="${s.class}">${s.icon} ${s.text}</span>`;
+                }
+            }
+        },
+        students: {
+            columns: ['name', 'class_name', 'student_type', 'email'],
+            headers: ['Name', 'Class', 'Type', 'Email'],
+            formatters: {}
+        },
+        teachers: {
+            columns: ['full_name', 'username', 'role', 'created_at'],
+            headers: ['Name', 'Username', 'Role', 'Created'],
+            formatters: {
+                created_at: formatDisplayDate
+            }
+        },
+        classes: {
+            columns: ['name', 'teacher_name', 'schedule', 'active'],
+            headers: ['Class Name', 'Teacher', 'Schedule', 'Active'],
+            formatters: {
+                active: (val) => val ? 'Yes' : 'No'
+            }
+        },
+        lesson_reports: {
+            columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
+            headers: ['Date', 'Class', 'Teacher', 'Topic'],
+            formatters: {
+                date: formatDisplayDate
+            }
+        },
+        reports: {
+            columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
+            headers: ['Date', 'Class', 'Teacher', 'Topic'],
+            formatters: {
+                date: formatDisplayDate
+            }
+        },
+        makeup_lessons: {
+            columns: ['scheduled_date', 'student_name', 'class_name', 'status'],
+            headers: ['Date', 'Student', 'Class', 'Status'],
+            formatters: {
+                scheduled_date: formatDisplayDate
+            }
+        }
+    };
+    
+    const config = columnConfig[type];
+    if (!config) {
+        // Fallback: use all columns
+        const allCols = Object.keys(data[0]);
+        config = {
+            columns: allCols,
+            headers: allCols.map(c => toTitleCase(c.replace(/_/g, ' '))),
+            formatters: {}
+        };
+    }
+    
+    let html = '<table class="db-table-clean"><thead><tr>';
+    config.headers.forEach(header => {
+        html += `<th>${header}</th>`;
+    });
+    if (includeActions) {
+        html += '<th>Actions</th>';
+    }
+    html += '</tr></thead><tbody>';
+    
+    data.forEach(row => {
+        html += '<tr>';
+        config.columns.forEach((col, idx) => {
+            let value = row[col];
+            
+            // Apply formatter if exists
+            if (config.formatters[col]) {
+                value = config.formatters[col](value);
+            } else {
+                // Default formatting
+                if (value === null || value === undefined) {
+                    value = '<em style="color: #999;">N/A</em>';
+                } else if (typeof value === 'object') {
+                    value = JSON.stringify(value);
+                } else if (typeof value === 'boolean') {
+                    value = value ? 'Yes' : 'No';
+                } else if (col.includes('date') && !config.formatters[col]) {
+                    // Auto-format dates
+                    value = formatDisplayDate(value);
+                } else {
+                    value = escapeHtml(String(value));
+                }
+            }
+            
+            html += `<td>${value}</td>`;
+        });
+        
+        // Add actions column if needed
+        if (includeActions) {
+            const sanitizedId = parseInt(row.id);
+            if (!isNaN(sanitizedId)) {
+                html += `<td class="actions-cell">
+                    <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${sanitizedId})">Edit</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${sanitizedId})">Delete</button>
+                </td>`;
+            } else {
+                html += '<td class="actions-cell">Invalid ID</td>';
+            }
+        }
+        
+        html += '</tr>';
+    });
+    
+    html += '</tbody></table>';
+    return html;
+}
+
+// Helper function to convert text to title case
+function toTitleCase(text) {
+    return text.replace(/\b\w/g, l => l.toUpperCase());
+}
+
 async function searchDatabase() {
     const query = document.getElementById('db-search-input').value.trim();
     const type = document.getElementById('db-search-type').value;
@@ -2745,120 +2907,54 @@ async function searchDatabase() {
         }
         
         let html = '<div class="search-results">';
+        let totalResults = 0;
         
-        // Display results grouped by type
+        // Display results grouped by type using clean table rendering
         if (results.students && results.students.length > 0) {
+            totalResults += results.students.length;
             html += `<h3>Students (${results.students.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const studentCols = Object.keys(results.students[0]);
-            studentCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.students.forEach(row => {
-                html += '<tr>';
-                studentCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderCleanTable(results.students, 'students');
+            html += '<br>';
         }
         
         if (results.teachers && results.teachers.length > 0) {
+            totalResults += results.teachers.length;
             html += `<h3>Teachers (${results.teachers.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const teacherCols = Object.keys(results.teachers[0]);
-            teacherCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.teachers.forEach(row => {
-                html += '<tr>';
-                teacherCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderCleanTable(results.teachers, 'teachers');
+            html += '<br>';
         }
         
         if (results.classes && results.classes.length > 0) {
+            totalResults += results.classes.length;
             html += `<h3>Classes (${results.classes.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const classCols = Object.keys(results.classes[0]);
-            classCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.classes.forEach(row => {
-                html += '<tr>';
-                classCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderCleanTable(results.classes, 'classes');
+            html += '<br>';
         }
         
         if (results.attendance && results.attendance.length > 0) {
+            totalResults += results.attendance.length;
             html += `<h3>Attendance (${results.attendance.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const attendanceCols = Object.keys(results.attendance[0]);
-            attendanceCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.attendance.forEach(row => {
-                html += '<tr>';
-                attendanceCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderCleanTable(results.attendance, 'attendance');
+            html += '<br>';
         }
         
         if (results.reports && results.reports.length > 0) {
+            totalResults += results.reports.length;
             html += `<h3>Lesson Reports (${results.reports.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const reportCols = Object.keys(results.reports[0]);
-            reportCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.reports.forEach(row => {
-                html += '<tr>';
-                reportCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderCleanTable(results.reports, 'reports');
+            html += '<br>';
         }
         
         if (results.makeup_lessons && results.makeup_lessons.length > 0) {
+            totalResults += results.makeup_lessons.length;
             html += `<h3>Make-up Lessons (${results.makeup_lessons.length})</h3>`;
-            html += '<table class="db-table"><thead><tr>';
-            const makeupCols = Object.keys(results.makeup_lessons[0]);
-            makeupCols.forEach(col => html += `<th>${col}</th>`);
-            html += '</tr></thead><tbody>';
-            results.makeup_lessons.forEach(row => {
-                html += '<tr>';
-                makeupCols.forEach(col => {
-                    let value = row[col];
-                    if (value === null) value = '<em>null</em>';
-                    else if (typeof value === 'object') value = JSON.stringify(value);
-                    html += `<td>${escapeHtml(String(value))}</td>`;
-                });
-                html += '</tr>';
-            });
-            html += '</tbody></table><br>';
+            html += renderCleanTable(results.makeup_lessons, 'makeup_lessons');
+            html += '<br>';
+        }
+        
+        // Add clean results summary at the bottom
+        if (totalResults > 0) {
+            html += `<div class="results-summary">${totalResults} total result${totalResults !== 1 ? 's' : ''}</div>`;
         }
         
         html += '</div>';
@@ -2881,44 +2977,14 @@ async function loadDatabaseTable() {
             return;
         }
         
-        const columns = Object.keys(result.data[0]);
         const hasActions = tableName === 'lesson_reports';
         
-        let html = '<table class="db-table"><thead><tr>';
+        // Use clean table rendering with optional actions
+        let html = renderCleanTable(result.data, tableName, { includeActions: hasActions });
         
-        columns.forEach(col => {
-            html += `<th>${col}</th>`;
-        });
-        if (hasActions) {
-            html += '<th>Actions</th>';
-        }
-        html += '</tr></thead><tbody>';
+        // Add results summary
+        html += `<div class="results-summary">${result.data.length} record${result.data.length !== 1 ? 's' : ''}</div>`;
         
-        result.data.forEach(row => {
-            html += '<tr>';
-            columns.forEach(col => {
-                let value = row[col];
-                if (value === null) value = '<em>null</em>';
-                else if (typeof value === 'object') value = JSON.stringify(value);
-                html += `<td>${value}</td>`;
-            });
-            if (hasActions) {
-                // Sanitize ID to prevent XSS
-                const sanitizedId = parseInt(row.id);
-                if (isNaN(sanitizedId)) {
-                    console.error('Invalid row ID:', row.id);
-                    html += '<td class="actions-cell">Invalid ID</td>';
-                } else {
-                    html += `<td class="actions-cell">
-                        <button class="btn btn-small btn-primary" onclick="editReportFromDatabase(${sanitizedId})">Edit</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteReportFromDatabase(${sanitizedId})">Delete</button>
-                    </td>`;
-                }
-            }
-            html += '</tr>';
-        });
-        
-        html += '</tbody></table>';
         container.innerHTML = html;
     } catch (error) {
         container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
@@ -2959,12 +3025,15 @@ async function deleteReportFromDatabase(reportId) {
 
 function exportDatabaseTable() {
     const tableName = document.getElementById('db-table-select').value;
-    const table = document.querySelector('.db-table');
+    const table = document.querySelector('.db-table-clean') || document.querySelector('.db-table');
     
     if (!table) {
         Toast.error('Please load data first');
         return;
     }
+    
+    const attendanceIcons = getAttendanceIcons();
+    const iconRegex = new RegExp(`[${attendanceIcons.join('')}]`, 'g');
     
     let csv = '';
     const rows = table.querySelectorAll('tr');
@@ -2973,6 +3042,8 @@ function exportDatabaseTable() {
         const cells = row.querySelectorAll('th, td');
         const rowData = Array.from(cells).map(cell => {
             let text = cell.textContent.trim();
+            // Remove emoji icons for cleaner export
+            text = text.replace(iconRegex, '').trim();
             if (text.includes(',') || text.includes('"')) {
                 text = '"' + text.replace(/"/g, '""') + '"';
             }
