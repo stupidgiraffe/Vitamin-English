@@ -2751,6 +2751,7 @@ document.getElementById('db-export-csv-btn')?.addEventListener('click', exportDa
 
 // Store current search results globally for PDF export
 let currentSearchResults = null;
+let searchAbortController = null;
 
 // Auto-search with debounce
 let searchTimeout;
@@ -2926,12 +2927,19 @@ async function searchDatabase() {
     const endDate = document.getElementById('db-search-end-date').value;
     const container = document.getElementById('db-viewer-container');
     
-    // If no query and no type selected, show placeholder
+    // If no query, no type, and no date filters, show placeholder
+    // This allows the "Load Table" button in advanced options to work
     if (!query && !type && !startDate && !endDate) {
-        container.innerHTML = '<p class="info-text">Start typing to search...</p>';
+        container.innerHTML = '<p class="info-text">Start typing to search or use advanced options...</p>';
         currentSearchResults = null;
         return;
     }
+    
+    // Abort previous search if still running
+    if (searchAbortController) {
+        searchAbortController.abort();
+    }
+    searchAbortController = new AbortController();
     
     try {
         container.innerHTML = '<p class="info-text">Searching...</p>';
@@ -2949,7 +2957,9 @@ async function searchDatabase() {
         if (startDate) params.append('startDate', startDate);
         if (endDate) params.append('endDate', endDate);
         
-        const results = await api(`/database/search?${params.toString()}`);
+        const results = await api(`/database/search?${params.toString()}`, {
+            signal: searchAbortController.signal
+        });
         
         // Store results for PDF export
         currentSearchResults = results?.results || null;
@@ -3016,6 +3026,10 @@ async function searchDatabase() {
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
+        // Ignore abort errors from rapid typing
+        if (error.name === 'AbortError') {
+            return;
+        }
         container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
         currentSearchResults = null;
     }
@@ -3130,9 +3144,7 @@ async function exportDatabasePDF() {
     try {
         // For students, use student attendance PDF endpoint
         if (type === 'students' && currentSearchResults.students?.length > 0) {
-            Toast.info('Generating PDF for students...', 'Please wait');
-            
-            // Get the first student (or we could add a selection UI)
+            // Get the first student (showing which one is being exported)
             const student = currentSearchResults.students[0];
             
             if (!student || !student.id) {
@@ -3140,13 +3152,15 @@ async function exportDatabasePDF() {
                 return;
             }
             
+            Toast.info(`Generating PDF for ${student.name}...`, 'Please wait');
+            
             const response = await api(`/pdf/student-attendance/${student.id}`, {
                 method: 'POST'
             });
             
             if (response.downloadUrl) {
                 window.open(response.downloadUrl, '_blank');
-                Toast.success('PDF generated successfully!');
+                Toast.success(`PDF generated for ${student.name}!`);
             } else {
                 Toast.error('Failed to generate PDF');
             }
@@ -3155,8 +3169,6 @@ async function exportDatabasePDF() {
         
         // For reports, use lesson report PDF endpoint
         if (type === 'reports' && currentSearchResults.reports?.length > 0) {
-            Toast.info('Generating PDF for reports...', 'Please wait');
-            
             const report = currentSearchResults.reports[0];
             
             if (!report || !report.id) {
@@ -3164,13 +3176,16 @@ async function exportDatabasePDF() {
                 return;
             }
             
+            const reportDate = report.date ? new Date(report.date).toLocaleDateString() : 'Unknown';
+            Toast.info(`Generating PDF for report from ${reportDate}...`, 'Please wait');
+            
             const response = await api(`/pdf/lesson-report/${report.id}`, {
                 method: 'POST'
             });
             
             if (response.downloadUrl) {
                 window.open(response.downloadUrl, '_blank');
-                Toast.success('PDF generated successfully!');
+                Toast.success(`PDF generated for report from ${reportDate}!`);
             } else {
                 Toast.error('Failed to generate PDF');
             }
@@ -3178,7 +3193,7 @@ async function exportDatabasePDF() {
         }
         
         // For other types or multiple results, show info message
-        Toast.info('PDF export is available for individual students and reports. Please filter to a specific type first.', 'Export Info');
+        Toast.info('PDF export is available for individual students and reports. Please use a filter to select students or reports.', 'Export Info');
         
     } catch (error) {
         console.error('Error exporting database PDF:', error);
