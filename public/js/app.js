@@ -3332,12 +3332,16 @@ async function exportSelectedItems(type, selectedIds) {
                 if (response.downloadUrl) {
                     window.open(response.downloadUrl, '_blank');
                     successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
             } else if (type === 'reports') {
                 const response = await api(`/pdf/lesson-report/${id}`, { method: 'POST' });
                 if (response.downloadUrl) {
                     window.open(response.downloadUrl, '_blank');
                     successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
             }
         } catch (error) {
@@ -3408,12 +3412,16 @@ async function exportAllAsSeparate(type) {
                 if (response.downloadUrl) {
                     window.open(response.downloadUrl, '_blank');
                     successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
             } else if (type === 'reports') {
                 const response = await api(`/pdf/lesson-report/${item.id}`, { method: 'POST' });
                 if (response.downloadUrl) {
                     window.open(response.downloadUrl, '_blank');
                     successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
                 }
             }
         } catch (error) {
@@ -3443,9 +3451,9 @@ async function exportAllAsCombined(type) {
     
     // Get date range from search params or use report dates
     const startDate = document.getElementById('db-search-start-date')?.value || 
-                      reports.reduce((min, r) => r.date < min ? r.date : min, reports[0].date);
+                      (reports.length > 0 && reports[0].date ? reports.reduce((min, r) => (r.date && r.date < min ? r.date : min), reports[0].date) : null);
     const endDate = document.getElementById('db-search-end-date')?.value ||
-                    reports.reduce((max, r) => r.date > max ? r.date : max, reports[0].date);
+                    (reports.length > 0 && reports[0].date ? reports.reduce((max, r) => (r.date && r.date > max ? r.date : max), reports[0].date) : null);
     
     // Get unique class IDs from the reports
     const classIds = [...new Set(reports.map(r => r.class_id))];
