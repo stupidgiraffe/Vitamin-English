@@ -536,7 +536,7 @@ async function initializeDatabasePage() {
     const container = document.getElementById('db-viewer-container');
     
     // Check if already loaded
-    if (container.querySelector('.db-table')) {
+    if (container.querySelector('.db-table-clean') || container.querySelector('.db-table')) {
         return;
     }
     
@@ -3004,7 +3004,7 @@ async function deleteReportFromDatabase(reportId) {
 
 function exportDatabaseTable() {
     const tableName = document.getElementById('db-table-select').value;
-    const table = document.querySelector('.db-table');
+    const table = document.querySelector('.db-table-clean') || document.querySelector('.db-table');
     
     if (!table) {
         Toast.error('Please load data first');
@@ -3018,6 +3018,8 @@ function exportDatabaseTable() {
         const cells = row.querySelectorAll('th, td');
         const rowData = Array.from(cells).map(cell => {
             let text = cell.textContent.trim();
+            // Remove emoji icons for cleaner export
+            text = text.replace(/[✓✗⏰—]/g, '').trim();
             if (text.includes(',') || text.includes('"')) {
                 text = '"' + text.replace(/"/g, '""') + '"';
             }
