@@ -111,8 +111,25 @@ router.get('/search', async (req, res) => {
         }
         
         // Validate and sanitize pagination parameters
-        const pageNum = Math.max(1, parseInt(page) || 1);
-        const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 25)); // Max 100 records
+        let pageNum = 1;
+        let limitNum = 25;
+        
+        // Validate page parameter
+        if (page) {
+            const parsedPage = parseInt(page);
+            if (!isNaN(parsedPage) && parsedPage > 0) {
+                pageNum = parsedPage;
+            }
+        }
+        
+        // Validate limit parameter
+        if (limit) {
+            const parsedLimit = parseInt(limit);
+            if (!isNaN(parsedLimit) && parsedLimit > 0) {
+                limitNum = Math.min(100, parsedLimit); // Max 100 records
+            }
+        }
+        
         const offset = (pageNum - 1) * limitNum;
         
         // Query parameter is now optional - can search by type and/or date only

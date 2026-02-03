@@ -2805,7 +2805,10 @@ async function searchDatabase(page = 1) {
             html += '</tr></thead><tbody>';
             
             rows.forEach(row => {
-                const rowId = parseInt(row.id) || 0;
+                const rowId = parseInt(row.id);
+                // Skip rows without valid IDs
+                if (isNaN(rowId) || rowId < 1) return;
+                
                 // Use data attributes instead of inline onclick for security
                 html += `<tr class="clickable-row" data-type="${escapeHtml(entityType)}" data-id="${rowId}">`;
                 cols.forEach(col => {
@@ -2931,7 +2934,8 @@ async function searchDatabase(page = 1) {
                 
                 const type = row.getAttribute('data-type');
                 const id = parseInt(row.getAttribute('data-id'));
-                if (type && id) {
+                // Only proceed with valid positive integers
+                if (type && !isNaN(id) && id > 0) {
                     openDetailModal(type, id);
                 }
             });
@@ -2944,7 +2948,8 @@ async function searchDatabase(page = 1) {
                 e.stopPropagation();
                 const type = btn.getAttribute('data-type');
                 const id = parseInt(btn.getAttribute('data-id'));
-                if (type && id) {
+                // Only proceed with valid positive integers
+                if (type && !isNaN(id) && id > 0) {
                     openDetailModal(type, id);
                 }
             });
@@ -2957,7 +2962,8 @@ async function searchDatabase(page = 1) {
                 e.stopPropagation();
                 const type = btn.getAttribute('data-type');
                 const id = parseInt(btn.getAttribute('data-id'));
-                if (type && id) {
+                // Only proceed with valid positive integers
+                if (type && !isNaN(id) && id > 0) {
                     exportToPDF(type, id);
                 }
             });
@@ -2968,7 +2974,8 @@ async function searchDatabase(page = 1) {
         paginationBtns.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const pageNum = parseInt(btn.getAttribute('data-page'));
-                if (pageNum && !btn.disabled) {
+                // Only proceed with valid page numbers
+                if (!isNaN(pageNum) && pageNum > 0 && !btn.disabled) {
                     searchDatabase(pageNum);
                 }
             });
