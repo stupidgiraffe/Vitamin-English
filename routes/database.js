@@ -102,6 +102,14 @@ router.get('/search', async (req, res) => {
             return res.status(400).json({ error: 'Invalid endDate format. Use YYYY-MM-DD' });
         }
         
+        // Validate that dates are actually valid dates
+        if (startDate && isNaN(Date.parse(startDate))) {
+            return res.status(400).json({ error: 'Invalid startDate value' });
+        }
+        if (endDate && isNaN(Date.parse(endDate))) {
+            return res.status(400).json({ error: 'Invalid endDate value' });
+        }
+        
         // Validate and sanitize pagination parameters
         const pageNum = Math.max(1, parseInt(page) || 1);
         const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 25)); // Max 100 records

@@ -2778,22 +2778,36 @@ async function searchDatabase(page = 1) {
         // Display results grouped by type
         const results = data.results;
         
+        // Configuration for which entity types support actions
+        const ACTION_CONFIG = {
+            student: true,   // Supports view details and PDF export
+            teacher: false,  // Teachers don't have individual PDFs
+            class: true,     // Supports class attendance PDFs
+            attendance: false, // Individual attendance records don't have PDFs
+            report: true,    // Supports lesson report PDFs
+            makeup: false    // Make-up lessons don't have individual PDFs
+        };
+        
         // Helper function to render a table with clickable rows and actions
         function renderTable(title, rows, entityType, showActions = true) {
             if (!rows || rows.length === 0) return '';
             
+            // Override showActions based on entity config
+            showActions = ACTION_CONFIG[entityType] !== false && showActions;
+            
             let html = `<h3>${title} (${rows.length})</h3>`;
             html += '<table class="db-table clickable-table"><thead><tr>';
             const cols = Object.keys(rows[0]);
-            cols.forEach(col => html += `<th>${col}</th>`);
+            cols.forEach(col => html += `<th>${escapeHtml(col)}</th>`);
             if (showActions) {
                 html += '<th class="actions-header">Actions</th>';
             }
             html += '</tr></thead><tbody>';
             
             rows.forEach(row => {
-                const rowId = row.id;
-                html += `<tr class="clickable-row" data-type="${entityType}" data-id="${rowId}" onclick="openDetailModal('${entityType}', ${rowId})">`;
+                const rowId = parseInt(row.id) || 0;
+                // Use data attributes instead of inline onclick for security
+                html += `<tr class="clickable-row" data-type="${escapeHtml(entityType)}" data-id="${rowId}">`;
                 cols.forEach(col => {
                     let value = row[col];
                     if (value === null) value = '<em>null</em>';
@@ -2802,9 +2816,9 @@ async function searchDatabase(page = 1) {
                 });
                 
                 if (showActions) {
-                    html += `<td class="table-actions" onclick="event.stopPropagation()">
-                        <button class="btn btn-sm btn-primary" onclick="openDetailModal('${entityType}', ${rowId})" title="View Details">👁️ View</button>
-                        <button class="btn btn-sm btn-secondary" onclick="exportToPDF('${entityType}', ${rowId})" title="Export as PDF">📄 PDF</button>
+                    html += `<td class="table-actions">
+                        <button class="btn btn-sm btn-primary detail-btn" data-type="${escapeHtml(entityType)}" data-id="${rowId}" title="View Details">👁️ View</button>
+                        <button class="btn btn-sm btn-secondary pdf-btn" data-type="${escapeHtml(entityType)}" data-id="${rowId}" title="Export as PDF">📄 PDF</button>
                     </td>`;
                 }
                 html += '</tr>';
@@ -2819,7 +2833,7 @@ async function searchDatabase(page = 1) {
         }
         
         if (results.teachers && results.teachers.length > 0) {
-            html += renderTable('Teachers', results.teachers, 'teacher', false);
+            html += renderTable('Teachers', results.teachers, 'teacher');
         }
         
         if (results.classes && results.classes.length > 0) {
@@ -2827,7 +2841,7 @@ async function searchDatabase(page = 1) {
         }
         
         if (results.attendance && results.attendance.length > 0) {
-            html += renderTable('Attendance', results.attendance, 'attendance', false);
+            html += renderTable('Attendance', results.attendance, 'attendance');
         }
         
         if (results.reports && results.reports.length > 0) {
@@ -2835,7 +2849,7 @@ async function searchDatabase(page = 1) {
         }
         
         if (results.makeup_lessons && results.makeup_lessons.length > 0) {
-            html += renderTable('Make-up Lessons', results.makeup_lessons, 'makeup', false);
+            html += renderTable('Make-up Lessons', results.makeup_lessons, 'makeup');
         }
         
         // Add pagination controls if available
@@ -2906,6 +2920,49 @@ async function searchDatabase(page = 1) {
         
         html += '</div>';
         container.innerHTML = html;
+        
+        // Attach event listeners to clickable rows and action buttons
+        // This is more secure than inline onclick handlers
+        const clickableRows = container.querySelectorAll('.clickable-row');
+        clickableRows.forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Don't trigger row click if clicking on action buttons
+                if (e.target.closest('.table-actions')) return;
+                
+                const type = row.getAttribute('data-type');
+                const id = parseInt(row.getAttribute('data-id'));
+                if (type && id) {
+                    openDetailModal(type, id);
+                }
+            });
+        });
+        
+        // Attach event listeners to detail buttons
+        const detailBtns = container.querySelectorAll('.detail-btn');
+        detailBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const type = btn.getAttribute('data-type');
+                const id = parseInt(btn.getAttribute('data-id'));
+                if (type && id) {
+                    openDetailModal(type, id);
+                }
+            });
+        });
+        
+        // Attach event listeners to PDF export buttons
+        const pdfBtns = container.querySelectorAll('.pdf-btn');
+        pdfBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const type = btn.getAttribute('data-type');
+                const id = parseInt(btn.getAttribute('data-id'));
+                if (type && id) {
+                    exportToPDF(type, id);
+                }
+            });
+        });
+        
     } catch (error) {
         console.error('Search error:', error);
         container.innerHTML = `<p class="info-text error">Error: ${escapeHtml(error.message)}</p>`;
