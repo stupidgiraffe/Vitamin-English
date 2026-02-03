@@ -99,8 +99,17 @@ router.post('/', async (req, res) => {
     try {
         const { class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
         
+        console.log('Saving report:', { class_id, teacher_id, date }); // Debug logging
+        
         if (!class_id || !teacher_id || !date) {
-            return res.status(400).json({ error: 'class_id, teacher_id, and date are required' });
+            return res.status(400).json({ 
+                error: 'Missing required fields',
+                details: {
+                    class_id: !class_id ? 'required' : 'ok',
+                    teacher_id: !teacher_id ? 'required' : 'ok',
+                    date: !date ? 'required' : 'ok'
+                }
+            });
         }
         
         // Check if report already exists
@@ -111,7 +120,10 @@ router.post('/', async (req, res) => {
         const existing = existingResult.rows[0];
         
         if (existing) {
-            return res.status(400).json({ error: 'Report for this class and date already exists' });
+            return res.status(400).json({ 
+                error: 'Report for this class and date already exists',
+                existingReportId: existing.id
+            });
         }
         
         const result = await pool.query(`
@@ -122,10 +134,15 @@ router.post('/', async (req, res) => {
         
         const reportResult = await pool.query('SELECT * FROM lesson_reports WHERE id = $1', [result.rows[0].id]);
         const report = reportResult.rows[0];
+        
+        console.log('Report created successfully:', report.id); // Debug logging
         res.status(201).json(report);
     } catch (error) {
         console.error('Error creating report:', error);
-        res.status(500).json({ error: 'Failed to create report' });
+        res.status(500).json({ 
+            error: 'Failed to create report',
+            message: error.message 
+        });
     }
 });
 
@@ -133,6 +150,14 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { teacher_id, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
+        
+        console.log('Updating report:', req.params.id); // Debug logging
+        
+        if (!teacher_id) {
+            return res.status(400).json({ 
+                error: 'Missing required field: teacher_id'
+            });
+        }
         
         await pool.query(`
             UPDATE lesson_reports 
@@ -150,10 +175,19 @@ router.put('/:id', async (req, res) => {
         
         const result = await pool.query('SELECT * FROM lesson_reports WHERE id = $1', [req.params.id]);
         const report = result.rows[0];
+        
+        if (!report) {
+            return res.status(404).json({ error: 'Report not found' });
+        }
+        
+        console.log('Report updated successfully:', report.id); // Debug logging
         res.json(report);
     } catch (error) {
         console.error('Error updating report:', error);
-        res.status(500).json({ error: 'Failed to update report' });
+        res.status(500).json({ 
+            error: 'Failed to update report',
+            message: error.message 
+        });
     }
 });
 

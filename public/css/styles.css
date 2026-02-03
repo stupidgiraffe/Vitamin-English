@@ -1686,6 +1686,84 @@ body {
     margin-right: 0.5rem;
 }
 
+/* Clean table styling for better UX */
+.db-table-clean {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin-bottom: 1rem;
+}
+
+.db-table-clean th {
+    background: #4472C4;
+    color: white;
+    padding: 12px 16px;
+    text-align: left;
+    font-weight: 600;
+    border: none;
+}
+
+.db-table-clean td {
+    padding: 10px 16px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.db-table-clean tbody tr:nth-child(even) {
+    background: #f8f9fa;
+}
+
+.db-table-clean tbody tr:hover {
+    background: rgba(68, 114, 196, 0.1);
+    cursor: default;
+}
+
+/* Status badges for attendance */
+.status-present {
+    color: #28a745;
+    font-weight: 500;
+}
+
+.status-absent {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+.status-late {
+    color: #ffc107;
+    font-weight: 500;
+}
+
+.status-unmarked {
+    color: #6c757d;
+}
+
+/* Results summary */
+.results-summary {
+    text-align: center;
+    color: #666;
+    padding: 12px;
+    font-size: 14px;
+    margin-top: 8px;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* Mobile responsive table */
+@media (max-width: 768px) {
+    .db-table-clean {
+        font-size: 12px;
+    }
+    
+    .db-table-clean th,
+    .db-table-clean td {
+        padding: 8px;
+    }
+    
+    /* Hide less important columns on mobile */
+    .db-table-clean .hide-mobile {
+        display: none;
+    }
+}
+
 /* Make-up Lessons */
 .makeup-lesson-item {
     background: white;
