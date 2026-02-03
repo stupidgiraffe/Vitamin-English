@@ -2877,8 +2877,8 @@ async function searchDatabase(page = 1) {
                 html += '<div class="pagination">';
                 
                 // Previous button
-                html += `<button class="pagination-btn" ${page <= 1 ? 'disabled' : ''} 
-                    onclick="searchDatabase(${page - 1})">« Previous</button>`;
+                html += `<button class="pagination-btn pagination-prev" ${page <= 1 ? 'disabled' : ''} 
+                    data-page="${page - 1}">« Previous</button>`;
                 
                 // Page numbers
                 const maxPageButtons = 5;
@@ -2891,28 +2891,28 @@ async function searchDatabase(page = 1) {
                 }
                 
                 if (startPage > 1) {
-                    html += `<button class="pagination-btn" onclick="searchDatabase(1)">1</button>`;
+                    html += `<button class="pagination-btn pagination-number" data-page="1">1</button>`;
                     if (startPage > 2) {
                         html += '<span class="pagination-ellipsis">...</span>';
                     }
                 }
                 
                 for (let i = startPage; i <= endPage; i++) {
-                    html += `<button class="pagination-btn ${i === page ? 'active' : ''}" 
+                    html += `<button class="pagination-btn pagination-number ${i === page ? 'active' : ''}" 
                         ${i === page ? 'disabled' : ''} 
-                        onclick="searchDatabase(${i})">${i}</button>`;
+                        data-page="${i}">${i}</button>`;
                 }
                 
                 if (endPage < totalPages) {
                     if (endPage < totalPages - 1) {
                         html += '<span class="pagination-ellipsis">...</span>';
                     }
-                    html += `<button class="pagination-btn" onclick="searchDatabase(${totalPages})">${totalPages}</button>`;
+                    html += `<button class="pagination-btn pagination-number" data-page="${totalPages}">${totalPages}</button>`;
                 }
                 
                 // Next button
-                html += `<button class="pagination-btn" ${page >= totalPages ? 'disabled' : ''} 
-                    onclick="searchDatabase(${page + 1})">Next »</button>`;
+                html += `<button class="pagination-btn pagination-next" ${page >= totalPages ? 'disabled' : ''} 
+                    data-page="${page + 1}">Next »</button>`;
                 
                 html += '</div>';
             }
@@ -2959,6 +2959,17 @@ async function searchDatabase(page = 1) {
                 const id = parseInt(btn.getAttribute('data-id'));
                 if (type && id) {
                     exportToPDF(type, id);
+                }
+            });
+        });
+        
+        // Attach event listeners to pagination buttons
+        const paginationBtns = container.querySelectorAll('.pagination-number, .pagination-prev, .pagination-next');
+        paginationBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const pageNum = parseInt(btn.getAttribute('data-page'));
+                if (pageNum && !btn.disabled) {
+                    searchDatabase(pageNum);
                 }
             });
         });
@@ -3147,10 +3158,10 @@ async function openDetailModal(type, id) {
             const exportBtn = document.createElement('button');
             exportBtn.className = 'btn btn-secondary';
             exportBtn.textContent = '📄 Export as PDF';
-            exportBtn.onclick = () => {
+            exportBtn.addEventListener('click', () => {
                 modal.classList.remove('active');
                 exportToPDF(type, id);
-            };
+            });
             modalBody.appendChild(exportBtn);
         }
         
