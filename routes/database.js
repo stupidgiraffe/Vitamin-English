@@ -85,7 +85,27 @@ router.get('/table/:tableName', async (req, res) => {
 // Advanced search across all records
 router.get('/search', async (req, res) => {
     try {
-        const { query, type, startDate, endDate } = req.query;
+        const { query, type, startDate, endDate, page = '1', limit = '25' } = req.query;
+        
+        // Validate type parameter (whitelist)
+        const VALID_TYPES = ['students', 'teachers', 'classes', 'attendance', 'reports', 'makeup_lessons'];
+        if (type && !VALID_TYPES.includes(type)) {
+            return res.status(400).json({ error: 'Invalid type parameter' });
+        }
+        
+        // Validate date formats
+        const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+        if (startDate && !DATE_REGEX.test(startDate)) {
+            return res.status(400).json({ error: 'Invalid startDate format. Use YYYY-MM-DD' });
+        }
+        if (endDate && !DATE_REGEX.test(endDate)) {
+            return res.status(400).json({ error: 'Invalid endDate format. Use YYYY-MM-DD' });
+        }
+        
+        // Validate and sanitize pagination parameters
+        const pageNum = Math.max(1, parseInt(page) || 1);
+        const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 25)); // Max 100 records
+        const offset = (pageNum - 1) * limitNum;
         
         // Query parameter is now optional - can search by type and/or date only
         const hasQuery = query && query.trim() !== '';
@@ -100,6 +120,15 @@ router.get('/search', async (req, res) => {
             makeup_lessons: []
         };
         
+        const counts = {
+            students: 0,
+            teachers: 0,
+            classes: 0,
+            attendance: 0,
+            reports: 0,
+            makeup_lessons: 0
+        };
+        
         // Search students if type is not specified or is 'students'
         if (!type || type === 'students') {
             let studentQuery = `
@@ -108,15 +137,28 @@ router.get('/search', async (req, res) => {
                 LEFT JOIN classes c ON s.class_id = c.id 
                 WHERE s.active = true
             `;
+            let countQuery = `
+                SELECT COUNT(*) as total
+                FROM students s 
+                LEFT JOIN classes c ON s.class_id = c.id 
+                WHERE s.active = true
+            `;
             const studentParams = [];
             
             if (hasQuery) {
-                studentQuery += ` AND (LOWER(s.name) LIKE $1 OR LOWER(s.notes) LIKE $1 OR LOWER(c.name) LIKE $1)`;
+                const condition = ` AND (LOWER(s.name) LIKE $1 OR LOWER(COALESCE(s.notes, '')) LIKE $1 OR LOWER(COALESCE(c.name, '')) LIKE $1)`;
+                studentQuery += condition;
+                countQuery += condition;
                 studentParams.push(searchPattern);
             }
             
-            studentQuery += ' ORDER BY s.name LIMIT 50';
-            const studentsResult = await pool.query(studentQuery, studentParams);
+            // Get total count
+            const countResult = await pool.query(countQuery, studentParams);
+            counts.students = parseInt(countResult.rows[0].total);
+            
+            // Get paginated results
+            studentQuery += ` ORDER BY s.name LIMIT $${studentParams.length + 1} OFFSET $${studentParams.length + 2}`;
+            const studentsResult = await pool.query(studentQuery, [...studentParams, limitNum, offset]);
             results.students = studentsResult.rows;
         }
         
@@ -127,15 +169,27 @@ router.get('/search', async (req, res) => {
                 FROM users 
                 WHERE role = 'teacher'
             `;
+            let countQuery = `
+                SELECT COUNT(*) as total
+                FROM users 
+                WHERE role = 'teacher'
+            `;
             const teacherParams = [];
             
             if (hasQuery) {
-                teacherQuery += ` AND (LOWER(username) LIKE $1 OR LOWER(full_name) LIKE $1)`;
+                const condition = ` AND (LOWER(username) LIKE $1 OR LOWER(full_name) LIKE $1)`;
+                teacherQuery += condition;
+                countQuery += condition;
                 teacherParams.push(searchPattern);
             }
             
-            teacherQuery += ' ORDER BY full_name LIMIT 50';
-            const teachersResult = await pool.query(teacherQuery, teacherParams);
+            // Get total count
+            const countResult = await pool.query(countQuery, teacherParams);
+            counts.teachers = parseInt(countResult.rows[0].total);
+            
+            // Get paginated results
+            teacherQuery += ` ORDER BY full_name LIMIT $${teacherParams.length + 1} OFFSET $${teacherParams.length + 2}`;
+            const teachersResult = await pool.query(teacherQuery, [...teacherParams, limitNum, offset]);
             results.teachers = teachersResult.rows;
         }
         
@@ -147,15 +201,28 @@ router.get('/search', async (req, res) => {
                 LEFT JOIN users u ON c.teacher_id = u.id 
                 WHERE c.active = true
             `;
+            let countQuery = `
+                SELECT COUNT(*) as total
+                FROM classes c 
+                LEFT JOIN users u ON c.teacher_id = u.id 
+                WHERE c.active = true
+            `;
             const classParams = [];
             
             if (hasQuery) {
-                classQuery += ` AND (LOWER(c.name) LIKE $1 OR LOWER(c.schedule) LIKE $1 OR LOWER(u.full_name) LIKE $1)`;
+                const condition = ` AND (LOWER(c.name) LIKE $1 OR LOWER(COALESCE(c.schedule, '')) LIKE $1 OR LOWER(COALESCE(u.full_name, '')) LIKE $1)`;
+                classQuery += condition;
+                countQuery += condition;
                 classParams.push(searchPattern);
             }
             
-            classQuery += ' ORDER BY c.name LIMIT 50';
-            const classesResult = await pool.query(classQuery, classParams);
+            // Get total count
+            const countResult = await pool.query(countQuery, classParams);
+            counts.classes = parseInt(countResult.rows[0].total);
+            
+            // Get paginated results
+            classQuery += ` ORDER BY c.name LIMIT $${classParams.length + 1} OFFSET $${classParams.length + 2}`;
+            const classesResult = await pool.query(classQuery, [...classParams, limitNum, offset]);
             results.classes = classesResult.rows;
         }
         
@@ -168,28 +235,46 @@ router.get('/search', async (req, res) => {
                 LEFT JOIN classes c ON a.class_id = c.id 
                 WHERE 1=1
             `;
+            let countQuery = `
+                SELECT COUNT(*) as total
+                FROM attendance a 
+                LEFT JOIN students s ON a.student_id = s.id 
+                LEFT JOIN classes c ON a.class_id = c.id 
+                WHERE 1=1
+            `;
             const attendanceParams = [];
             let paramIndex = 1;
             
             if (hasQuery) {
-                attendanceQuery += ` AND (LOWER(s.name) LIKE $${paramIndex} OR LOWER(c.name) LIKE $${paramIndex})`;
+                const condition = ` AND (LOWER(COALESCE(s.name, '')) LIKE $${paramIndex} OR LOWER(COALESCE(c.name, '')) LIKE $${paramIndex})`;
+                attendanceQuery += condition;
+                countQuery += condition;
                 attendanceParams.push(searchPattern);
                 paramIndex++;
             }
             
             if (startDate) {
-                attendanceQuery += ` AND a.date >= $${paramIndex}`;
+                const condition = ` AND a.date >= $${paramIndex}`;
+                attendanceQuery += condition;
+                countQuery += condition;
                 attendanceParams.push(startDate);
                 paramIndex++;
             }
             if (endDate) {
-                attendanceQuery += ` AND a.date <= $${paramIndex}`;
+                const condition = ` AND a.date <= $${paramIndex}`;
+                attendanceQuery += condition;
+                countQuery += condition;
                 attendanceParams.push(endDate);
                 paramIndex++;
             }
             
-            attendanceQuery += ' ORDER BY a.date DESC LIMIT 100';
-            const attendanceResult = await pool.query(attendanceQuery, attendanceParams);
+            // Get total count
+            const countResult = await pool.query(countQuery, attendanceParams);
+            counts.attendance = parseInt(countResult.rows[0].total);
+            
+            // Get paginated results
+            attendanceQuery += ` ORDER BY a.date DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+            const attendanceResult = await pool.query(attendanceQuery, [...attendanceParams, limitNum, offset]);
             results.attendance = attendanceResult.rows;
         }
         
@@ -202,30 +287,48 @@ router.get('/search', async (req, res) => {
                 LEFT JOIN users u ON lr.teacher_id = u.id 
                 WHERE 1=1
             `;
+            let countQuery = `
+                SELECT COUNT(*) as total
+                FROM lesson_reports lr 
+                LEFT JOIN classes c ON lr.class_id = c.id 
+                LEFT JOIN users u ON lr.teacher_id = u.id 
+                WHERE 1=1
+            `;
             const reportsParams = [];
             let paramIndex = 1;
             
             if (hasQuery) {
-                reportsQuery += ` AND (LOWER(c.name) LIKE $${paramIndex} OR LOWER(u.full_name) LIKE $${paramIndex} 
-                    OR LOWER(lr.target_topic) LIKE $${paramIndex} OR LOWER(lr.vocabulary) LIKE $${paramIndex} 
-                    OR LOWER(lr.comments) LIKE $${paramIndex})`;
+                const condition = ` AND (LOWER(COALESCE(c.name, '')) LIKE $${paramIndex} OR LOWER(COALESCE(u.full_name, '')) LIKE $${paramIndex} 
+                    OR LOWER(COALESCE(lr.target_topic, '')) LIKE $${paramIndex} OR LOWER(COALESCE(lr.vocabulary, '')) LIKE $${paramIndex} 
+                    OR LOWER(COALESCE(lr.comments, '')) LIKE $${paramIndex})`;
+                reportsQuery += condition;
+                countQuery += condition;
                 reportsParams.push(searchPattern);
                 paramIndex++;
             }
             
             if (startDate) {
-                reportsQuery += ` AND lr.date >= $${paramIndex}`;
+                const condition = ` AND lr.date >= $${paramIndex}`;
+                reportsQuery += condition;
+                countQuery += condition;
                 reportsParams.push(startDate);
                 paramIndex++;
             }
             if (endDate) {
-                reportsQuery += ` AND lr.date <= $${paramIndex}`;
+                const condition = ` AND lr.date <= $${paramIndex}`;
+                reportsQuery += condition;
+                countQuery += condition;
                 reportsParams.push(endDate);
                 paramIndex++;
             }
             
-            reportsQuery += ' ORDER BY lr.date DESC LIMIT 50';
-            const reportsResult = await pool.query(reportsQuery, reportsParams);
+            // Get total count
+            const countResult = await pool.query(countQuery, reportsParams);
+            counts.reports = parseInt(countResult.rows[0].total);
+            
+            // Get paginated results
+            reportsQuery += ` ORDER BY lr.date DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+            const reportsResult = await pool.query(reportsQuery, [...reportsParams, limitNum, offset]);
             results.reports = reportsResult.rows;
         }
         
@@ -238,39 +341,66 @@ router.get('/search', async (req, res) => {
                 LEFT JOIN classes c ON ml.class_id = c.id 
                 WHERE 1=1
             `;
+            let countQuery = `
+                SELECT COUNT(*) as total
+                FROM makeup_lessons ml 
+                LEFT JOIN students s ON ml.student_id = s.id 
+                LEFT JOIN classes c ON ml.class_id = c.id 
+                WHERE 1=1
+            `;
             const makeupParams = [];
             let paramIndex = 1;
             
             if (hasQuery) {
-                makeupQuery += ` AND (LOWER(s.name) LIKE $${paramIndex} OR LOWER(c.name) LIKE $${paramIndex} OR LOWER(ml.reason) LIKE $${paramIndex})`;
+                const condition = ` AND (LOWER(COALESCE(s.name, '')) LIKE $${paramIndex} OR LOWER(COALESCE(c.name, '')) LIKE $${paramIndex} OR LOWER(COALESCE(ml.reason, '')) LIKE $${paramIndex})`;
+                makeupQuery += condition;
+                countQuery += condition;
                 makeupParams.push(searchPattern);
                 paramIndex++;
             }
             
             if (startDate) {
-                makeupQuery += ` AND ml.scheduled_date >= $${paramIndex}`;
+                const condition = ` AND ml.scheduled_date >= $${paramIndex}`;
+                makeupQuery += condition;
+                countQuery += condition;
                 makeupParams.push(startDate);
                 paramIndex++;
             }
             if (endDate) {
-                makeupQuery += ` AND ml.scheduled_date <= $${paramIndex}`;
+                const condition = ` AND ml.scheduled_date <= $${paramIndex}`;
+                makeupQuery += condition;
+                countQuery += condition;
                 makeupParams.push(endDate);
                 paramIndex++;
             }
             
-            makeupQuery += ' ORDER BY ml.scheduled_date DESC LIMIT 50';
-            const makeupResult = await pool.query(makeupQuery, makeupParams);
+            // Get total count
+            const countResult = await pool.query(countQuery, makeupParams);
+            counts.makeup_lessons = parseInt(countResult.rows[0].total);
+            
+            // Get paginated results
+            makeupQuery += ` ORDER BY ml.scheduled_date DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+            const makeupResult = await pool.query(makeupQuery, [...makeupParams, limitNum, offset]);
             results.makeup_lessons = makeupResult.rows;
         }
         
         // Calculate total results
         const totalResults = Object.values(results).reduce((sum, arr) => sum + arr.length, 0);
+        const totalCount = Object.values(counts).reduce((sum, count) => sum + count, 0);
+        const totalPages = Math.ceil(totalCount / limitNum);
         
         res.json({ 
             query,
             type: type || 'all',
             totalResults,
-            results 
+            results,
+            pagination: {
+                page: pageNum,
+                limit: limitNum,
+                total: totalCount,
+                totalPages: totalPages,
+                counts: counts
+            }
         });
     } catch (error) {
         console.error('Search error:', error);
