@@ -1971,6 +1971,57 @@ body {
         width: 100%;
         padding: 10px 0;
     }
+    
+    /* Mobile Dashboard Fixes */
+    .container {
+        padding: 1rem;
+        box-sizing: border-box;
+    }
+    
+    .dashboard-grid {
+        overflow-x: hidden;
+        box-sizing: border-box;
+    }
+    
+    .dashboard-card {
+        padding: 1rem;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    /* Fix Quick Actions overflow */
+    .quick-actions {
+        box-sizing: border-box;
+        width: 100%;
+    }
+    
+    .quick-actions .btn {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        white-space: normal;
+        word-wrap: break-word;
+        text-align: center;
+    }
+    
+    /* Fix Weekly Schedule overflow */
+    .weekly-schedule-container {
+        overflow-x: auto;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    /* Prevent page-level horizontal scroll */
+    body {
+        overflow-x: hidden;
+    }
+    
+    .page {
+        overflow-x: hidden;
+    }
 }
 
 /* ================================================
