@@ -202,75 +202,110 @@
             <div id="reports-page" class="page">
                 <h2>Teacher Lesson Reports</h2>
                 
-                <div class="controls">
-                    <div class="control-group">
-                        <label>Class:</label>
-                        <select id="reports-class-select" class="form-control"></select>
-                    </div>
-                    <div class="control-group">
-                        <label>Date:</label>
-                        <input type="date" id="report-date" class="form-control">
-                    </div>
-                    <button id="load-report-btn" class="btn btn-primary">Load Report</button>
-                    <button id="new-report-btn" class="btn btn-success">New Report</button>
+                <!-- Tab Navigation -->
+                <div class="tab-navigation" role="tablist" aria-label="Report view options">
+                    <button class="tab-btn active" data-tab="single-report" role="tab" aria-selected="true" aria-controls="single-report-tab">Single Report</button>
+                    <button class="tab-btn" data-tab="multi-class" role="tab" aria-selected="false" aria-controls="multi-class-tab">Multi-Class View</button>
                 </div>
+                
+                <!-- Single Report Tab -->
+                <div id="single-report-tab" class="tab-content active" role="tabpanel" aria-labelledby="single-report-tab">
+                    <div class="controls">
+                        <div class="control-group">
+                            <label>Class:</label>
+                            <select id="reports-class-select" class="form-control"></select>
+                        </div>
+                        <div class="control-group">
+                            <label>Date:</label>
+                            <input type="date" id="report-date" class="form-control">
+                        </div>
+                        <button id="load-report-btn" class="btn btn-primary">Load Report</button>
+                        <button id="new-report-btn" class="btn btn-success">New Report</button>
+                    </div>
 
-                <div id="report-form-container" style="display: none;">
-                    <form id="report-form" class="report-form">
-                        <input type="hidden" id="report-id">
-                        
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Date *</label>
-                                <input type="date" id="report-form-date" required class="form-control">
+                    <div id="report-form-container" style="display: none;">
+                        <form id="report-form" class="report-form">
+                            <input type="hidden" id="report-id">
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Date *</label>
+                                    <input type="date" id="report-form-date" required class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label>Teacher *</label>
+                                    <select id="report-teacher" required class="form-control"></select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Class *</label>
+                                    <select id="report-class" required class="form-control"></select>
+                                </div>
                             </div>
+
                             <div class="form-group">
-                                <label>Teacher *</label>
-                                <select id="report-teacher" required class="form-control"></select>
+                                <label>Target/Topic</label>
+                                <textarea id="report-target" rows="2" class="form-control"></textarea>
                             </div>
+
                             <div class="form-group">
-                                <label>Class *</label>
-                                <select id="report-class" required class="form-control"></select>
+                                <label>New Vocabulary/Phrases</label>
+                                <textarea id="report-vocabulary" rows="3" class="form-control"></textarea>
                             </div>
-                        </div>
 
-                        <div class="form-group">
-                            <label>Target/Topic</label>
-                            <textarea id="report-target" rows="2" class="form-control"></textarea>
-                        </div>
+                            <div class="form-group">
+                                <label>Mistakes (specific)</label>
+                                <textarea id="report-mistakes" rows="3" class="form-control"></textarea>
+                            </div>
 
-                        <div class="form-group">
-                            <label>New Vocabulary/Phrases</label>
-                            <textarea id="report-vocabulary" rows="3" class="form-control"></textarea>
-                        </div>
+                            <div class="form-group">
+                                <label>Strengths (specific)</label>
+                                <textarea id="report-strengths" rows="3" class="form-control"></textarea>
+                            </div>
 
-                        <div class="form-group">
-                            <label>Mistakes (specific)</label>
-                            <textarea id="report-mistakes" rows="3" class="form-control"></textarea>
-                        </div>
+                            <div class="form-group">
+                                <label>Comments/Homework</label>
+                                <textarea id="report-comments" rows="3" class="form-control"></textarea>
+                            </div>
 
-                        <div class="form-group">
-                            <label>Strengths (specific)</label>
-                            <textarea id="report-strengths" rows="3" class="form-control"></textarea>
-                        </div>
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary">Save Report</button>
+                                <button type="button" id="cancel-report-btn" class="btn btn-secondary">Cancel</button>
+                                <button type="button" id="delete-report-btn" class="btn btn-danger" style="display: none;">Delete</button>
+                                <button type="button" id="export-report-pdf-btn" class="btn btn-secondary" style="display: none;">Export PDF</button>
+                            </div>
+                        </form>
+                    </div>
 
-                        <div class="form-group">
-                            <label>Comments/Homework</label>
-                            <textarea id="report-comments" rows="3" class="form-control"></textarea>
-                        </div>
-
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn-primary">Save Report</button>
-                            <button type="button" id="cancel-report-btn" class="btn btn-secondary">Cancel</button>
-                            <button type="button" id="delete-report-btn" class="btn btn-danger" style="display: none;">Delete</button>
-                            <button type="button" id="export-report-pdf-btn" class="btn btn-secondary" style="display: none;">Export PDF</button>
-                        </div>
-                    </form>
+                    <div id="reports-list-container">
+                        <h3>Recent Reports</h3>
+                        <div id="reports-list"></div>
+                    </div>
                 </div>
-
-                <div id="reports-list-container">
-                    <h3>Recent Reports</h3>
-                    <div id="reports-list"></div>
+                
+                <!-- Multi-Class View Tab -->
+                <div id="multi-class-tab" class="tab-content" role="tabpanel" aria-labelledby="multi-class-tab">
+                    <div class="controls">
+                        <div class="control-group">
+                            <label>Select Classes:</label>
+                            <div id="multi-class-selector" class="multi-select-container">
+                                <!-- Checkboxes will be populated dynamically -->
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label>Start Date:</label>
+                            <input type="date" id="multi-start-date" class="form-control">
+                        </div>
+                        <div class="control-group">
+                            <label>End Date:</label>
+                            <input type="date" id="multi-end-date" class="form-control">
+                        </div>
+                        <button id="load-multi-reports-btn" class="btn btn-primary">Load Reports</button>
+                        <button id="export-multi-pdf-btn" class="btn btn-success" style="display: none;">📄 Export All as PDF</button>
+                    </div>
+                    
+                    <div id="multi-class-grid" class="multi-class-grid">
+                        <p class="info-text">Select classes and date range, then click "Load Reports"</p>
+                    </div>
                 </div>
             </div>
 
