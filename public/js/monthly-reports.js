@@ -296,32 +296,80 @@ function populateWeekFields(weeks) {
         weekRow.className = 'mr-week-row';
         weekRow.dataset.week = week.week_number;
         
-        const removeButton = week.week_number > 1 ? 
-            `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${week.week_number})">Remove</button>` : '';
+        // Create header
+        const header = document.createElement('h5');
+        header.textContent = `Week ${week.week_number} `;
         
-        weekRow.innerHTML = `
-            <h5>Week ${week.week_number} ${removeButton}</h5>
-            <div class="form-group">
-                <label>Date</label>
-                <input type="date" class="form-control mr-week-date" data-week="${week.week_number}" value="${week.lesson_date ? week.lesson_date.split('T')[0] : ''}">
-            </div>
-            <div class="form-group">
-                <label>Target (目標)</label>
-                <textarea class="form-control mr-week-target" rows="2" data-week="${week.week_number}">${week.target || ''}</textarea>
-            </div>
-            <div class="form-group">
-                <label>Vocabulary (単語)</label>
-                <textarea class="form-control mr-week-vocabulary" rows="2" data-week="${week.week_number}">${week.vocabulary || ''}</textarea>
-            </div>
-            <div class="form-group">
-                <label>Phrase (文)</label>
-                <textarea class="form-control mr-week-phrase" rows="2" data-week="${week.week_number}">${week.phrase || ''}</textarea>
-            </div>
-            <div class="form-group">
-                <label>Others (その他)</label>
-                <textarea class="form-control mr-week-others" rows="2" data-week="${week.week_number}">${week.others || ''}</textarea>
-            </div>
-        `;
+        if (week.week_number > 1) {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', () => removeWeekRow(week.week_number));
+            header.appendChild(removeBtn);
+        }
+        
+        weekRow.appendChild(header);
+        
+        // Create date field
+        const dateGroup = document.createElement('div');
+        dateGroup.className = 'form-group';
+        dateGroup.innerHTML = '<label>Date</label>';
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.className = 'form-control mr-week-date';
+        dateInput.dataset.week = week.week_number;
+        dateInput.value = week.lesson_date ? week.lesson_date.split('T')[0] : '';
+        dateGroup.appendChild(dateInput);
+        weekRow.appendChild(dateGroup);
+        
+        // Create target field
+        const targetGroup = document.createElement('div');
+        targetGroup.className = 'form-group';
+        targetGroup.innerHTML = '<label>Target (目標)</label>';
+        const targetTextarea = document.createElement('textarea');
+        targetTextarea.className = 'form-control mr-week-target';
+        targetTextarea.rows = 2;
+        targetTextarea.dataset.week = week.week_number;
+        targetTextarea.value = week.target || '';
+        targetGroup.appendChild(targetTextarea);
+        weekRow.appendChild(targetGroup);
+        
+        // Create vocabulary field
+        const vocabGroup = document.createElement('div');
+        vocabGroup.className = 'form-group';
+        vocabGroup.innerHTML = '<label>Vocabulary (単語)</label>';
+        const vocabTextarea = document.createElement('textarea');
+        vocabTextarea.className = 'form-control mr-week-vocabulary';
+        vocabTextarea.rows = 2;
+        vocabTextarea.dataset.week = week.week_number;
+        vocabTextarea.value = week.vocabulary || '';
+        vocabGroup.appendChild(vocabTextarea);
+        weekRow.appendChild(vocabGroup);
+        
+        // Create phrase field
+        const phraseGroup = document.createElement('div');
+        phraseGroup.className = 'form-group';
+        phraseGroup.innerHTML = '<label>Phrase (文)</label>';
+        const phraseTextarea = document.createElement('textarea');
+        phraseTextarea.className = 'form-control mr-week-phrase';
+        phraseTextarea.rows = 2;
+        phraseTextarea.dataset.week = week.week_number;
+        phraseTextarea.value = week.phrase || '';
+        phraseGroup.appendChild(phraseTextarea);
+        weekRow.appendChild(phraseGroup);
+        
+        // Create others field
+        const othersGroup = document.createElement('div');
+        othersGroup.className = 'form-group';
+        othersGroup.innerHTML = '<label>Others (その他)</label>';
+        const othersTextarea = document.createElement('textarea');
+        othersTextarea.className = 'form-control mr-week-others';
+        othersTextarea.rows = 2;
+        othersTextarea.dataset.week = week.week_number;
+        othersTextarea.value = week.others || '';
+        othersGroup.appendChild(othersTextarea);
+        weekRow.appendChild(othersGroup);
         
         container.appendChild(weekRow);
     });

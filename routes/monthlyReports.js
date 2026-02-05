@@ -459,7 +459,9 @@ router.post('/preview-generate', async (req, res) => {
             lesson_date: lesson.date,
             target: lesson.target_topic || '',
             vocabulary: lesson.vocabulary || '',
-            phrase: lesson.mistakes || '', // Use mistakes field for phrases
+            // Use 'mistakes' field for 'phrase' as it contains common errors and practice phrases
+            // that are relevant for the monthly report's phrase section
+            phrase: lesson.mistakes || '',
             others: lesson.comments || '',
             lesson_report_id: lesson.id
         }));
@@ -551,7 +553,9 @@ router.post('/auto-generate', async (req, res) => {
                 lesson.date,
                 lesson.target_topic || '',
                 lesson.vocabulary || '',
-                lesson.mistakes || '', // Use mistakes field for phrases
+                // Use 'mistakes' field for 'phrase' as it contains common errors and practice phrases
+                // that are relevant for the monthly report's phrase section
+                lesson.mistakes || '',
                 lesson.comments || '',
                 lesson.id
             ]);
