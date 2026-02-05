@@ -4111,8 +4111,16 @@ async function cancelMakeupLesson(id) {
 // Update loadDashboard to include makeup lessons
 const originalLoadDashboard = loadDashboard;
 loadDashboard = async function() {
-    await originalLoadDashboard();
-    await loadMakeupLessons();
+    try {
+        await originalLoadDashboard();
+    } catch (err) {
+        console.error('Dashboard load error:', err);
+    }
+    try {
+        await loadMakeupLessons();
+    } catch (err) {
+        console.error('Makeup lessons load error:', err);
+    }
 };
 
 // Update navigateToPage to handle new pages
@@ -4299,6 +4307,13 @@ async function initializeMonthlyReportsPage() {
     // Set up event listeners
     document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
     document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
+
+    // Auto-load reports on page open
+    try {
+        await loadMonthlyReports();
+    } catch (err) {
+        console.error('Auto-load monthly reports failed:', err);
+    }
 }
 
 // Load monthly reports with filters
