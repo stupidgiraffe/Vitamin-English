@@ -4300,8 +4300,13 @@ async function initializeMonthlyReportsPage() {
     document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
     document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
     
-    // Auto-load reports on page open
-    await loadMonthlyReports();
+    // Load existing reports (gracefully handle errors)
+    try {
+        await loadMonthlyReports();
+    } catch (error) {
+        // Silently fail on initial load - user can click filter if needed
+        console.log('Monthly reports not loaded on init:', error);
+    }
 }
 
 // Load monthly reports with filters

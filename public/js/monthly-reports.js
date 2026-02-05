@@ -2,270 +2,95 @@
 
 // Show new monthly report modal
 async function showNewMonthlyReportModal() {
-    // Calculate default dates: first day of current month and today
     const today = new Date();
-    const defaultStartDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
-    const defaultEndDate = today.toISOString().split('T')[0];
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const lastDay = today.toISOString().split('T')[0];
     
-    let classOptions = '<option value="">Select Class</option>';
+    let opts = '<option value="">Select Class *</option>';
     classes.forEach(c => {
-        classOptions += `<option value="${c.id}">${c.name}</option>`;
+        opts += `<option value="${c.id}">${c.name}</option>`;
     });
     
-    const content = `
+    const html = `
         <form id="monthly-report-form">
             <div class="form-group">
                 <label>Class *</label>
-                <select id="mr-class" class="form-control" required>${classOptions}</select>
+                <select id="mr-class" class="form-control" required>${opts}</select>
             </div>
             <div class="form-group">
                 <label>Start Date *</label>
-                <input type="date" id="mr-start-date" class="form-control" required value="${defaultStartDate}">
+                <input type="date" id="mr-start-date" class="form-control" required value="${firstDay}">
             </div>
             <div class="form-group">
                 <label>End Date *</label>
-                <input type="date" id="mr-end-date" class="form-control" required value="${defaultEndDate}">
+                <input type="date" id="mr-end-date" class="form-control" required value="${lastDay}">
             </div>
             <div class="form-group">
-                <button type="button" class="btn btn-primary btn-lg btn-block" id="mr-load-lessons-btn">
-                    <i class="fas fa-sync"></i> Load Lessons from Date Range
-                </button>
-                <small class="form-text text-muted">Select a class and date range, then click here to load lesson data. You can review and edit before saving.</small>
+                <label>Monthly Theme (今月のテーマ)</label>
+                <textarea id="mr-theme" class="form-control" rows="3" placeholder="Optional: Add a theme or summary..."></textarea>
             </div>
-            <hr>
-            <div id="mr-lessons-section" style="display:none;">
-                <h4>Lessons</h4>
-                <div id="mr-lessons-container"></div>
-                <hr>
-                <div class="form-group">
-                    <label>Monthly Theme (今月のテーマ)</label>
-                    <textarea id="mr-theme" class="form-control" rows="4" placeholder="Describe the monthly theme and overall progress..."></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Status</label>
-                    <select id="mr-status" class="form-control">
-                        <option value="draft">Draft</option>
-                        <option value="published">Published</option>
-                    </select>
-                </div>
-                <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Create Report</button>
-                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select id="mr-status" class="form-control">
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                </select>
+            </div>
+            <p class="info-text"><i class="fas fa-info-circle"></i> This will automatically include all teacher comment sheets between the selected dates.</p>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Create Report</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
             </div>
         </form>
     `;
     
-    showModal('Create Monthly Report', content);
+    showModal('Create Monthly Report', html);
     
-    // Add event listeners
     document.getElementById('monthly-report-form').addEventListener('submit', handleCreateMonthlyReport);
-    document.getElementById('mr-load-lessons-btn').addEventListener('click', loadLessonsForReport);
 }
 
 // Load lessons for the report based on class and date range
-async function loadLessonsForReport() {
-    const classId = document.getElementById('mr-class').value;
-    const startDate = document.getElementById('mr-start-date').value;
-    const endDate = document.getElementById('mr-end-date').value;
-    
-    if (!classId) {
-        Toast.error('Please select a class first');
-        return;
-    }
-    
-    if (!startDate || !endDate) {
-        Toast.error('Please select start and end dates');
-        return;
-    }
-    
-    try {
-        const response = await api('/monthly-reports/preview-generate', {
-            method: 'POST',
-            body: JSON.stringify({
-                class_id: classId,
-                start_date: startDate,
-                end_date: endDate
-            })
-        });
-        
-        if (response.weeks.length === 0) {
-            Toast.warning('No lesson reports found for this period. You can still create the report and add lessons manually later.');
-            document.getElementById('mr-lessons-section').style.display = 'block';
-            document.getElementById('mr-lessons-container').innerHTML = '<p class="info-text">No lessons found. The report will be created with empty lesson data.</p>';
-            return;
-        }
-        
-        // Populate the lessons
-        populateLessonFields(response.weeks);
-        document.getElementById('mr-lessons-section').style.display = 'block';
-        Toast.success(`Found ${response.lessonCount} lesson${response.lessonCount > 1 ? 's' : ''} - data loaded successfully!`);
-        
-    } catch (error) {
-        console.error('Error loading lessons:', error);
-        Toast.error(error.message || 'Failed to load lessons');
-    }
-}
-
-// Populate lesson fields with data
-function populateLessonFields(weeks) {
-    const container = document.getElementById('mr-lessons-container');
-    container.innerHTML = ''; // Clear existing
-    
-    weeks.forEach((week, index) => {
-        // Create lesson row with populated data
-        const lessonRow = document.createElement('div');
-        lessonRow.className = 'mr-lesson-row';
-        lessonRow.dataset.lesson = week.week_number;
-        
-        // Create header
-        const header = document.createElement('h5');
-        header.textContent = `Lesson ${week.week_number}`;
-        lessonRow.appendChild(header);
-        
-        // Create date field
-        const dateGroup = document.createElement('div');
-        dateGroup.className = 'form-group';
-        const dateLabel = document.createElement('label');
-        dateLabel.textContent = 'Date';
-        dateGroup.appendChild(dateLabel);
-        const dateInput = document.createElement('input');
-        dateInput.type = 'date';
-        dateInput.className = 'form-control mr-lesson-date';
-        dateInput.dataset.lesson = week.week_number;
-        dateInput.value = week.lesson_date ? week.lesson_date.split('T')[0] : '';
-        dateGroup.appendChild(dateInput);
-        lessonRow.appendChild(dateGroup);
-        
-        // Create target field
-        const targetGroup = document.createElement('div');
-        targetGroup.className = 'form-group';
-        const targetLabel = document.createElement('label');
-        targetLabel.textContent = 'Target (目標)';
-        targetGroup.appendChild(targetLabel);
-        const targetTextarea = document.createElement('textarea');
-        targetTextarea.className = 'form-control mr-lesson-target';
-        targetTextarea.rows = 2;
-        targetTextarea.dataset.lesson = week.week_number;
-        targetTextarea.value = week.target || '';
-        targetGroup.appendChild(targetTextarea);
-        lessonRow.appendChild(targetGroup);
-        
-        // Create vocabulary field
-        const vocabGroup = document.createElement('div');
-        vocabGroup.className = 'form-group';
-        const vocabLabel = document.createElement('label');
-        vocabLabel.textContent = 'Vocabulary (単語)';
-        vocabGroup.appendChild(vocabLabel);
-        const vocabTextarea = document.createElement('textarea');
-        vocabTextarea.className = 'form-control mr-lesson-vocabulary';
-        vocabTextarea.rows = 2;
-        vocabTextarea.dataset.lesson = week.week_number;
-        vocabTextarea.value = week.vocabulary || '';
-        vocabGroup.appendChild(vocabTextarea);
-        lessonRow.appendChild(vocabGroup);
-        
-        // Create phrase field
-        const phraseGroup = document.createElement('div');
-        phraseGroup.className = 'form-group';
-        const phraseLabel = document.createElement('label');
-        phraseLabel.textContent = 'Phrase (文)';
-        phraseGroup.appendChild(phraseLabel);
-        const phraseTextarea = document.createElement('textarea');
-        phraseTextarea.className = 'form-control mr-lesson-phrase';
-        phraseTextarea.rows = 2;
-        phraseTextarea.dataset.lesson = week.week_number;
-        phraseTextarea.value = week.phrase || '';
-        phraseGroup.appendChild(phraseTextarea);
-        lessonRow.appendChild(phraseGroup);
-        
-        // Create others field
-        const othersGroup = document.createElement('div');
-        othersGroup.className = 'form-group';
-        const othersLabel = document.createElement('label');
-        othersLabel.textContent = 'Others (その他)';
-        othersGroup.appendChild(othersLabel);
-        const othersTextarea = document.createElement('textarea');
-        othersTextarea.className = 'form-control mr-lesson-others';
-        othersTextarea.rows = 2;
-        othersTextarea.dataset.lesson = week.week_number;
-        othersTextarea.value = week.others || '';
-        othersGroup.appendChild(othersTextarea);
-        lessonRow.appendChild(othersGroup);
-        
-        container.appendChild(lessonRow);
-    });
-}
 
 // Handle create monthly report
 async function handleCreateMonthlyReport(e) {
     e.preventDefault();
     
-    const classId = document.getElementById('mr-class').value;
-    const startDate = document.getElementById('mr-start-date').value;
-    const endDate = document.getElementById('mr-end-date').value;
-    const theme = document.getElementById('mr-theme').value;
-    const status = document.getElementById('mr-status').value;
+    const cid = document.getElementById('mr-class').value;
+    const sd = document.getElementById('mr-start-date').value;
+    const ed = document.getElementById('mr-end-date').value;
+    const thm = document.getElementById('mr-theme').value;
+    const sts = document.getElementById('mr-status').value;
     
-    if (!startDate || !endDate) {
+    if (!sd || !ed) {
         Toast.error('Please select start and end dates');
         return;
     }
     
-    // Calculate year and month from start date for backend compatibility
-    const startDateObj = new Date(startDate);
-    
-    // Validate the date is valid
-    if (isNaN(startDateObj.getTime())) {
+    const dt = new Date(sd);
+    if (isNaN(dt.getTime())) {
         Toast.error('Invalid start date');
         return;
     }
     
-    const year = startDateObj.getFullYear();
-    const month = startDateObj.getMonth() + 1;
-    
-    // Collect lesson data
-    const weeks = [];
-    const lessonRows = document.querySelectorAll('.mr-lesson-row');
-    lessonRows.forEach((row, index) => {
-        const lessonNumber = parseInt(row.dataset.lesson);
-        const date = row.querySelector('.mr-lesson-date').value;
-        const target = row.querySelector('.mr-lesson-target').value;
-        const vocabulary = row.querySelector('.mr-lesson-vocabulary').value;
-        const phrase = row.querySelector('.mr-lesson-phrase').value;
-        const others = row.querySelector('.mr-lesson-others').value;
-        
-        weeks.push({
-            week_number: lessonNumber,
-            lesson_date: date || null,
-            target: target,
-            vocabulary: vocabulary,
-            phrase: phrase,
-            others: others
-        });
-    });
-    
     try {
-        const response = await api('/monthly-reports', {
+        // Use auto-generate endpoint to create report with all teacher comment sheets
+        const result = await api('/monthly-reports/auto-generate', {
             method: 'POST',
             body: JSON.stringify({
-                class_id: classId,
-                year: year,
-                month: month,
-                start_date: startDate,
-                end_date: endDate,
-                monthly_theme: theme,
-                status: status,
-                weeks: weeks
+                class_id: cid,
+                start_date: sd,
+                end_date: ed,
+                monthly_theme: thm,
+                status: sts
             })
         });
         
         Toast.success('Monthly report created successfully!');
         closeModal();
         loadMonthlyReports();
-    } catch (error) {
-        console.error('Error creating monthly report:', error);
-        Toast.error(error.message || 'Failed to create monthly report');
+    } catch (err) {
+        console.error('Error creating monthly report:', err);
+        Toast.error(err.message || 'Failed to create monthly report');
     }
 }
 

@@ -542,7 +542,7 @@ router.post('/auto-generate', async (req, res) => {
     const client = await pool.connect();
     
     try {
-        const { class_id, start_date, end_date, year, month } = req.body;
+        const { class_id, start_date, end_date, year, month, monthly_theme, status } = req.body;
         
         if (!class_id) {
             return res.status(400).json({ 
@@ -605,12 +605,12 @@ router.post('/auto-generate', async (req, res) => {
             });
         }
         
-        // Create monthly report
+        // Create monthly report with theme and status
         const reportResult = await client.query(`
             INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
-        `, [class_id, reportYear, reportMonth, startDate, endDate, '', 'draft', req.session.userId]);
+        `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
         
         const reportId = reportResult.rows[0].id;
         
