@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS attendance (
     FOREIGN KEY (class_id) REFERENCES classes(id)
 );
 
--- Lesson Reports table
-CREATE TABLE IF NOT EXISTS lesson_reports (
+-- Teacher Comment Sheets table (renamed from lesson_reports per migration 005)
+CREATE TABLE IF NOT EXISTS teacher_comment_sheets (
     id SERIAL PRIMARY KEY,
     class_id INTEGER NOT NULL,
     teacher_id INTEGER NOT NULL,
@@ -75,8 +75,8 @@ CREATE TABLE IF NOT EXISTS lesson_reports (
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
 CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_class ON attendance(class_id);
-CREATE INDEX IF NOT EXISTS idx_reports_date ON lesson_reports(date);
-CREATE INDEX IF NOT EXISTS idx_reports_class ON lesson_reports(class_id);
+CREATE INDEX IF NOT EXISTS idx_teacher_comment_sheets_date ON teacher_comment_sheets(date);
+CREATE INDEX IF NOT EXISTS idx_teacher_comment_sheets_class ON teacher_comment_sheets(class_id);
 CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
 
 -- Make-up lessons table
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS pdf_history (
     type VARCHAR(50) NOT NULL,
     student_id INTEGER REFERENCES students(id),
     class_id INTEGER REFERENCES classes(id),
-    report_id INTEGER REFERENCES lesson_reports(id),
+    report_id INTEGER REFERENCES teacher_comment_sheets(id),
     r2_key VARCHAR(500) NOT NULL,
     r2_url TEXT NOT NULL,
     file_size INTEGER,
