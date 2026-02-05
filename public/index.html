@@ -72,7 +72,7 @@
             <div class="nav-menu">
                 <button class="nav-item active" data-page="dashboard" data-i18n="nav.dashboard">Dashboard</button>
                 <button class="nav-item" data-page="attendance" data-i18n="nav.attendance">Attendance</button>
-                <button class="nav-item" data-page="reports" data-i18n="nav.reports">Lesson Reports</button>
+                <button class="nav-item" data-page="reports" data-i18n="nav.reports">Teacher Comment Sheets</button>
                 <button class="nav-item" data-page="monthly-reports" data-i18n="nav.monthlyReports">Monthly Reports</button>
                 <button class="nav-item" data-page="students-profile" data-i18n="nav.students">Students</button>
                 <button class="nav-item" data-page="makeup" data-i18n="nav.makeup">Make-up Lessons</button>
@@ -101,7 +101,7 @@
                         <h3>⚡ Quick Actions</h3>
                         <div class="quick-actions">
                             <button class="btn btn-primary" onclick="navigateToPage('attendance')">📊 Mark Attendance</button>
-                            <button class="btn btn-primary" onclick="navigateToPage('reports')">📝 Add Lesson Report</button>
+                            <button class="btn btn-primary" onclick="navigateToPage('reports')">📝 Add Teacher Comment Sheet</button>
                             <button class="btn btn-primary" onclick="navigateToPage('admin')">⚙️ Manage Data</button>
                         </div>
                     </div>
@@ -201,9 +201,9 @@
                 </div>
             </div>
 
-            <!-- Lesson Reports Page -->
+            <!-- Teacher Comment Sheets Page -->
             <div id="reports-page" class="page">
-                <h2>Teacher Lesson Reports</h2>
+                <h2>Teacher Comment Sheets</h2>
                 
                 <!-- Tab Navigation -->
                 <div class="tab-navigation" role="tablist" aria-label="Report view options">
@@ -452,7 +452,7 @@
                             <option value="students">Students</option>
                             <option value="classes">Classes</option>
                             <option value="attendance">Attendance</option>
-                            <option value="lesson_reports">Lesson Reports</option>
+                            <option value="teacher_comment_sheets">Teacher Comment Sheets</option>
                             <option value="makeup_lessons">Make-up Lessons</option>
                             <option value="users">Users</option>
                         </select>

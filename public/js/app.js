@@ -2832,6 +2832,13 @@ function renderCleanTable(data, type, options = {}) {
                 date: formatDisplayDate
             }
         },
+        teacher_comment_sheets: {
+            columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
+            headers: ['Date', 'Class', 'Teacher', 'Topic'],
+            formatters: {
+                date: formatDisplayDate
+            }
+        },
         reports: {
             columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
             headers: ['Date', 'Class', 'Teacher', 'Topic'],
@@ -3086,7 +3093,7 @@ async function loadDatabaseTable() {
             return;
         }
         
-        const hasActions = tableName === 'lesson_reports';
+        const hasActions = tableName === 'lesson_reports' || tableName === 'teacher_comment_sheets';
         
         // Use clean table rendering with optional actions
         let html = renderCleanTable(result.data, tableName, { includeActions: hasActions });
