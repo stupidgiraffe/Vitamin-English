@@ -474,7 +474,8 @@ router.post('/auto-generate', async (req, res) => {
         const reportId = reportResult.rows[0].id;
         
         // Create weekly entries from lesson reports
-        lessons.forEach(async (lesson, index) => {
+        for (let index = 0; index < lessons.length; index++) {
+            const lesson = lessons[index];
             await client.query(`
                 INSERT INTO monthly_report_weeks 
                 (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, lesson_report_id)
@@ -489,7 +490,7 @@ router.post('/auto-generate', async (req, res) => {
                 lesson.comments || '',
                 lesson.id
             ]);
-        });
+        }
         
         await client.query('COMMIT');
         
