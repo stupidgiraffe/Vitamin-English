@@ -495,6 +495,7 @@ router.post('/auto-generate', async (req, res) => {
         }
         
         // Calculate date range based on inputs
+        // Precedence: start_date/end_date takes priority over year/month if both are provided
         let startDate, endDate, reportYear, reportMonth;
         if (start_date && end_date) {
             // Custom range

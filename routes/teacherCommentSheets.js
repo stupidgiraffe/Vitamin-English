@@ -5,7 +5,7 @@ const pool = require('../database/init');
 // Get teacher comment sheets
 router.get('/', async (req, res) => {
     try {
-        const { classId, teacherId, startDate, endDate} = req.query;
+        const { classId, teacherId, startDate, endDate } = req.query;
         
         let query = `
             SELECT r.*, c.name as class_name, u.full_name as teacher_name

@@ -55,8 +55,9 @@ function wrapText(text, maxLength) {
     let currentLine = '';
     
     for (const word of words) {
-        if ((currentLine + ' ' + word).length <= maxLength) {
-            currentLine = currentLine ? currentLine + ' ' + word : word;
+        const testLine = currentLine ? currentLine + ' ' + word : word;
+        if (testLine.length <= maxLength) {
+            currentLine = testLine;
         } else {
             if (currentLine) lines.push(currentLine);
             currentLine = word.length > maxLength ? word.substring(0, maxLength - 3) + '...' : word;
