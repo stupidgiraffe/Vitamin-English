@@ -2,25 +2,15 @@
 
 // Show new monthly report modal
 async function showNewMonthlyReportModal() {
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
+    // Calculate default dates: first day of current month and today
+    const today = new Date();
+    const defaultStartDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const defaultEndDate = today.toISOString().split('T')[0];
     
     let classOptions = '<option value="">Select Class</option>';
     classes.forEach(c => {
         classOptions += `<option value="${c.id}">${c.name}</option>`;
     });
-    
-    let yearOptions = '';
-    for (let i = 0; i < 3; i++) {
-        const year = currentYear - i;
-        yearOptions += `<option value="${year}" ${year === currentYear ? 'selected' : ''}>${year}</option>`;
-    }
-    
-    let monthOptions = '';
-    for (let i = 1; i <= 12; i++) {
-        monthOptions += `<option value="${i}" ${i === currentMonth ? 'selected' : ''}>${monthNames[i - 1]}</option>`;
-    }
     
     const content = `
         <form id="monthly-report-form">
@@ -29,40 +19,12 @@ async function showNewMonthlyReportModal() {
                 <select id="mr-class" class="form-control" required>${classOptions}</select>
             </div>
             <div class="form-group">
-                <label>Report Period Type</label>
-                <select id="mr-period-type" class="form-control">
-                    <option value="monthly">Monthly</option>
-                    <option value="weekly">Weekly (7 days)</option>
-                    <option value="custom">Custom Date Range</option>
-                </select>
+                <label>Start Date *</label>
+                <input type="date" id="mr-start-date" class="form-control" required value="${defaultStartDate}">
             </div>
-            <div id="mr-monthly-selector" class="form-row">
-                <div class="form-group">
-                    <label>Year *</label>
-                    <select id="mr-year" class="form-control" required>${yearOptions}</select>
-                </div>
-                <div class="form-group">
-                    <label>Month *</label>
-                    <select id="mr-month" class="form-control" required>${monthOptions}</select>
-                </div>
-            </div>
-            <div id="mr-weekly-selector" style="display:none">
-                <div class="form-group">
-                    <label>Week Starting Date *</label>
-                    <input type="date" id="mr-week-start" class="form-control">
-                </div>
-            </div>
-            <div id="mr-custom-selector" style="display:none">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Start Date *</label>
-                        <input type="date" id="mr-start-date" class="form-control">
-                    </div>
-                    <div class="form-group">
-                        <label>End Date *</label>
-                        <input type="date" id="mr-end-date" class="form-control">
-                    </div>
-                </div>
+            <div class="form-group">
+                <label>End Date *</label>
+                <input type="date" id="mr-end-date" class="form-control" required value="${defaultEndDate}">
             </div>
             <div class="form-group">
                 <button type="button" class="btn btn-primary btn-lg btn-block" id="mr-auto-generate-btn">
@@ -123,33 +85,10 @@ async function showNewMonthlyReportModal() {
     document.getElementById('monthly-report-form').addEventListener('submit', handleCreateMonthlyReport);
     document.getElementById('mr-add-week-btn').addEventListener('click', addWeekRow);
     document.getElementById('mr-auto-generate-btn').addEventListener('click', autoGenerateFromLessonReports);
-    document.getElementById('mr-period-type').addEventListener('change', handlePeriodTypeChange);
     
     // Add 3 more weeks by default (total 4 weeks)
     for (let i = 2; i <= 4; i++) {
         addWeekRow();
-    }
-}
-
-// Handle period type change
-function handlePeriodTypeChange() {
-    const periodType = document.getElementById('mr-period-type').value;
-    const monthlySelector = document.getElementById('mr-monthly-selector');
-    const weeklySelector = document.getElementById('mr-weekly-selector');
-    const customSelector = document.getElementById('mr-custom-selector');
-    
-    // Hide all selectors
-    monthlySelector.style.display = 'none';
-    weeklySelector.style.display = 'none';
-    customSelector.style.display = 'none';
-    
-    // Show appropriate selector
-    if (periodType === 'monthly') {
-        monthlySelector.style.display = 'flex';
-    } else if (periodType === 'weekly') {
-        weeklySelector.style.display = 'block';
-    } else if (periodType === 'custom') {
-        customSelector.style.display = 'block';
     }
 }
 
@@ -216,58 +155,27 @@ function removeWeekRow(weekNumber) {
 // Auto-generate from lesson reports
 async function autoGenerateFromLessonReports() {
     const classId = document.getElementById('mr-class').value;
-    const periodType = document.getElementById('mr-period-type').value;
+    const startDate = document.getElementById('mr-start-date').value;
+    const endDate = document.getElementById('mr-end-date').value;
     
     if (!classId) {
         Toast.error('Please select a class first');
         return;
     }
     
-    let params = { class_id: classId };
-    
-    // Build params based on period type
-    if (periodType === 'monthly') {
-        const year = document.getElementById('mr-year').value;
-        const month = document.getElementById('mr-month').value;
-        
-        if (!year || !month) {
-            Toast.error('Please select year and month');
-            return;
-        }
-        
-        params.year = year;
-        params.month = month;
-    } else if (periodType === 'weekly') {
-        const weekStart = document.getElementById('mr-week-start').value;
-        
-        if (!weekStart) {
-            Toast.error('Please select week starting date');
-            return;
-        }
-        
-        params.start_date = weekStart;
-        // Add 6 days to get week end
-        const startDate = new Date(weekStart);
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 6);
-        params.end_date = endDate.toISOString().split('T')[0];
-    } else if (periodType === 'custom') {
-        const startDate = document.getElementById('mr-start-date').value;
-        const endDate = document.getElementById('mr-end-date').value;
-        
-        if (!startDate || !endDate) {
-            Toast.error('Please select start and end dates');
-            return;
-        }
-        
-        params.start_date = startDate;
-        params.end_date = endDate;
+    if (!startDate || !endDate) {
+        Toast.error('Please select start and end dates');
+        return;
     }
     
     try {
         const response = await api('/monthly-reports/preview-generate', {
             method: 'POST',
-            body: JSON.stringify(params)
+            body: JSON.stringify({
+                class_id: classId,
+                start_date: startDate,
+                end_date: endDate
+            })
         });
         
         if (response.weeks.length === 0) {
@@ -390,10 +298,20 @@ async function handleCreateMonthlyReport(e) {
     e.preventDefault();
     
     const classId = document.getElementById('mr-class').value;
-    const year = parseInt(document.getElementById('mr-year').value);
-    const month = parseInt(document.getElementById('mr-month').value);
+    const startDate = document.getElementById('mr-start-date').value;
+    const endDate = document.getElementById('mr-end-date').value;
     const theme = document.getElementById('mr-theme').value;
     const status = document.getElementById('mr-status').value;
+    
+    if (!startDate || !endDate) {
+        Toast.error('Please select start and end dates');
+        return;
+    }
+    
+    // Calculate year and month from start date for backend compatibility
+    const startDateObj = new Date(startDate);
+    const year = startDateObj.getFullYear();
+    const month = startDateObj.getMonth() + 1;
     
     // Collect week data
     const weeks = [];
@@ -423,6 +341,8 @@ async function handleCreateMonthlyReport(e) {
                 class_id: classId,
                 year: year,
                 month: month,
+                start_date: startDate,
+                end_date: endDate,
                 monthly_theme: theme,
                 status: status,
                 weeks: weeks

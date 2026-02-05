@@ -113,16 +113,41 @@ router.post('/', async (req, res) => {
     const client = await pool.connect();
     
     try {
-        const { class_id, year, month, monthly_theme, status, weeks } = req.body;
+        const { class_id, year, month, start_date, end_date, monthly_theme, status, weeks } = req.body;
         
-        // Validation
-        if (!class_id || !year || !month) {
+        // Validation - require either (year/month) or (start_date/end_date)
+        let reportYear = year;
+        let reportMonth = month;
+        let reportStartDate = start_date;
+        let reportEndDate = end_date;
+        
+        // If start_date and end_date are provided, calculate year/month from start_date
+        if (start_date && end_date) {
+            const startDateObj = new Date(start_date);
+            reportYear = reportYear || startDateObj.getFullYear();
+            reportMonth = reportMonth || (startDateObj.getMonth() + 1);
+            reportStartDate = start_date;
+            reportEndDate = end_date;
+        } else if (year && month) {
+            // If only year/month provided, calculate start_date and end_date
+            reportYear = year;
+            reportMonth = month;
+            if (!reportStartDate) {
+                reportStartDate = `${year}-${String(month).padStart(2, '0')}-01`;
+            }
+            if (!reportEndDate) {
+                const lastDay = new Date(year, month, 0).getDate();
+                reportEndDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+            }
+        }
+        
+        if (!class_id || !reportYear || !reportMonth) {
             return res.status(400).json({ 
-                error: 'Missing required fields: class_id, year, month' 
+                error: 'Missing required fields: class_id and either (year/month) or (start_date/end_date)' 
             });
         }
         
-        if (month < 1 || month > 12) {
+        if (reportMonth < 1 || reportMonth > 12) {
             return res.status(400).json({ error: 'Month must be between 1 and 12' });
         }
         
@@ -132,7 +157,7 @@ router.post('/', async (req, res) => {
         const existingResult = await client.query(`
             SELECT id FROM monthly_reports 
             WHERE class_id = $1 AND year = $2 AND month = $3
-        `, [class_id, year, month]);
+        `, [class_id, reportYear, reportMonth]);
         
         if (existingResult.rows.length > 0) {
             await client.query('ROLLBACK');
@@ -141,15 +166,17 @@ router.post('/', async (req, res) => {
             });
         }
         
-        // Insert monthly report
+        // Insert monthly report with start_date and end_date
         const reportResult = await client.query(`
-            INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         `, [
             class_id, 
-            year, 
-            month, 
+            reportYear, 
+            reportMonth,
+            reportStartDate,
+            reportEndDate,
             monthly_theme || '', 
             status || 'draft',
             req.session.userId
