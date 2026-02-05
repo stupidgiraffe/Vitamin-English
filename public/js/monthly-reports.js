@@ -28,7 +28,15 @@ async function showNewMonthlyReportModal() {
                 <label>Class *</label>
                 <select id="mr-class" class="form-control" required>${classOptions}</select>
             </div>
-            <div class="form-row">
+            <div class="form-group">
+                <label>Report Period Type</label>
+                <select id="mr-period-type" class="form-control">
+                    <option value="monthly">Monthly</option>
+                    <option value="weekly">Weekly (7 days)</option>
+                    <option value="custom">Custom Date Range</option>
+                </select>
+            </div>
+            <div id="mr-monthly-selector" class="form-row">
                 <div class="form-group">
                     <label>Year *</label>
                     <select id="mr-year" class="form-control" required>${yearOptions}</select>
@@ -38,8 +46,29 @@ async function showNewMonthlyReportModal() {
                     <select id="mr-month" class="form-control" required>${monthOptions}</select>
                 </div>
             </div>
+            <div id="mr-weekly-selector" style="display:none">
+                <div class="form-group">
+                    <label>Week Starting Date *</label>
+                    <input type="date" id="mr-week-start" class="form-control">
+                </div>
+            </div>
+            <div id="mr-custom-selector" style="display:none">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Start Date *</label>
+                        <input type="date" id="mr-start-date" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>End Date *</label>
+                        <input type="date" id="mr-end-date" class="form-control">
+                    </div>
+                </div>
+            </div>
             <div class="form-group">
-                <button type="button" class="btn btn-info" id="mr-auto-generate-btn">Auto-Generate from Lesson Reports</button>
+                <button type="button" class="btn btn-primary btn-lg btn-block" id="mr-auto-generate-btn">
+                    <i class="fas fa-magic"></i> Generate Report from Lesson Data
+                </button>
+                <small class="form-text text-muted">This will populate the form with lesson report data. You can review and edit before saving.</small>
             </div>
             <hr>
             <h4>Weekly Lessons</h4>
@@ -94,10 +123,33 @@ async function showNewMonthlyReportModal() {
     document.getElementById('monthly-report-form').addEventListener('submit', handleCreateMonthlyReport);
     document.getElementById('mr-add-week-btn').addEventListener('click', addWeekRow);
     document.getElementById('mr-auto-generate-btn').addEventListener('click', autoGenerateFromLessonReports);
+    document.getElementById('mr-period-type').addEventListener('change', handlePeriodTypeChange);
     
     // Add 3 more weeks by default (total 4 weeks)
     for (let i = 2; i <= 4; i++) {
         addWeekRow();
+    }
+}
+
+// Handle period type change
+function handlePeriodTypeChange() {
+    const periodType = document.getElementById('mr-period-type').value;
+    const monthlySelector = document.getElementById('mr-monthly-selector');
+    const weeklySelector = document.getElementById('mr-weekly-selector');
+    const customSelector = document.getElementById('mr-custom-selector');
+    
+    // Hide all selectors
+    monthlySelector.style.display = 'none';
+    weeklySelector.style.display = 'none';
+    customSelector.style.display = 'none';
+    
+    // Show appropriate selector
+    if (periodType === 'monthly') {
+        monthlySelector.style.display = 'flex';
+    } else if (periodType === 'weekly') {
+        weeklySelector.style.display = 'block';
+    } else if (periodType === 'custom') {
+        customSelector.style.display = 'block';
     }
 }
 
@@ -164,27 +216,173 @@ function removeWeekRow(weekNumber) {
 // Auto-generate from lesson reports
 async function autoGenerateFromLessonReports() {
     const classId = document.getElementById('mr-class').value;
-    const year = document.getElementById('mr-year').value;
-    const month = document.getElementById('mr-month').value;
+    const periodType = document.getElementById('mr-period-type').value;
     
-    if (!classId || !year || !month) {
-        Toast.error('Please select class, year, and month first');
+    if (!classId) {
+        Toast.error('Please select a class first');
         return;
     }
     
+    let params = { class_id: classId };
+    
+    // Build params based on period type
+    if (periodType === 'monthly') {
+        const year = document.getElementById('mr-year').value;
+        const month = document.getElementById('mr-month').value;
+        
+        if (!year || !month) {
+            Toast.error('Please select year and month');
+            return;
+        }
+        
+        params.year = year;
+        params.month = month;
+    } else if (periodType === 'weekly') {
+        const weekStart = document.getElementById('mr-week-start').value;
+        
+        if (!weekStart) {
+            Toast.error('Please select week starting date');
+            return;
+        }
+        
+        params.start_date = weekStart;
+        // Add 6 days to get week end
+        const startDate = new Date(weekStart);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 6);
+        params.end_date = endDate.toISOString().split('T')[0];
+    } else if (periodType === 'custom') {
+        const startDate = document.getElementById('mr-start-date').value;
+        const endDate = document.getElementById('mr-end-date').value;
+        
+        if (!startDate || !endDate) {
+            Toast.error('Please select start and end dates');
+            return;
+        }
+        
+        params.start_date = startDate;
+        params.end_date = endDate;
+    }
+    
     try {
-        const response = await api('/monthly-reports/auto-generate', {
+        const response = await api('/monthly-reports/preview-generate', {
             method: 'POST',
-            body: JSON.stringify({ class_id: classId, year, month })
+            body: JSON.stringify(params)
         });
         
-        Toast.success('Monthly report auto-generated successfully!');
-        closeModal();
-        loadMonthlyReports();
+        if (response.weeks.length === 0) {
+            Toast.warning('No lesson reports found for this period');
+            return;
+        }
+        
+        // POPULATE the form fields instead of closing modal
+        populateWeekFields(response.weeks);
+        Toast.success(`Found ${response.lessonCount} lesson${response.lessonCount > 1 ? 's' : ''} - data populated successfully!`);
+        
     } catch (error) {
-        console.error('Error auto-generating report:', error);
-        Toast.error(error.message || 'Failed to auto-generate report');
+        console.error('Error generating preview:', error);
+        Toast.error(error.message || 'Failed to generate preview');
     }
+}
+
+// Populate week fields with data
+function populateWeekFields(weeks) {
+    const container = document.getElementById('mr-weeks-container');
+    container.innerHTML = ''; // Clear existing
+    
+    weeks.forEach((week, index) => {
+        // Create week row with populated data
+        const weekRow = document.createElement('div');
+        weekRow.className = 'mr-week-row';
+        weekRow.dataset.week = week.week_number;
+        
+        // Create header
+        const header = document.createElement('h5');
+        header.textContent = `Week ${week.week_number} `;
+        
+        if (week.week_number > 1) {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-danger';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', () => removeWeekRow(week.week_number));
+            header.appendChild(removeBtn);
+        }
+        
+        weekRow.appendChild(header);
+        
+        // Create date field
+        const dateGroup = document.createElement('div');
+        dateGroup.className = 'form-group';
+        const dateLabel = document.createElement('label');
+        dateLabel.textContent = 'Date';
+        dateGroup.appendChild(dateLabel);
+        const dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.className = 'form-control mr-week-date';
+        dateInput.dataset.week = week.week_number;
+        dateInput.value = week.lesson_date ? week.lesson_date.split('T')[0] : '';
+        dateGroup.appendChild(dateInput);
+        weekRow.appendChild(dateGroup);
+        
+        // Create target field
+        const targetGroup = document.createElement('div');
+        targetGroup.className = 'form-group';
+        const targetLabel = document.createElement('label');
+        targetLabel.textContent = 'Target (目標)';
+        targetGroup.appendChild(targetLabel);
+        const targetTextarea = document.createElement('textarea');
+        targetTextarea.className = 'form-control mr-week-target';
+        targetTextarea.rows = 2;
+        targetTextarea.dataset.week = week.week_number;
+        targetTextarea.value = week.target || '';
+        targetGroup.appendChild(targetTextarea);
+        weekRow.appendChild(targetGroup);
+        
+        // Create vocabulary field
+        const vocabGroup = document.createElement('div');
+        vocabGroup.className = 'form-group';
+        const vocabLabel = document.createElement('label');
+        vocabLabel.textContent = 'Vocabulary (単語)';
+        vocabGroup.appendChild(vocabLabel);
+        const vocabTextarea = document.createElement('textarea');
+        vocabTextarea.className = 'form-control mr-week-vocabulary';
+        vocabTextarea.rows = 2;
+        vocabTextarea.dataset.week = week.week_number;
+        vocabTextarea.value = week.vocabulary || '';
+        vocabGroup.appendChild(vocabTextarea);
+        weekRow.appendChild(vocabGroup);
+        
+        // Create phrase field
+        const phraseGroup = document.createElement('div');
+        phraseGroup.className = 'form-group';
+        const phraseLabel = document.createElement('label');
+        phraseLabel.textContent = 'Phrase (文)';
+        phraseGroup.appendChild(phraseLabel);
+        const phraseTextarea = document.createElement('textarea');
+        phraseTextarea.className = 'form-control mr-week-phrase';
+        phraseTextarea.rows = 2;
+        phraseTextarea.dataset.week = week.week_number;
+        phraseTextarea.value = week.phrase || '';
+        phraseGroup.appendChild(phraseTextarea);
+        weekRow.appendChild(phraseGroup);
+        
+        // Create others field
+        const othersGroup = document.createElement('div');
+        othersGroup.className = 'form-group';
+        const othersLabel = document.createElement('label');
+        othersLabel.textContent = 'Others (その他)';
+        othersGroup.appendChild(othersLabel);
+        const othersTextarea = document.createElement('textarea');
+        othersTextarea.className = 'form-control mr-week-others';
+        othersTextarea.rows = 2;
+        othersTextarea.dataset.week = week.week_number;
+        othersTextarea.value = week.others || '';
+        othersGroup.appendChild(othersTextarea);
+        weekRow.appendChild(othersGroup);
+        
+        container.appendChild(weekRow);
+    });
 }
 
 // Handle create monthly report
