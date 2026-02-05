@@ -42,14 +42,13 @@ router.get('/', async (req, res) => {
         }
         
         if (start_date) {
-            query += ` AND mr.created_at >= $${paramIndex}`;
+            query += ` AND (mr.start_date >= $${paramIndex} OR mr.created_at >= $${paramIndex})`;
             params.push(start_date);
             paramIndex++;
         }
         
         if (end_date) {
-            // Add one day to end_date to include the entire end date
-            query += ` AND mr.created_at < ($${paramIndex}::date + interval '1 day')`;
+            query += ` AND (mr.end_date <= $${paramIndex} OR mr.created_at <= ($${paramIndex}::date + interval '1 day'))`;
             params.push(end_date);
             paramIndex++;
         }

@@ -308,10 +308,10 @@ async function viewMonthlyReport(reportId) {
                     <div class="week-view">
                         <h4>Week ${week.week_number}</h4>
                         <p><strong>Date:</strong> ${date}</p>
-                        <p><strong>Target (目標):</strong> ${week.target || 'N/A'}</p>
-                        <p><strong>Vocabulary (単語):</strong> ${week.vocabulary || 'N/A'}</p>
-                        <p><strong>Phrase (文):</strong> ${week.phrase || 'N/A'}</p>
-                        <p><strong>Others (その他):</strong> ${week.others || 'N/A'}</p>
+                        <p><strong>Target (目標):</strong> ${escapeHtml(week.target || 'N/A')}</p>
+                        <p><strong>Vocabulary (単語):</strong> ${escapeHtml(week.vocabulary || 'N/A')}</p>
+                        <p><strong>Phrase (文):</strong> ${escapeHtml(week.phrase || 'N/A')}</p>
+                        <p><strong>Others (その他):</strong> ${escapeHtml(week.others || 'N/A')}</p>
                     </div>
                 `;
             });
@@ -321,7 +321,8 @@ async function viewMonthlyReport(reportId) {
         
         const content = `
             <div class="monthly-report-view">
-                <h3>${report.class_name} - ${monthNames[report.month - 1]} ${report.year}</h3>
+                <h3>${escapeHtml(report.class_name)} - ${monthNames[report.month - 1]} ${report.year}</h3>
+                <p><strong>Date Range:</strong> ${report.start_date || 'N/A'} to ${report.end_date || 'N/A'}</p>
                 <p><strong>Status:</strong> ${report.status === 'published' ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>'}</p>
                 <hr>
                 <h4>Weekly Lessons</h4>

@@ -4356,9 +4356,9 @@ function renderMonthlyReportsList() {
             <thead>
                 <tr>
                     <th>Class</th>
-                    <th>Month/Year</th>
+                    <th>Period</th>
+                    <th>Date Range</th>
                     <th>Status</th>
-                    <th>Created</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -4367,17 +4367,19 @@ function renderMonthlyReportsList() {
     
     monthlyReports.forEach(report => {
         const monthYear = `${monthNames[report.month - 1]} ${report.year}`;
+        const dateRange = (report.start_date && report.end_date) 
+            ? `${report.start_date} — ${report.end_date}` 
+            : 'N/A';
         const statusBadge = report.status === 'published' 
             ? '<span class="badge badge-success">Published</span>' 
             : '<span class="badge badge-warning">Draft</span>';
-        const createdDate = new Date(report.created_at).toLocaleDateString();
         
         html += `
             <tr>
-                <td>${report.class_name || 'N/A'}</td>
+                <td>${escapeHtml(report.class_name || 'N/A')}</td>
                 <td>${monthYear}</td>
+                <td>${dateRange}</td>
                 <td>${statusBadge}</td>
-                <td>${createdDate}</td>
                 <td class="actions">
                     <button class="btn btn-sm btn-primary" onclick="viewMonthlyReport(${report.id})">View</button>
                     <button class="btn btn-sm btn-secondary" onclick="editMonthlyReport(${report.id})">Edit</button>
