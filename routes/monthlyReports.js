@@ -467,14 +467,14 @@ router.post('/preview-generate', async (req, res) => {
         
         const lessons = lessonsResult.rows;
         
-        // Map to weekly format
+        // Map to weekly format, combining strengths+comments into others
         const weeks = lessons.map((lesson, index) => ({
             week_number: index + 1,
             lesson_date: lesson.date,
             target: lesson.target_topic || '',
             vocabulary: lesson.vocabulary || '',
             phrase: lesson.mistakes || '',
-            others: lesson.comments || '',
+            others: [lesson.strengths, lesson.comments].filter(Boolean).join(' | '),
             teacher_comment_sheet_id: lesson.id
         }));
         
@@ -575,6 +575,8 @@ router.post('/auto-generate', async (req, res) => {
         // Create weekly entries from teacher comment sheets
         for (let index = 0; index < lessons.length; index++) {
             const lesson = lessons[index];
+            // Combine strengths and comments into 'others' since weekly schema has no strengths column
+            const othersContent = [lesson.strengths, lesson.comments].filter(Boolean).join(' | ');
             await client.query(`
                 INSERT INTO monthly_report_weeks 
                 (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
@@ -586,7 +588,7 @@ router.post('/auto-generate', async (req, res) => {
                 lesson.target_topic || '',
                 lesson.vocabulary || '',
                 lesson.mistakes || '',
-                lesson.comments || '',
+                othersContent,
                 lesson.id
             ]);
         }
