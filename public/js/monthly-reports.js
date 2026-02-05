@@ -27,54 +27,31 @@ async function showNewMonthlyReportModal() {
                 <input type="date" id="mr-end-date" class="form-control" required value="${defaultEndDate}">
             </div>
             <div class="form-group">
-                <button type="button" class="btn btn-primary btn-lg btn-block" id="mr-auto-generate-btn">
-                    <i class="fas fa-magic"></i> Generate Report from Lesson Data
+                <button type="button" class="btn btn-primary btn-lg btn-block" id="mr-load-lessons-btn">
+                    <i class="fas fa-sync"></i> Load Lessons from Date Range
                 </button>
-                <small class="form-text text-muted">This will populate the form with lesson report data. You can review and edit before saving.</small>
+                <small class="form-text text-muted">Select a class and date range, then click here to load lesson data. You can review and edit before saving.</small>
             </div>
             <hr>
-            <h4>Weekly Lessons</h4>
-            <div id="mr-weeks-container">
-                <div class="mr-week-row" data-week="1">
-                    <h5>Week 1</h5>
-                    <div class="form-group">
-                        <label>Date</label>
-                        <input type="date" class="form-control mr-week-date" data-week="1">
-                    </div>
-                    <div class="form-group">
-                        <label>Target (目標)</label>
-                        <textarea class="form-control mr-week-target" rows="2" data-week="1"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Vocabulary (単語)</label>
-                        <textarea class="form-control mr-week-vocabulary" rows="2" data-week="1"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Phrase (文)</label>
-                        <textarea class="form-control mr-week-phrase" rows="2" data-week="1"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>Others (その他)</label>
-                        <textarea class="form-control mr-week-others" rows="2" data-week="1"></textarea>
-                    </div>
+            <div id="mr-lessons-section" style="display:none;">
+                <h4>Lessons</h4>
+                <div id="mr-lessons-container"></div>
+                <hr>
+                <div class="form-group">
+                    <label>Monthly Theme (今月のテーマ)</label>
+                    <textarea id="mr-theme" class="form-control" rows="4" placeholder="Describe the monthly theme and overall progress..."></textarea>
                 </div>
-            </div>
-            <button type="button" class="btn btn-secondary" id="mr-add-week-btn">+ Add Week</button>
-            <hr>
-            <div class="form-group">
-                <label>Monthly Theme (今月のテーマ)</label>
-                <textarea id="mr-theme" class="form-control" rows="4" placeholder="Describe the monthly theme and overall progress..."></textarea>
-            </div>
-            <div class="form-group">
-                <label>Status</label>
-                <select id="mr-status" class="form-control">
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                </select>
-            </div>
-            <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Create Report</button>
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="mr-status" class="form-control">
+                        <option value="draft">Draft</option>
+                        <option value="published">Published</option>
+                    </select>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Create Report</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
             </div>
         </form>
     `;
@@ -83,77 +60,11 @@ async function showNewMonthlyReportModal() {
     
     // Add event listeners
     document.getElementById('monthly-report-form').addEventListener('submit', handleCreateMonthlyReport);
-    document.getElementById('mr-add-week-btn').addEventListener('click', addWeekRow);
-    document.getElementById('mr-auto-generate-btn').addEventListener('click', autoGenerateFromLessonReports);
-    
-    // Add 3 more weeks by default (total 4 weeks)
-    for (let i = 2; i <= 4; i++) {
-        addWeekRow();
-    }
+    document.getElementById('mr-load-lessons-btn').addEventListener('click', loadLessonsForReport);
 }
 
-// Add week row to the form
-function addWeekRow() {
-    const container = document.getElementById('mr-weeks-container');
-    const weekRows = container.querySelectorAll('.mr-week-row');
-    const nextWeekNumber = weekRows.length + 1;
-    
-    if (nextWeekNumber > 6) {
-        Toast.warning('Maximum 6 weeks allowed');
-        return;
-    }
-    
-    const weekRow = document.createElement('div');
-    weekRow.className = 'mr-week-row';
-    weekRow.dataset.week = nextWeekNumber;
-    weekRow.innerHTML = `
-        <h5>Week ${nextWeekNumber} <button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${nextWeekNumber})">Remove</button></h5>
-        <div class="form-group">
-            <label>Date</label>
-            <input type="date" class="form-control mr-week-date" data-week="${nextWeekNumber}">
-        </div>
-        <div class="form-group">
-            <label>Target (目標)</label>
-            <textarea class="form-control mr-week-target" rows="2" data-week="${nextWeekNumber}"></textarea>
-        </div>
-        <div class="form-group">
-            <label>Vocabulary (単語)</label>
-            <textarea class="form-control mr-week-vocabulary" rows="2" data-week="${nextWeekNumber}"></textarea>
-        </div>
-        <div class="form-group">
-            <label>Phrase (文)</label>
-            <textarea class="form-control mr-week-phrase" rows="2" data-week="${nextWeekNumber}"></textarea>
-        </div>
-        <div class="form-group">
-            <label>Others (その他)</label>
-            <textarea class="form-control mr-week-others" rows="2" data-week="${nextWeekNumber}"></textarea>
-        </div>
-    `;
-    
-    container.appendChild(weekRow);
-}
-
-// Remove week row
-function removeWeekRow(weekNumber) {
-    const weekRow = document.querySelector(`.mr-week-row[data-week="${weekNumber}"]`);
-    if (weekRow) {
-        weekRow.remove();
-        // Renumber remaining weeks
-        const container = document.getElementById('mr-weeks-container');
-        const weekRows = container.querySelectorAll('.mr-week-row');
-        weekRows.forEach((row, index) => {
-            const newWeekNumber = index + 1;
-            row.dataset.week = newWeekNumber;
-            row.querySelector('h5').innerHTML = `Week ${newWeekNumber} ${newWeekNumber > 1 ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${newWeekNumber})">Remove</button>` : ''}`;
-            row.querySelectorAll('[data-week]').forEach(el => {
-                el.dataset.week = newWeekNumber;
-            });
-        });
-    }
-}
-
-// Auto-generate from lesson reports
-async function autoGenerateFromLessonReports() {
+// Load lessons for the report based on class and date range
+async function loadLessonsForReport() {
     const classId = document.getElementById('mr-class').value;
     const startDate = document.getElementById('mr-start-date').value;
     const endDate = document.getElementById('mr-end-date').value;
@@ -179,45 +90,38 @@ async function autoGenerateFromLessonReports() {
         });
         
         if (response.weeks.length === 0) {
-            Toast.warning('No lesson reports found for this period');
+            Toast.warning('No lesson reports found for this period. You can still create the report and add lessons manually later.');
+            document.getElementById('mr-lessons-section').style.display = 'block';
+            document.getElementById('mr-lessons-container').innerHTML = '<p class="info-text">No lessons found. The report will be created with empty lesson data.</p>';
             return;
         }
         
-        // POPULATE the form fields instead of closing modal
-        populateWeekFields(response.weeks);
-        Toast.success(`Found ${response.lessonCount} lesson${response.lessonCount > 1 ? 's' : ''} - data populated successfully!`);
+        // Populate the lessons
+        populateLessonFields(response.weeks);
+        document.getElementById('mr-lessons-section').style.display = 'block';
+        Toast.success(`Found ${response.lessonCount} lesson${response.lessonCount > 1 ? 's' : ''} - data loaded successfully!`);
         
     } catch (error) {
-        console.error('Error generating preview:', error);
-        Toast.error(error.message || 'Failed to generate preview');
+        console.error('Error loading lessons:', error);
+        Toast.error(error.message || 'Failed to load lessons');
     }
 }
 
-// Populate week fields with data
-function populateWeekFields(weeks) {
-    const container = document.getElementById('mr-weeks-container');
+// Populate lesson fields with data
+function populateLessonFields(weeks) {
+    const container = document.getElementById('mr-lessons-container');
     container.innerHTML = ''; // Clear existing
     
     weeks.forEach((week, index) => {
-        // Create week row with populated data
-        const weekRow = document.createElement('div');
-        weekRow.className = 'mr-week-row';
-        weekRow.dataset.week = week.week_number;
+        // Create lesson row with populated data
+        const lessonRow = document.createElement('div');
+        lessonRow.className = 'mr-lesson-row';
+        lessonRow.dataset.lesson = week.week_number;
         
         // Create header
         const header = document.createElement('h5');
-        header.textContent = `Week ${week.week_number} `;
-        
-        if (week.week_number > 1) {
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'btn btn-sm btn-danger';
-            removeBtn.textContent = 'Remove';
-            removeBtn.addEventListener('click', () => removeWeekRow(week.week_number));
-            header.appendChild(removeBtn);
-        }
-        
-        weekRow.appendChild(header);
+        header.textContent = `Lesson ${week.week_number}`;
+        lessonRow.appendChild(header);
         
         // Create date field
         const dateGroup = document.createElement('div');
@@ -227,11 +131,11 @@ function populateWeekFields(weeks) {
         dateGroup.appendChild(dateLabel);
         const dateInput = document.createElement('input');
         dateInput.type = 'date';
-        dateInput.className = 'form-control mr-week-date';
-        dateInput.dataset.week = week.week_number;
+        dateInput.className = 'form-control mr-lesson-date';
+        dateInput.dataset.lesson = week.week_number;
         dateInput.value = week.lesson_date ? week.lesson_date.split('T')[0] : '';
         dateGroup.appendChild(dateInput);
-        weekRow.appendChild(dateGroup);
+        lessonRow.appendChild(dateGroup);
         
         // Create target field
         const targetGroup = document.createElement('div');
@@ -240,12 +144,12 @@ function populateWeekFields(weeks) {
         targetLabel.textContent = 'Target (目標)';
         targetGroup.appendChild(targetLabel);
         const targetTextarea = document.createElement('textarea');
-        targetTextarea.className = 'form-control mr-week-target';
+        targetTextarea.className = 'form-control mr-lesson-target';
         targetTextarea.rows = 2;
-        targetTextarea.dataset.week = week.week_number;
+        targetTextarea.dataset.lesson = week.week_number;
         targetTextarea.value = week.target || '';
         targetGroup.appendChild(targetTextarea);
-        weekRow.appendChild(targetGroup);
+        lessonRow.appendChild(targetGroup);
         
         // Create vocabulary field
         const vocabGroup = document.createElement('div');
@@ -254,12 +158,12 @@ function populateWeekFields(weeks) {
         vocabLabel.textContent = 'Vocabulary (単語)';
         vocabGroup.appendChild(vocabLabel);
         const vocabTextarea = document.createElement('textarea');
-        vocabTextarea.className = 'form-control mr-week-vocabulary';
+        vocabTextarea.className = 'form-control mr-lesson-vocabulary';
         vocabTextarea.rows = 2;
-        vocabTextarea.dataset.week = week.week_number;
+        vocabTextarea.dataset.lesson = week.week_number;
         vocabTextarea.value = week.vocabulary || '';
         vocabGroup.appendChild(vocabTextarea);
-        weekRow.appendChild(vocabGroup);
+        lessonRow.appendChild(vocabGroup);
         
         // Create phrase field
         const phraseGroup = document.createElement('div');
@@ -268,12 +172,12 @@ function populateWeekFields(weeks) {
         phraseLabel.textContent = 'Phrase (文)';
         phraseGroup.appendChild(phraseLabel);
         const phraseTextarea = document.createElement('textarea');
-        phraseTextarea.className = 'form-control mr-week-phrase';
+        phraseTextarea.className = 'form-control mr-lesson-phrase';
         phraseTextarea.rows = 2;
-        phraseTextarea.dataset.week = week.week_number;
+        phraseTextarea.dataset.lesson = week.week_number;
         phraseTextarea.value = week.phrase || '';
         phraseGroup.appendChild(phraseTextarea);
-        weekRow.appendChild(phraseGroup);
+        lessonRow.appendChild(phraseGroup);
         
         // Create others field
         const othersGroup = document.createElement('div');
@@ -282,14 +186,14 @@ function populateWeekFields(weeks) {
         othersLabel.textContent = 'Others (その他)';
         othersGroup.appendChild(othersLabel);
         const othersTextarea = document.createElement('textarea');
-        othersTextarea.className = 'form-control mr-week-others';
+        othersTextarea.className = 'form-control mr-lesson-others';
         othersTextarea.rows = 2;
-        othersTextarea.dataset.week = week.week_number;
+        othersTextarea.dataset.lesson = week.week_number;
         othersTextarea.value = week.others || '';
         othersGroup.appendChild(othersTextarea);
-        weekRow.appendChild(othersGroup);
+        lessonRow.appendChild(othersGroup);
         
-        container.appendChild(weekRow);
+        container.appendChild(lessonRow);
     });
 }
 
@@ -320,19 +224,19 @@ async function handleCreateMonthlyReport(e) {
     const year = startDateObj.getFullYear();
     const month = startDateObj.getMonth() + 1;
     
-    // Collect week data
+    // Collect lesson data
     const weeks = [];
-    const weekRows = document.querySelectorAll('.mr-week-row');
-    weekRows.forEach((row, index) => {
-        const weekNumber = parseInt(row.dataset.week);
-        const date = row.querySelector('.mr-week-date').value;
-        const target = row.querySelector('.mr-week-target').value;
-        const vocabulary = row.querySelector('.mr-week-vocabulary').value;
-        const phrase = row.querySelector('.mr-week-phrase').value;
-        const others = row.querySelector('.mr-week-others').value;
+    const lessonRows = document.querySelectorAll('.mr-lesson-row');
+    lessonRows.forEach((row, index) => {
+        const lessonNumber = parseInt(row.dataset.lesson);
+        const date = row.querySelector('.mr-lesson-date').value;
+        const target = row.querySelector('.mr-lesson-target').value;
+        const vocabulary = row.querySelector('.mr-lesson-vocabulary').value;
+        const phrase = row.querySelector('.mr-lesson-phrase').value;
+        const others = row.querySelector('.mr-lesson-others').value;
         
         weeks.push({
-            week_number: weekNumber,
+            week_number: lessonNumber,
             lesson_date: date || null,
             target: target,
             vocabulary: vocabulary,

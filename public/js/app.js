@@ -4299,6 +4299,9 @@ async function initializeMonthlyReportsPage() {
     // Set up event listeners
     document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
     document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
+    
+    // Auto-load reports on page open
+    await loadMonthlyReports();
 }
 
 // Load monthly reports with filters
