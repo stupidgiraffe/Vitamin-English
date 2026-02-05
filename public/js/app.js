@@ -2824,13 +2824,6 @@ function renderCleanTable(data, type, options = {}) {
                 active: (val) => val ? 'Yes' : 'No'
             }
         },
-        lesson_reports: {
-            columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
-            headers: ['Date', 'Class', 'Teacher', 'Topic'],
-            formatters: {
-                date: formatDisplayDate
-            }
-        },
         teacher_comment_sheets: {
             columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
             headers: ['Date', 'Class', 'Teacher', 'Topic'],
@@ -2935,7 +2928,7 @@ function renderCleanTable(data, type, options = {}) {
         
         // Add actions column - either original edit/delete or new view/pdf buttons
         if (includeActions) {
-            // Original behavior for lesson_reports table
+            // Original behavior for teacher_comment_sheets table
             if (!isNaN(sanitizedId)) {
                 html += `<td class="actions-cell">
                     <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); editReportFromDatabase(${sanitizedId})">Edit</button>
@@ -3110,7 +3103,7 @@ async function loadDatabaseTable() {
             return;
         }
         
-        const hasActions = tableName === 'lesson_reports' || tableName === 'teacher_comment_sheets';
+        const hasActions = tableName === 'teacher_comment_sheets';
         
         // Use clean table rendering with optional actions
         let html = renderCleanTable(result.data, tableName, { includeActions: hasActions });
