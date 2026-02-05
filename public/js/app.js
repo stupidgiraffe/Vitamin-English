@@ -2839,6 +2839,16 @@ function renderCleanTable(data, type, options = {}) {
                 date: formatDisplayDate
             }
         },
+        monthly_reports: {
+            columns: ['year', 'month', 'class_name', 'status'],
+            headers: ['Year', 'Month', 'Class', 'Status'],
+            formatters: {
+                month: (val) => {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return months[val - 1] || val;
+                }
+            }
+        },
         reports: {
             columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
             headers: ['Date', 'Class', 'Teacher', 'Topic'],
@@ -2878,7 +2888,7 @@ function renderCleanTable(data, type, options = {}) {
     });
     
     // Add Actions header for students and reports
-    if (includeActions || type === 'students' || type === 'reports') {
+    if (includeActions || type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports') {
         html += '<th>Actions</th>';
     }
     
@@ -2886,8 +2896,8 @@ function renderCleanTable(data, type, options = {}) {
     
     data.forEach(row => {
         const sanitizedId = parseInt(row.id);
-        const rowClass = (type === 'students' || type === 'reports' || type === 'attendance') ? 'clickable-row' : '';
-        const rowAttrs = (type === 'students' || type === 'reports' || type === 'attendance') 
+        const rowClass = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance') ? 'clickable-row' : '';
+        const rowAttrs = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance') 
             ? `data-type="${type}" data-id="${sanitizedId}"` 
             : '';
         
@@ -2934,14 +2944,14 @@ function renderCleanTable(data, type, options = {}) {
             } else {
                 html += '<td class="actions-cell">Invalid ID</td>';
             }
-        } else if (type === 'students' || type === 'reports') {
+        } else if (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports') {
             // New view/PDF buttons for search results
             if (!isNaN(sanitizedId)) {
                 html += `<td class="actions-cell">
                     <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewSearchResult('${type}', ${sanitizedId})" title="View Details">
                         👁️
                     </button>`;
-                if (type === 'students' || type === 'reports') {
+                if (type === 'students' || type === 'teacher_comment_sheets') {
                     html += `
                     <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); exportSinglePDF('${type}', ${sanitizedId})" title="Export PDF">
                         📄
@@ -3046,10 +3056,17 @@ async function searchDatabase() {
             html += '<br>';
         }
         
-        if (results.results.reports && results.results.reports.length > 0) {
-            totalResults += results.results.reports.length;
-            html += `<h3>Lesson Reports (${results.results.reports.length})</h3>`;
-            html += renderCleanTable(results.results.reports, 'reports', { includeSelection: true });
+        if (results.results.teacher_comments && results.results.teacher_comments.length > 0) {
+            totalResults += results.results.teacher_comments.length;
+            html += `<h3>Teacher Comment Sheets (${results.results.teacher_comments.length})</h3>`;
+            html += renderCleanTable(results.results.teacher_comments, 'teacher_comment_sheets', { includeSelection: true });
+            html += '<br>';
+        }
+        
+        if (results.results.monthly_reports && results.results.monthly_reports.length > 0) {
+            totalResults += results.results.monthly_reports.length;
+            html += `<h3>Monthly Reports (${results.results.monthly_reports.length})</h3>`;
+            html += renderCleanTable(results.results.monthly_reports, 'monthly_reports', { includeSelection: true });
             html += '<br>';
         }
         
@@ -3202,7 +3219,8 @@ async function exportDatabasePDF() {
     if (!exportType) {
         // Find the first type with results
         if (currentSearchResults.students?.length > 0) exportType = 'students';
-        else if (currentSearchResults.reports?.length > 0) exportType = 'reports';
+        else if (currentSearchResults.teacher_comments?.length > 0) exportType = 'teacher_comments';
+        else if (currentSearchResults.monthly_reports?.length > 0) exportType = 'monthly_reports';
     }
     
     if (exportType) {
@@ -3236,7 +3254,11 @@ async function viewSearchResult(type, id) {
             await showStudentDetail(id);
             break;
         case 'reports':
+        case 'teacher_comment_sheets':
             await viewReportDetail(id);
+            break;
+        case 'monthly_reports':
+            await viewMonthlyReportDetail(id);
             break;
         case 'attendance':
             await viewAttendanceDetail(id);
@@ -3286,6 +3308,48 @@ async function viewAttendanceDetail(attendanceId) {
     }
 }
 
+// View monthly report detail modal
+async function viewMonthlyReportDetail(reportId) {
+    try {
+        const report = await api(`/monthly-reports/${reportId}`);
+        
+        let weeksHtml = '';
+        if (report.weeks && report.weeks.length > 0) {
+            report.weeks.forEach((week, index) => {
+                weeksHtml += `
+                    <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
+                        <strong>Week ${week.week_number}</strong> ${week.lesson_date ? `- ${formatDisplayDate(week.lesson_date)}` : ''}
+                        <p style="margin: 5px 0;"><strong>Target:</strong> ${week.target || 'N/A'}</p>
+                        <p style="margin: 5px 0;"><strong>Vocabulary:</strong> ${week.vocabulary || 'N/A'}</p>
+                        <p style="margin: 5px 0;"><strong>Phrase:</strong> ${week.phrase || 'N/A'}</p>
+                    </div>
+                `;
+            });
+        } else {
+            weeksHtml = '<p>No weekly data available</p>';
+        }
+        
+        showModal(`Monthly Report - ${report.class_name}`, `
+            <div class="report-detail">
+                <p><strong>Class:</strong> ${report.class_name}</p>
+                <p><strong>Year:</strong> ${report.year}</p>
+                <p><strong>Month:</strong> ${report.month}</p>
+                <p><strong>Status:</strong> ${report.status}</p>
+                <p><strong>Theme:</strong> ${report.monthly_theme || 'N/A'}</p>
+                
+                <h4 style="margin-top: 20px;">Weekly Lessons:</h4>
+                ${weeksHtml}
+                
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                </div>
+            </div>
+        `);
+    } catch (error) {
+        Toast.error('Failed to load monthly report: ' + error.message);
+    }
+}
+
 // Export single PDF
 async function exportSinglePDF(type, id) {
     Toast.info('Generating PDF...');
@@ -3294,7 +3358,7 @@ async function exportSinglePDF(type, id) {
         let endpoint;
         if (type === 'students') {
             endpoint = `/pdf/student-attendance/${id}`;
-        } else if (type === 'reports') {
+        } else if (type === 'reports' || type === 'teacher_comment_sheets') {
             endpoint = `/pdf/lesson-report/${id}`;
         } else {
             Toast.error('PDF export not available for this type');
@@ -3342,7 +3406,7 @@ async function exportSelectedItems(type, selectedIds) {
                     // Small delay to avoid popup blockers
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
-            } else if (type === 'reports') {
+            } else if (type === 'reports' || type === 'teacher_comment_sheets') {
                 const response = await api(`/pdf/lesson-report/${id}`, { method: 'POST' });
                 if (response.downloadUrl) {
                     window.open(response.downloadUrl, '_blank');
@@ -3382,7 +3446,7 @@ function showExportOptionsModal(type) {
                 <p class="option-desc">Download each item as a separate PDF file</p>
             </div>
             
-            ${type === 'reports' ? `
+            ${type === 'reports' || type === 'teacher_comment_sheets' ? `
             <div class="export-option">
                 <button class="btn btn-secondary" onclick="exportAllAsCombined('${type}')">
                     📑 Export All as One Combined PDF
@@ -3422,7 +3486,7 @@ async function exportAllAsSeparate(type) {
                     // Small delay to avoid popup blockers
                     await new Promise(resolve => setTimeout(resolve, 100));
                 }
-            } else if (type === 'reports') {
+            } else if (type === 'reports' || type === 'teacher_comment_sheets') {
                 const response = await api(`/pdf/lesson-report/${item.id}`, { method: 'POST' });
                 if (response.downloadUrl) {
                     window.open(response.downloadUrl, '_blank');
@@ -3443,8 +3507,8 @@ async function exportAllAsSeparate(type) {
 async function exportAllAsCombined(type) {
     closeModal();
     
-    if (type !== 'reports') {
-        Toast.error('Combined export only available for reports');
+    if (type !== 'reports' && type !== 'teacher_comment_sheets') {
+        Toast.error('Combined export only available for teacher comment sheets');
         return;
     }
     

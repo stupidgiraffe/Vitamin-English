@@ -7,7 +7,7 @@ router.get('/table/:tableName', async (req, res) => {
     const { tableName } = req.params;
     
     // Whitelist allowed tables
-    const allowedTables = ['students', 'classes', 'attendance', 'lesson_reports', 'users', 'makeup_lessons'];
+    const allowedTables = ['students', 'classes', 'attendance', 'teacher_comment_sheets', 'monthly_reports', 'users', 'makeup_lessons'];
     
     if (!allowedTables.includes(tableName)) {
         return res.status(400).json({ error: 'Invalid table name' });
@@ -45,13 +45,22 @@ router.get('/table/:tableName', async (req, res) => {
                     LIMIT 500
                 `;
                 break;
-            case 'lesson_reports':
+            case 'teacher_comment_sheets':
                 query = `
-                    SELECT lr.*, c.name as class_name, u.full_name as teacher_name 
-                    FROM lesson_reports lr 
-                    LEFT JOIN classes c ON lr.class_id = c.id 
-                    LEFT JOIN users u ON lr.teacher_id = u.id 
-                    ORDER BY lr.date DESC 
+                    SELECT tcs.*, c.name as class_name, u.full_name as teacher_name 
+                    FROM teacher_comment_sheets tcs 
+                    LEFT JOIN classes c ON tcs.class_id = c.id 
+                    LEFT JOIN users u ON tcs.teacher_id = u.id 
+                    ORDER BY tcs.date DESC 
+                    LIMIT 100
+                `;
+                break;
+            case 'monthly_reports':
+                query = `
+                    SELECT mr.*, c.name as class_name 
+                    FROM monthly_reports mr 
+                    LEFT JOIN classes c ON mr.class_id = c.id 
+                    ORDER BY mr.year DESC, mr.month DESC, mr.created_at DESC 
                     LIMIT 100
                 `;
                 break;
@@ -96,7 +105,8 @@ router.get('/search', async (req, res) => {
             teachers: [],
             classes: [],
             attendance: [],
-            reports: [],
+            teacher_comments: [],
+            monthly_reports: [],
             makeup_lessons: []
         };
         
@@ -193,40 +203,73 @@ router.get('/search', async (req, res) => {
             results.attendance = attendanceResult.rows;
         }
         
-        // Search lesson reports with date filtering
-        if (!type || type === 'reports') {
-            let reportsQuery = `
-                SELECT lr.*, c.name as class_name, u.full_name as teacher_name 
-                FROM lesson_reports lr 
-                LEFT JOIN classes c ON lr.class_id = c.id 
-                LEFT JOIN users u ON lr.teacher_id = u.id 
+        // Search teacher comment sheets with date filtering
+        if (!type || type === 'teacher_comments') {
+            let tcsQuery = `
+                SELECT tcs.*, c.name as class_name, u.full_name as teacher_name 
+                FROM teacher_comment_sheets tcs 
+                LEFT JOIN classes c ON tcs.class_id = c.id 
+                LEFT JOIN users u ON tcs.teacher_id = u.id 
                 WHERE 1=1
             `;
-            const reportsParams = [];
+            const tcsParams = [];
             let paramIndex = 1;
             
             if (hasQuery) {
-                reportsQuery += ` AND (LOWER(c.name) LIKE $${paramIndex} OR LOWER(u.full_name) LIKE $${paramIndex} 
-                    OR LOWER(lr.target_topic) LIKE $${paramIndex} OR LOWER(lr.vocabulary) LIKE $${paramIndex} 
-                    OR LOWER(lr.comments) LIKE $${paramIndex})`;
-                reportsParams.push(searchPattern);
+                tcsQuery += ` AND (LOWER(c.name) LIKE $${paramIndex} OR LOWER(u.full_name) LIKE $${paramIndex} 
+                    OR LOWER(tcs.target_topic) LIKE $${paramIndex} OR LOWER(tcs.vocabulary) LIKE $${paramIndex} 
+                    OR LOWER(tcs.comments) LIKE $${paramIndex})`;
+                tcsParams.push(searchPattern);
                 paramIndex++;
             }
             
             if (startDate) {
-                reportsQuery += ` AND lr.date >= $${paramIndex}`;
-                reportsParams.push(startDate);
+                tcsQuery += ` AND tcs.date >= $${paramIndex}`;
+                tcsParams.push(startDate);
                 paramIndex++;
             }
             if (endDate) {
-                reportsQuery += ` AND lr.date <= $${paramIndex}`;
-                reportsParams.push(endDate);
+                tcsQuery += ` AND tcs.date <= $${paramIndex}`;
+                tcsParams.push(endDate);
                 paramIndex++;
             }
             
-            reportsQuery += ' ORDER BY lr.date DESC LIMIT 50';
-            const reportsResult = await pool.query(reportsQuery, reportsParams);
-            results.reports = reportsResult.rows;
+            tcsQuery += ' ORDER BY tcs.date DESC LIMIT 50';
+            const tcsResult = await pool.query(tcsQuery, tcsParams);
+            results.teacher_comments = tcsResult.rows;
+        }
+        
+        // Search monthly reports with date filtering
+        if (!type || type === 'monthly_reports') {
+            let mrQuery = `
+                SELECT mr.*, c.name as class_name 
+                FROM monthly_reports mr 
+                LEFT JOIN classes c ON mr.class_id = c.id 
+                WHERE 1=1
+            `;
+            const mrParams = [];
+            let paramIndex = 1;
+            
+            if (hasQuery) {
+                mrQuery += ` AND (LOWER(c.name) LIKE $${paramIndex} OR LOWER(mr.monthly_theme) LIKE $${paramIndex})`;
+                mrParams.push(searchPattern);
+                paramIndex++;
+            }
+            
+            if (startDate) {
+                mrQuery += ` AND mr.created_at >= $${paramIndex}`;
+                mrParams.push(startDate);
+                paramIndex++;
+            }
+            if (endDate) {
+                mrQuery += ` AND mr.created_at <= $${paramIndex}`;
+                mrParams.push(endDate);
+                paramIndex++;
+            }
+            
+            mrQuery += ' ORDER BY mr.year DESC, mr.month DESC, mr.created_at DESC LIMIT 50';
+            const mrResult = await pool.query(mrQuery, mrParams);
+            results.monthly_reports = mrResult.rows;
         }
         
         // Search makeup lessons
