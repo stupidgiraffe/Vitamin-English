@@ -468,8 +468,7 @@ function populateClassSelects() {
 
 function populateTeacherSelects() {
     const selects = [
-        document.getElementById('report-teacher'),
-        document.getElementById('attendance-taken-by')
+        document.getElementById('report-teacher')
     ];
     
     selects.forEach(select => {
