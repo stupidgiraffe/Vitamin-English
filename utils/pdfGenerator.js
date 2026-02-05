@@ -993,10 +993,429 @@ async function generateMultiClassReportPDF(classReportsData, startDate, endDate)
     });
 }
 
+/**
+ * Generate a comprehensive Monthly Report PDF for a class
+ * @param {Object} reportData - Monthly report data containing:
+ *   - classInfo: { id, name, teacherName, schedule }
+ *   - period: { year, month, monthName, startDate, endDate }
+ *   - students: Array of { id, name, type, email, phone }
+ *   - lessonSummary: { totalLessons, lessons, topicsCovered, allVocabulary, commonMistakes, overallStrengths, teacherComments }
+ *   - attendanceSummary: { totalDays, records: { [studentId]: { studentName, present, absent, late, total, rate } } }
+ * @returns {Promise<Buffer>} PDF buffer
+ */
+async function generateMonthlyReportPDF(reportData) {
+    return new Promise((resolve, reject) => {
+        try {
+            const doc = new PDFDocument({ margin: 40, size: 'A4' });
+            const buffers = [];
+            
+            doc.on('data', (chunk) => buffers.push(chunk));
+            doc.on('end', () => {
+                const pdfBuffer = Buffer.concat(buffers);
+                resolve(pdfBuffer);
+            });
+            doc.on('error', reject);
+            
+            const { classInfo, period, students, lessonSummary, attendanceSummary } = reportData;
+            
+            // ==================== COVER PAGE ====================
+            // Professional header with branding
+            doc.rect(0, 0, doc.page.width, 140)
+               .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+            
+            doc.fontSize(32)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.white)
+               .text('🍊 Vitamin English School', 0, 35, { align: 'center', width: doc.page.width });
+            
+            doc.fontSize(24)
+               .fillColor(THEME.colors.accentYellow)
+               .text('Monthly Class Report', 0, 80, { align: 'center', width: doc.page.width });
+            
+            doc.moveDown(5);
+            doc.fillColor(THEME.colors.textDark);
+            
+            // Report Info Box
+            const infoBoxY = doc.y;
+            doc.rect(50, infoBoxY, doc.page.width - 100, 120)
+               .fillAndStroke(THEME.colors.accentYellow, THEME.colors.brightYellow);
+            
+            doc.fontSize(20)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.textDark)
+               .text(sanitizeForPDF(classInfo.name), 0, infoBoxY + 20, { align: 'center', width: doc.page.width });
+            
+            doc.fontSize(16)
+               .font('Helvetica')
+               .text(`${period.monthName} ${period.year}`, 0, infoBoxY + 55, { align: 'center', width: doc.page.width });
+            
+            doc.fontSize(12)
+               .fillColor(THEME.colors.textSecondary)
+               .text(`Report Period: ${period.startDate} to ${period.endDate}`, 0, infoBoxY + 85, { align: 'center', width: doc.page.width });
+            
+            doc.moveDown(5);
+            
+            // Quick Stats Summary
+            const statsY = doc.y;
+            doc.rect(50, statsY, doc.page.width - 100, 30)
+               .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+            
+            doc.fontSize(13)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.textDark)
+               .text('Report Overview', 60, statsY + 9);
+            
+            doc.moveDown(2);
+            
+            // Stats grid
+            const statsGridY = doc.y;
+            const statBoxWidth = (doc.page.width - 120) / 4;
+            
+            const stats = [
+                { label: 'Students', value: students.length.toString() },
+                { label: 'Lessons', value: lessonSummary.totalLessons.toString() },
+                { label: 'Topics', value: lessonSummary.topicsCovered.length.toString() },
+                { label: 'Class Days', value: attendanceSummary.totalDays.toString() }
+            ];
+            
+            stats.forEach((stat, index) => {
+                const x = 60 + (index * statBoxWidth);
+                doc.rect(x, statsGridY, statBoxWidth - 10, 50)
+                   .fill('#F8F9FA');
+                
+                doc.fontSize(22)
+                   .font('Helvetica-Bold')
+                   .fillColor(THEME.colors.primaryBlue)
+                   .text(stat.value, x, statsGridY + 8, { width: statBoxWidth - 10, align: 'center' });
+                
+                doc.fontSize(10)
+                   .font('Helvetica')
+                   .fillColor(THEME.colors.textSecondary)
+                   .text(stat.label, x, statsGridY + 34, { width: statBoxWidth - 10, align: 'center' });
+            });
+            
+            doc.moveDown(4);
+            
+            // Class Information
+            doc.fontSize(12)
+               .font('Helvetica')
+               .fillColor(THEME.colors.textDark)
+               .text(`Teacher: ${sanitizeForPDF(classInfo.teacherName) || 'N/A'}`, 60, doc.y)
+               .text(`Schedule: ${sanitizeForPDF(classInfo.schedule) || 'N/A'}`, 60, doc.y + 20);
+            
+            // ==================== STUDENT ROSTER PAGE ====================
+            doc.addPage();
+            
+            // Header
+            doc.rect(0, 0, doc.page.width, 60)
+               .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+            
+            doc.fontSize(18)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.white)
+               .text(`${sanitizeForPDF(classInfo.name)} - Student Roster`, 0, 22, { align: 'center', width: doc.page.width });
+            
+            doc.moveDown(3);
+            doc.fillColor(THEME.colors.textDark);
+            
+            // Attendance Summary Table
+            const tableStartY = doc.y;
+            const colWidths = { num: 30, name: 180, type: 70, present: 55, absent: 55, late: 50, rate: 60 };
+            const tableWidth = Object.values(colWidths).reduce((a, b) => a + b, 0);
+            const tableStartX = (doc.page.width - tableWidth) / 2;
+            
+            // Table header
+            doc.rect(tableStartX, tableStartY, tableWidth, 25)
+               .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+            
+            let currentX = tableStartX + 5;
+            doc.fontSize(9)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.textDark);
+            
+            doc.text('#', currentX, tableStartY + 8, { width: colWidths.num - 5 });
+            currentX += colWidths.num;
+            doc.text('Student Name', currentX, tableStartY + 8, { width: colWidths.name - 5 });
+            currentX += colWidths.name;
+            doc.text('Type', currentX, tableStartY + 8, { width: colWidths.type - 5 });
+            currentX += colWidths.type;
+            doc.text('Present', currentX, tableStartY + 8, { width: colWidths.present - 5 });
+            currentX += colWidths.present;
+            doc.text('Absent', currentX, tableStartY + 8, { width: colWidths.absent - 5 });
+            currentX += colWidths.absent;
+            doc.text('Late', currentX, tableStartY + 8, { width: colWidths.late - 5 });
+            currentX += colWidths.late;
+            doc.text('Rate', currentX, tableStartY + 8, { width: colWidths.rate - 5 });
+            
+            let rowY = tableStartY + 25;
+            
+            // Table rows
+            students.forEach((student, index) => {
+                // Check for page break
+                if (rowY > doc.page.height - 80) {
+                    doc.addPage();
+                    rowY = 50;
+                }
+                
+                // Alternate row background
+                if (index % 2 === 1) {
+                    doc.rect(tableStartX, rowY, tableWidth, 20)
+                       .fill(THEME.colors.accentYellow);
+                }
+                
+                const attendance = attendanceSummary.records[student.id] || { present: 0, absent: 0, late: 0, rate: 0 };
+                
+                currentX = tableStartX + 5;
+                doc.fontSize(9)
+                   .font('Helvetica')
+                   .fillColor(THEME.colors.textDark);
+                
+                doc.text((index + 1).toString(), currentX, rowY + 5, { width: colWidths.num - 5 });
+                currentX += colWidths.num;
+                
+                const displayName = sanitizeForPDF(student.name).length > 25 
+                    ? sanitizeForPDF(student.name).substring(0, 25) + '...' 
+                    : sanitizeForPDF(student.name);
+                doc.text(displayName, currentX, rowY + 5, { width: colWidths.name - 5 });
+                currentX += colWidths.name;
+                
+                doc.text(student.type || 'regular', currentX, rowY + 5, { width: colWidths.type - 5 });
+                currentX += colWidths.type;
+                
+                doc.text(attendance.present.toString(), currentX, rowY + 5, { width: colWidths.present - 5 });
+                currentX += colWidths.present;
+                
+                doc.text(attendance.absent.toString(), currentX, rowY + 5, { width: colWidths.absent - 5 });
+                currentX += colWidths.absent;
+                
+                doc.text(attendance.late.toString(), currentX, rowY + 5, { width: colWidths.late - 5 });
+                currentX += colWidths.late;
+                
+                // Color code attendance rate
+                const rateColor = attendance.rate >= 80 ? '#28a745' : attendance.rate >= 60 ? '#ffc107' : '#dc3545';
+                doc.fillColor(rateColor)
+                   .text(`${attendance.rate}%`, currentX, rowY + 5, { width: colWidths.rate - 5 });
+                
+                rowY += 20;
+            });
+            
+            // ==================== LESSON SUMMARY PAGE ====================
+            doc.addPage();
+            
+            // Header
+            doc.rect(0, 0, doc.page.width, 60)
+               .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+            
+            doc.fontSize(18)
+               .font('Helvetica-Bold')
+               .fillColor(THEME.colors.white)
+               .text(`${sanitizeForPDF(classInfo.name)} - Lesson Summary`, 0, 22, { align: 'center', width: doc.page.width });
+            
+            doc.moveDown(3);
+            doc.fillColor(THEME.colors.textDark);
+            
+            // Topics Covered Section
+            const addSection = (title, content, icon = '📌') => {
+                if (!content || (Array.isArray(content) && content.length === 0)) return;
+                
+                // Check for page break
+                if (doc.y > doc.page.height - 150) {
+                    doc.addPage();
+                    doc.y = 50;
+                }
+                
+                const sectionY = doc.y;
+                doc.rect(40, sectionY, doc.page.width - 80, 25)
+                   .fillAndStroke(THEME.colors.lightBlue, THEME.colors.primaryBlue);
+                
+                doc.fontSize(12)
+                   .font('Helvetica-Bold')
+                   .fillColor(THEME.colors.textDark)
+                   .text(`${icon} ${title}`, 50, sectionY + 7);
+                
+                doc.moveDown(1.5);
+                
+                doc.fontSize(10)
+                   .font('Helvetica')
+                   .fillColor(THEME.colors.textDark);
+                
+                if (Array.isArray(content)) {
+                    content.forEach((item, i) => {
+                        if (doc.y > doc.page.height - 50) {
+                            doc.addPage();
+                            doc.y = 50;
+                        }
+                        doc.text(`• ${sanitizeForPDF(item)}`, 50, doc.y, { width: doc.page.width - 100 });
+                        doc.moveDown(0.3);
+                    });
+                } else {
+                    doc.text(sanitizeForPDF(content), 50, doc.y, { width: doc.page.width - 100 });
+                }
+                
+                doc.moveDown(1);
+            };
+            
+            addSection('Topics Covered This Month', lessonSummary.topicsCovered, '📚');
+            addSection('New Vocabulary & Phrases', lessonSummary.allVocabulary, '📝');
+            addSection('Common Mistakes to Address', lessonSummary.commonMistakes, '⚠️');
+            addSection('Overall Strengths', lessonSummary.overallStrengths, '⭐');
+            
+            // ==================== INDIVIDUAL LESSONS PAGE ====================
+            if (lessonSummary.lessons && lessonSummary.lessons.length > 0) {
+                doc.addPage();
+                
+                // Header
+                doc.rect(0, 0, doc.page.width, 60)
+                   .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+                
+                doc.fontSize(18)
+                   .font('Helvetica-Bold')
+                   .fillColor(THEME.colors.white)
+                   .text(`${sanitizeForPDF(classInfo.name)} - Lesson Details`, 0, 22, { align: 'center', width: doc.page.width });
+                
+                doc.moveDown(3);
+                doc.fillColor(THEME.colors.textDark);
+                
+                // Individual lesson entries
+                lessonSummary.lessons.forEach((lesson, index) => {
+                    // Check for page break
+                    if (doc.y > doc.page.height - 200) {
+                        doc.addPage();
+                        doc.y = 50;
+                    }
+                    
+                    // Lesson date header
+                    const lessonHeaderY = doc.y;
+                    doc.rect(40, lessonHeaderY, doc.page.width - 80, 25)
+                       .fill(THEME.colors.accentYellow);
+                    
+                    doc.fontSize(11)
+                       .font('Helvetica-Bold')
+                       .fillColor(THEME.colors.textDark)
+                       .text(`📅 ${lesson.date} - ${sanitizeForPDF(lesson.teacherName) || 'N/A'}`, 50, lessonHeaderY + 7);
+                    
+                    doc.moveDown(1.5);
+                    
+                    // Lesson details
+                    const addLessonField = (label, content) => {
+                        if (!content) return;
+                        
+                        doc.fontSize(10)
+                           .font('Helvetica-Bold')
+                           .fillColor(THEME.colors.primaryBlue)
+                           .text(label, 50, doc.y);
+                        
+                        doc.moveDown(0.2);
+                        doc.fontSize(9)
+                           .font('Helvetica')
+                           .fillColor(THEME.colors.textDark)
+                           .text(sanitizeForPDF(content), 50, doc.y, { width: doc.page.width - 100 });
+                        
+                        doc.moveDown(0.5);
+                    };
+                    
+                    addLessonField('Topic:', lesson.targetTopic);
+                    addLessonField('Vocabulary:', lesson.vocabulary);
+                    addLessonField('Mistakes:', lesson.mistakes);
+                    addLessonField('Strengths:', lesson.strengths);
+                    addLessonField('Comments/Homework:', lesson.comments);
+                    
+                    doc.moveDown(0.5);
+                    
+                    // Divider between lessons
+                    if (index < lessonSummary.lessons.length - 1) {
+                        doc.moveTo(50, doc.y)
+                           .lineTo(doc.page.width - 50, doc.y)
+                           .stroke('#CCCCCC');
+                        doc.moveDown(0.5);
+                    }
+                });
+            }
+            
+            // ==================== TEACHER COMMENTS PAGE ====================
+            if (lessonSummary.teacherComments && lessonSummary.teacherComments.length > 0) {
+                doc.addPage();
+                
+                // Header
+                doc.rect(0, 0, doc.page.width, 60)
+                   .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+                
+                doc.fontSize(18)
+                   .font('Helvetica-Bold')
+                   .fillColor(THEME.colors.white)
+                   .text(`${sanitizeForPDF(classInfo.name)} - Teacher Comments & Homework`, 0, 22, { align: 'center', width: doc.page.width });
+                
+                doc.moveDown(3);
+                doc.fillColor(THEME.colors.textDark);
+                
+                lessonSummary.teacherComments.forEach((comment, index) => {
+                    if (doc.y > doc.page.height - 100) {
+                        doc.addPage();
+                        doc.y = 50;
+                    }
+                    
+                    doc.fontSize(10)
+                       .font('Helvetica-Bold')
+                       .fillColor(THEME.colors.primaryBlue)
+                       .text(`📅 ${comment.date}`, 50, doc.y);
+                    
+                    doc.moveDown(0.3);
+                    doc.fontSize(10)
+                       .font('Helvetica')
+                       .fillColor(THEME.colors.textDark)
+                       .text(sanitizeForPDF(comment.comment), 50, doc.y, { width: doc.page.width - 100 });
+                    
+                    doc.moveDown(1);
+                });
+            }
+            
+            // ==================== FOOTER ON ALL PAGES ====================
+            const pages = doc.bufferedPageRange();
+            for (let i = 0; i < pages.count; i++) {
+                doc.switchToPage(i);
+                
+                // Footer line
+                doc.moveTo(40, doc.page.height - 50)
+                   .lineTo(doc.page.width - 40, doc.page.height - 50)
+                   .stroke('#CCCCCC');
+                
+                doc.fontSize(8)
+                   .font('Helvetica')
+                   .fillColor('#666666')
+                   .text(
+                       `${sanitizeForPDF(classInfo.name)} | ${period.monthName} ${period.year} Monthly Report`,
+                       40, doc.page.height - 40,
+                       { align: 'left', width: 200 }
+                   )
+                   .text(
+                       `Page ${i + 1} of ${pages.count}`,
+                       doc.page.width - 140, doc.page.height - 40,
+                       { align: 'right', width: 100 }
+                   );
+            }
+            
+            // Add generation timestamp on last page
+            doc.switchToPage(pages.count - 1);
+            doc.fontSize(8)
+               .fillColor('#999999')
+               .text(
+                   `Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`,
+                   0, doc.page.height - 25,
+                   { align: 'center', width: doc.page.width }
+               );
+            
+            doc.end();
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
 module.exports = {
     generateStudentAttendancePDF,
     generateClassAttendancePDF,
     generateAttendanceGridPDF,
     generateLessonReportPDF,
-    generateMultiClassReportPDF
+    generateMultiClassReportPDF,
+    generateMonthlyReportPDF
 };

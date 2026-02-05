@@ -171,6 +171,7 @@ const databaseRoutes = require('./routes/database');
 const makeupRoutes = require('./routes/makeup');
 const pdfRoutes = require('./routes/pdf');
 const adminRoutes = require('./routes/admin');
+const monthlyReportsRoutes = require('./routes/monthly-reports');
 
 // Auto-load test data on startup if database is empty (controlled by SEED_ON_STARTUP env var)
 async function initializeTestData() {
@@ -230,6 +231,7 @@ app.use('/api/database', requireAuth, databaseRoutes);
 app.use('/api/makeup', requireAuth, makeupRoutes);
 app.use('/api/pdf', requireAuth, pdfRoutes);
 app.use('/api/admin', requireAuth, adminRoutes);
+app.use('/api/monthly-reports', requireAuth, monthlyReportsRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

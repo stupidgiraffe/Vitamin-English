@@ -71,6 +71,7 @@
                 <button class="nav-item active" data-page="dashboard" data-i18n="nav.dashboard">Dashboard</button>
                 <button class="nav-item" data-page="attendance" data-i18n="nav.attendance">Attendance</button>
                 <button class="nav-item" data-page="reports" data-i18n="nav.reports">Lesson Reports</button>
+                <button class="nav-item" data-page="monthly-reports" data-i18n="nav.monthlyReports">Monthly Reports</button>
                 <button class="nav-item" data-page="students-profile" data-i18n="nav.students">Students</button>
                 <button class="nav-item" data-page="makeup" data-i18n="nav.makeup">Make-up Lessons</button>
                 <button class="nav-item" data-page="database" data-i18n="nav.database">Database</button>
@@ -306,6 +307,153 @@
                     <div id="multi-class-grid" class="multi-class-grid">
                         <p class="info-text">Select classes and date range, then click "Load Reports"</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- Monthly Reports Page -->
+            <div id="monthly-reports-page" class="page">
+                <h2>📊 Monthly Class Reports</h2>
+                <p class="page-description">Generate comprehensive monthly summaries for each class, including lesson topics, vocabulary, student attendance, and teacher comments.</p>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Select Class:</label>
+                        <select id="monthly-class-select" class="form-control">
+                            <option value="">-- Select Class --</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Year:</label>
+                        <select id="monthly-year-select" class="form-control">
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Month:</label>
+                        <select id="monthly-month-select" class="form-control">
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    <button id="generate-monthly-report-btn" class="btn btn-primary" disabled>🔄 Generate Report</button>
+                    <button id="export-monthly-pdf-btn" class="btn btn-success" style="display: none;">📄 Export PDF</button>
+                </div>
+
+                <!-- Monthly Report Preview Container -->
+                <div id="monthly-report-preview" class="monthly-report-preview" style="display: none;">
+                    <!-- Header Section -->
+                    <div class="monthly-report-header">
+                        <h3 id="monthly-report-title"></h3>
+                        <p id="monthly-report-period"></p>
+                    </div>
+                    
+                    <!-- Stats Grid -->
+                    <div class="monthly-stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-students">0</div>
+                            <div class="stat-label">Students</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-lessons">0</div>
+                            <div class="stat-label">Lessons</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-topics">0</div>
+                            <div class="stat-label">Topics</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="stat-days">0</div>
+                            <div class="stat-label">Class Days</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tabs for different sections -->
+                    <div class="monthly-tabs">
+                        <button class="monthly-tab-btn active" data-tab="overview">Overview</button>
+                        <button class="monthly-tab-btn" data-tab="students">Students & Attendance</button>
+                        <button class="monthly-tab-btn" data-tab="lessons">Lesson Details</button>
+                        <button class="monthly-tab-btn" data-tab="comments">Teacher Comments</button>
+                    </div>
+                    
+                    <!-- Tab Content: Overview -->
+                    <div id="monthly-overview-tab" class="monthly-tab-content active">
+                        <div class="monthly-section">
+                            <h4>📚 Topics Covered</h4>
+                            <div id="monthly-topics-list" class="topics-list"></div>
+                        </div>
+                        <div class="monthly-section">
+                            <h4>📝 Vocabulary & Phrases</h4>
+                            <div id="monthly-vocabulary" class="content-box"></div>
+                        </div>
+                        <div class="monthly-section">
+                            <h4>⚠️ Common Mistakes</h4>
+                            <div id="monthly-mistakes" class="content-box"></div>
+                        </div>
+                        <div class="monthly-section">
+                            <h4>⭐ Strengths</h4>
+                            <div id="monthly-strengths" class="content-box"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab Content: Students -->
+                    <div id="monthly-students-tab" class="monthly-tab-content">
+                        <div class="monthly-section">
+                            <h4>👥 Student Attendance Summary</h4>
+                            <table class="monthly-attendance-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Student Name</th>
+                                        <th>Type</th>
+                                        <th>Present</th>
+                                        <th>Absent</th>
+                                        <th>Late</th>
+                                        <th>Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="monthly-attendance-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab Content: Lessons -->
+                    <div id="monthly-lessons-tab" class="monthly-tab-content">
+                        <div class="monthly-section">
+                            <h4>📅 Lesson-by-Lesson Details</h4>
+                            <div id="monthly-lessons-list"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab Content: Comments -->
+                    <div id="monthly-comments-tab" class="monthly-tab-content">
+                        <div class="monthly-section">
+                            <h4>💬 Teacher Comments & Homework</h4>
+                            <div id="monthly-comments-list"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Empty state -->
+                <div id="monthly-report-empty" class="empty-state">
+                    <div class="empty-icon">📊</div>
+                    <h3>Select a class and month to generate a report</h3>
+                    <p>Monthly reports summarize all lesson data, student attendance, and teacher comments for a given month.</p>
+                </div>
+                
+                <!-- Saved Reports List -->
+                <div id="monthly-saved-reports" class="monthly-saved-reports" style="display: none;">
+                    <h3>📁 Previously Generated Reports</h3>
+                    <div id="monthly-reports-list"></div>
                 </div>
             </div>
 

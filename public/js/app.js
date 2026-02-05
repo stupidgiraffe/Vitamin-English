@@ -510,6 +510,7 @@ function navigateToPage(page) {
     else if (page === 'attendance') initializeAttendancePage();
     else if (page === 'database') initializeDatabasePage();
     else if (page === 'reports') initMultiClassView();
+    else if (page === 'monthly-reports') initMonthlyReportsPage();
 }
 
 // Initialize attendance page with default date range (last 6 months)
@@ -4197,3 +4198,434 @@ showModal = function(title, content) {
         });
     });
 };
+
+// ==================== Monthly Reports Page Functions ====================
+let currentMonthlyReportData = null;
+let currentMonthlyReportId = null;
+
+/**
+ * Initialize monthly reports page
+ */
+function initMonthlyReportsPage() {
+    const classSelect = document.getElementById('monthly-class-select');
+    const yearSelect = document.getElementById('monthly-year-select');
+    const monthSelect = document.getElementById('monthly-month-select');
+    const generateBtn = document.getElementById('generate-monthly-report-btn');
+    const exportBtn = document.getElementById('export-monthly-pdf-btn');
+    
+    // Populate class dropdown
+    populateMonthlyClassSelect();
+    
+    // Populate year dropdown (current year and 2 years back)
+    const currentYear = new Date().getFullYear();
+    yearSelect.innerHTML = '';
+    for (let year = currentYear; year >= currentYear - 2; year--) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelect.appendChild(option);
+    }
+    
+    // Set current month as default
+    monthSelect.value = new Date().getMonth() + 1;
+    
+    // Event listeners
+    classSelect.addEventListener('change', () => {
+        generateBtn.disabled = !classSelect.value;
+        hideMonthlyReportPreview();
+        loadSavedMonthlyReports();
+    });
+    
+    generateBtn.addEventListener('click', generateMonthlyReport);
+    exportBtn.addEventListener('click', exportMonthlyReportPDF);
+    
+    // Tab switching
+    document.querySelectorAll('.monthly-tab-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const tabId = e.target.dataset.tab;
+            switchMonthlyTab(tabId);
+        });
+    });
+}
+
+/**
+ * Populate the class select dropdown
+ */
+async function populateMonthlyClassSelect() {
+    const select = document.getElementById('monthly-class-select');
+    try {
+        const response = await api('/classes');
+        if (response && response.length > 0) {
+            select.innerHTML = '<option value="">-- Select Class --</option>';
+            response.forEach(cls => {
+                const option = document.createElement('option');
+                option.value = cls.id;
+                option.textContent = cls.name;
+                select.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading classes:', error);
+    }
+}
+
+/**
+ * Generate monthly report for selected class and month
+ */
+async function generateMonthlyReport() {
+    const classId = document.getElementById('monthly-class-select').value;
+    const year = document.getElementById('monthly-year-select').value;
+    const month = document.getElementById('monthly-month-select').value;
+    
+    if (!classId || !year || !month) {
+        Toast.error('Please select a class, year, and month');
+        return;
+    }
+    
+    const generateBtn = document.getElementById('generate-monthly-report-btn');
+    generateBtn.disabled = true;
+    generateBtn.innerHTML = '⏳ Generating...';
+    
+    try {
+        const response = await api('/monthly-reports/generate', {
+            method: 'POST',
+            body: JSON.stringify({ classId, year, month })
+        });
+        
+        if (response.success) {
+            currentMonthlyReportData = response.reportData;
+            currentMonthlyReportId = response.reportId;
+            displayMonthlyReport(response.reportData);
+            document.getElementById('export-monthly-pdf-btn').style.display = 'inline-block';
+            Toast.success('Monthly report generated successfully!');
+            loadSavedMonthlyReports();
+        } else {
+            throw new Error(response.error || 'Failed to generate report');
+        }
+    } catch (error) {
+        console.error('Error generating monthly report:', error);
+        Toast.error(error.message || 'Failed to generate monthly report');
+    } finally {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '🔄 Generate Report';
+    }
+}
+
+/**
+ * Display monthly report data in the preview
+ */
+function displayMonthlyReport(data) {
+    const preview = document.getElementById('monthly-report-preview');
+    const emptyState = document.getElementById('monthly-report-empty');
+    
+    // Hide empty state, show preview
+    emptyState.style.display = 'none';
+    preview.style.display = 'block';
+    
+    // Header
+    document.getElementById('monthly-report-title').textContent = data.classInfo.name;
+    document.getElementById('monthly-report-period').textContent = 
+        `${data.period.monthName} ${data.period.year} (${data.period.startDate} to ${data.period.endDate})`;
+    
+    // Stats
+    document.getElementById('stat-students').textContent = data.students.length;
+    document.getElementById('stat-lessons').textContent = data.lessonSummary.totalLessons;
+    document.getElementById('stat-topics').textContent = data.lessonSummary.topicsCovered.length;
+    document.getElementById('stat-days').textContent = data.attendanceSummary.totalDays;
+    
+    // Overview tab
+    const topicsList = document.getElementById('monthly-topics-list');
+    if (data.lessonSummary.topicsCovered.length > 0) {
+        topicsList.innerHTML = data.lessonSummary.topicsCovered
+            .map(topic => `<span class="topic-tag">${escapeHtml(topic)}</span>`)
+            .join('');
+    } else {
+        topicsList.innerHTML = '<span class="info-text">No topics recorded</span>';
+    }
+    
+    document.getElementById('monthly-vocabulary').innerHTML = 
+        data.lessonSummary.allVocabulary 
+            ? escapeHtml(data.lessonSummary.allVocabulary) 
+            : '<span class="info-text">No vocabulary recorded</span>';
+    
+    document.getElementById('monthly-mistakes').innerHTML = 
+        data.lessonSummary.commonMistakes 
+            ? escapeHtml(data.lessonSummary.commonMistakes) 
+            : '<span class="info-text">No mistakes recorded</span>';
+    
+    document.getElementById('monthly-strengths').innerHTML = 
+        data.lessonSummary.overallStrengths 
+            ? escapeHtml(data.lessonSummary.overallStrengths) 
+            : '<span class="info-text">No strengths recorded</span>';
+    
+    // Students & Attendance tab
+    const attendanceBody = document.getElementById('monthly-attendance-body');
+    attendanceBody.innerHTML = data.students.map((student, index) => {
+        const att = data.attendanceSummary.records[student.id] || { present: 0, absent: 0, late: 0, rate: 0 };
+        const rateClass = att.rate >= 80 ? 'good' : att.rate >= 60 ? 'warning' : 'danger';
+        return `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${escapeHtml(student.name)}</td>
+                <td>${student.type || 'regular'}</td>
+                <td>${att.present}</td>
+                <td>${att.absent}</td>
+                <td>${att.late}</td>
+                <td><span class="attendance-rate ${rateClass}">${att.rate}%</span></td>
+            </tr>
+        `;
+    }).join('');
+    
+    // Lessons tab
+    const lessonsList = document.getElementById('monthly-lessons-list');
+    if (data.lessonSummary.lessons.length > 0) {
+        lessonsList.innerHTML = data.lessonSummary.lessons.map(lesson => `
+            <div class="lesson-card">
+                <div class="lesson-card-header">
+                    <span class="lesson-date">📅 ${lesson.date}</span>
+                    <span class="lesson-teacher">${escapeHtml(lesson.teacherName || 'N/A')}</span>
+                </div>
+                ${lesson.targetTopic ? `
+                    <div class="lesson-field">
+                        <div class="lesson-field-label">Topic:</div>
+                        <div class="lesson-field-content">${escapeHtml(lesson.targetTopic)}</div>
+                    </div>
+                ` : ''}
+                ${lesson.vocabulary ? `
+                    <div class="lesson-field">
+                        <div class="lesson-field-label">Vocabulary:</div>
+                        <div class="lesson-field-content">${escapeHtml(lesson.vocabulary)}</div>
+                    </div>
+                ` : ''}
+                ${lesson.mistakes ? `
+                    <div class="lesson-field">
+                        <div class="lesson-field-label">Mistakes:</div>
+                        <div class="lesson-field-content">${escapeHtml(lesson.mistakes)}</div>
+                    </div>
+                ` : ''}
+                ${lesson.strengths ? `
+                    <div class="lesson-field">
+                        <div class="lesson-field-label">Strengths:</div>
+                        <div class="lesson-field-content">${escapeHtml(lesson.strengths)}</div>
+                    </div>
+                ` : ''}
+                ${lesson.comments ? `
+                    <div class="lesson-field">
+                        <div class="lesson-field-label">Comments/Homework:</div>
+                        <div class="lesson-field-content">${escapeHtml(lesson.comments)}</div>
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
+    } else {
+        lessonsList.innerHTML = '<p class="info-text">No lessons recorded for this month</p>';
+    }
+    
+    // Comments tab
+    const commentsList = document.getElementById('monthly-comments-list');
+    if (data.lessonSummary.teacherComments.length > 0) {
+        commentsList.innerHTML = data.lessonSummary.teacherComments.map(comment => `
+            <div class="comment-card">
+                <div class="comment-date">📅 ${comment.date}</div>
+                <div class="comment-text">${escapeHtml(comment.comment)}</div>
+            </div>
+        `).join('');
+    } else {
+        commentsList.innerHTML = '<p class="info-text">No teacher comments recorded for this month</p>';
+    }
+    
+    // Switch to overview tab
+    switchMonthlyTab('overview');
+}
+
+/**
+ * Hide monthly report preview and show empty state
+ */
+function hideMonthlyReportPreview() {
+    document.getElementById('monthly-report-preview').style.display = 'none';
+    document.getElementById('monthly-report-empty').style.display = 'block';
+    document.getElementById('export-monthly-pdf-btn').style.display = 'none';
+    currentMonthlyReportData = null;
+    currentMonthlyReportId = null;
+}
+
+/**
+ * Switch between tabs in monthly report preview
+ */
+function switchMonthlyTab(tabId) {
+    // Update tab buttons
+    document.querySelectorAll('.monthly-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tabId);
+    });
+    
+    // Update tab content
+    document.querySelectorAll('.monthly-tab-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    document.getElementById(`monthly-${tabId}-tab`).classList.add('active');
+}
+
+/**
+ * Export monthly report as PDF
+ */
+async function exportMonthlyReportPDF() {
+    if (!currentMonthlyReportId) {
+        Toast.error('Please generate a report first');
+        return;
+    }
+    
+    const exportBtn = document.getElementById('export-monthly-pdf-btn');
+    exportBtn.disabled = true;
+    exportBtn.innerHTML = '⏳ Exporting...';
+    
+    try {
+        const response = await api(`/monthly-reports/export-pdf/${currentMonthlyReportId}`, {
+            method: 'POST'
+        });
+        
+        if (response.success && response.downloadUrl) {
+            // Open PDF in new tab
+            window.open(response.downloadUrl, '_blank');
+            Toast.success('PDF exported successfully!');
+        } else {
+            throw new Error(response.error || 'Failed to export PDF');
+        }
+    } catch (error) {
+        console.error('Error exporting PDF:', error);
+        Toast.error(error.message || 'Failed to export PDF');
+    } finally {
+        exportBtn.disabled = false;
+        exportBtn.innerHTML = '📄 Export PDF';
+    }
+}
+
+/**
+ * Load saved monthly reports for the selected class
+ */
+async function loadSavedMonthlyReports() {
+    const classId = document.getElementById('monthly-class-select').value;
+    const container = document.getElementById('monthly-saved-reports');
+    const list = document.getElementById('monthly-reports-list');
+    
+    if (!classId) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await api(`/monthly-reports/class/${classId}`);
+        
+        if (response.success && response.reports.length > 0) {
+            container.style.display = 'block';
+            list.innerHTML = response.reports.map(report => {
+                const reportData = report.report_data;
+                return `
+                    <div class="saved-report-item">
+                        <div class="saved-report-info">
+                            <div class="saved-report-title">
+                                ${reportData.period.monthName} ${reportData.period.year}
+                            </div>
+                            <div class="saved-report-meta">
+                                ${reportData.lessonSummary.totalLessons} lessons | 
+                                ${reportData.students.length} students |
+                                Generated by ${escapeHtml(report.generated_by_name || 'Unknown')}
+                            </div>
+                        </div>
+                        <div class="saved-report-actions">
+                            <button class="btn btn-small btn-primary" onclick="viewSavedMonthlyReport(${report.id})">
+                                👁️ View
+                            </button>
+                            <button class="btn btn-small btn-success" onclick="exportSavedMonthlyReport(${report.id})">
+                                📄 PDF
+                            </button>
+                            <button class="btn btn-small btn-danger" onclick="deleteSavedMonthlyReport(${report.id})">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            container.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error loading saved reports:', error);
+        container.style.display = 'none';
+    }
+}
+
+/**
+ * View a saved monthly report
+ */
+async function viewSavedMonthlyReport(reportId) {
+    try {
+        const response = await api(`/monthly-reports/${reportId}`);
+        
+        if (response.success && response.report) {
+            currentMonthlyReportData = response.report.report_data;
+            currentMonthlyReportId = response.report.id;
+            displayMonthlyReport(response.report.report_data);
+            document.getElementById('export-monthly-pdf-btn').style.display = 'inline-block';
+            
+            // Scroll to preview
+            document.getElementById('monthly-report-preview').scrollIntoView({ behavior: 'smooth' });
+        }
+    } catch (error) {
+        console.error('Error viewing saved report:', error);
+        Toast.error('Failed to load saved report');
+    }
+}
+
+/**
+ * Export a saved monthly report as PDF
+ */
+async function exportSavedMonthlyReport(reportId) {
+    try {
+        const response = await api(`/monthly-reports/export-pdf/${reportId}`, {
+            method: 'POST'
+        });
+        
+        if (response.success && response.downloadUrl) {
+            window.open(response.downloadUrl, '_blank');
+            Toast.success('PDF exported successfully!');
+        } else {
+            throw new Error(response.error || 'Failed to export PDF');
+        }
+    } catch (error) {
+        console.error('Error exporting PDF:', error);
+        Toast.error(error.message || 'Failed to export PDF');
+    }
+}
+
+/**
+ * Delete a saved monthly report
+ */
+async function deleteSavedMonthlyReport(reportId) {
+    if (!confirm('Are you sure you want to delete this monthly report?')) {
+        return;
+    }
+    
+    try {
+        const response = await api(`/monthly-reports/${reportId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.success) {
+            Toast.success('Report deleted successfully');
+            loadSavedMonthlyReports();
+            
+            // If this was the currently displayed report, hide the preview
+            if (currentMonthlyReportId === reportId) {
+                hideMonthlyReportPreview();
+            }
+        }
+    } catch (error) {
+        console.error('Error deleting report:', error);
+        Toast.error('Failed to delete report');
+    }
+}
+
+// Make functions globally available
+window.viewSavedMonthlyReport = viewSavedMonthlyReport;
+window.exportSavedMonthlyReport = exportSavedMonthlyReport;
+window.deleteSavedMonthlyReport = deleteSavedMonthlyReport;

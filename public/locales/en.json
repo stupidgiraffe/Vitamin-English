@@ -9,7 +9,8 @@
     "logout": "Logout",
     "dashboard": "Dashboard",
     "reports": "Lesson Reports",
-    "makeup": "Make-up Lessons"
+    "makeup": "Make-up Lessons",
+    "monthlyReports": "Monthly Reports"
   },
   "buttons": {
     "addClass": "Add Class",

@@ -117,3 +117,19 @@ CREATE INDEX IF NOT EXISTS idx_pdf_history_type ON pdf_history(type);
 CREATE INDEX IF NOT EXISTS idx_pdf_history_student ON pdf_history(student_id);
 CREATE INDEX IF NOT EXISTS idx_pdf_history_class ON pdf_history(class_id);
 CREATE INDEX IF NOT EXISTS idx_pdf_history_created_at ON pdf_history(created_at);
+
+-- Monthly reports table (stores generated monthly report summaries per class)
+CREATE TABLE IF NOT EXISTS monthly_reports (
+    id SERIAL PRIMARY KEY,
+    class_id INTEGER NOT NULL REFERENCES classes(id),
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL CHECK(month >= 1 AND month <= 12),
+    report_data JSONB NOT NULL,
+    generated_by INTEGER REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(class_id, year, month)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_reports_class ON monthly_reports(class_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_reports_year_month ON monthly_reports(year, month);

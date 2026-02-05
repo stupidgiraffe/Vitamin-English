@@ -9,7 +9,8 @@
     "logout": "ログアウト",
     "dashboard": "ダッシュボード",
     "reports": "レッスン報告",
-    "makeup": "振替レッスン"
+    "makeup": "振替レッスン",
+    "monthlyReports": "月次レポート"
   },
   "buttons": {
     "addClass": "クラスを追加",
