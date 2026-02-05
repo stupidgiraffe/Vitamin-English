@@ -310,6 +310,13 @@ async function handleCreateMonthlyReport(e) {
     
     // Calculate year and month from start date for backend compatibility
     const startDateObj = new Date(startDate);
+    
+    // Validate the date is valid
+    if (isNaN(startDateObj.getTime())) {
+        Toast.error('Invalid start date');
+        return;
+    }
+    
     const year = startDateObj.getFullYear();
     const month = startDateObj.getMonth() + 1;
     

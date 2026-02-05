@@ -124,6 +124,14 @@ router.post('/', async (req, res) => {
         // If start_date and end_date are provided, calculate year/month from start_date
         if (start_date && end_date) {
             const startDateObj = new Date(start_date);
+            
+            // Validate the date is valid
+            if (isNaN(startDateObj.getTime())) {
+                return res.status(400).json({ 
+                    error: 'Invalid start_date format' 
+                });
+            }
+            
             reportYear = reportYear || startDateObj.getFullYear();
             reportMonth = reportMonth || (startDateObj.getMonth() + 1);
             reportStartDate = start_date;
@@ -144,6 +152,13 @@ router.post('/', async (req, res) => {
         if (!class_id || !reportYear || !reportMonth) {
             return res.status(400).json({ 
                 error: 'Missing required fields: class_id and either (year/month) or (start_date/end_date)' 
+            });
+        }
+        
+        // Additional validation checks
+        if (isNaN(reportYear) || isNaN(reportMonth)) {
+            return res.status(400).json({ 
+                error: 'Invalid year or month values' 
             });
         }
         
