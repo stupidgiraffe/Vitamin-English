@@ -1,0 +1,553 @@
+const express = require('express');
+const router = express.Router();
+const pool = require('../database/init');
+const { generateMonthlyReportPDF } = require('../utils/monthlyReportPdf');
+const { uploadPDF, getDownloadUrl } = require('../utils/r2Storage');
+
+/**
+ * GET /api/monthly-reports
+ * List all monthly reports with filtering
+ */
+router.get('/', async (req, res) => {
+    try {
+        const { classId, year, month, status } = req.query;
+        
+        let query = `
+            SELECT mr.*, c.name as class_name, c.schedule, u.full_name as created_by_name
+            FROM monthly_reports mr
+            JOIN classes c ON mr.class_id = c.id
+            LEFT JOIN users u ON mr.created_by = u.id
+            WHERE 1=1
+        `;
+        const params = [];
+        let paramIndex = 1;
+        
+        if (classId) {
+            query += ` AND mr.class_id = $${paramIndex}`;
+            params.push(classId);
+            paramIndex++;
+        }
+        
+        if (year) {
+            query += ` AND mr.year = $${paramIndex}`;
+            params.push(year);
+            paramIndex++;
+        }
+        
+        if (month) {
+            query += ` AND mr.month = $${paramIndex}`;
+            params.push(month);
+            paramIndex++;
+        }
+        
+        if (status) {
+            query += ` AND mr.status = $${paramIndex}`;
+            params.push(status);
+            paramIndex++;
+        }
+        
+        query += ' ORDER BY mr.year DESC, mr.month DESC, mr.created_at DESC';
+        
+        const result = await pool.query(query, params);
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching monthly reports:', error);
+        res.status(500).json({ error: 'Failed to fetch monthly reports' });
+    }
+});
+
+/**
+ * GET /api/monthly-reports/:id
+ * Get single monthly report with all weeks
+ */
+router.get('/:id', async (req, res) => {
+    try {
+        const reportResult = await pool.query(`
+            SELECT mr.*, c.name as class_name, c.schedule, u.full_name as created_by_name
+            FROM monthly_reports mr
+            JOIN classes c ON mr.class_id = c.id
+            LEFT JOIN users u ON mr.created_by = u.id
+            WHERE mr.id = $1
+        `, [req.params.id]);
+        
+        const report = reportResult.rows[0];
+        if (!report) {
+            return res.status(404).json({ error: 'Monthly report not found' });
+        }
+        
+        // Get weekly data
+        const weeksResult = await pool.query(`
+            SELECT * FROM monthly_report_weeks
+            WHERE monthly_report_id = $1
+            ORDER BY week_number
+        `, [req.params.id]);
+        
+        report.weeks = weeksResult.rows;
+        
+        res.json(report);
+    } catch (error) {
+        console.error('Error fetching monthly report:', error);
+        res.status(500).json({ error: 'Failed to fetch monthly report' });
+    }
+});
+
+/**
+ * POST /api/monthly-reports
+ * Create new monthly report
+ */
+router.post('/', async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        const { class_id, year, month, monthly_theme, status, weeks } = req.body;
+        
+        // Validation
+        if (!class_id || !year || !month) {
+            return res.status(400).json({ 
+                error: 'Missing required fields: class_id, year, month' 
+            });
+        }
+        
+        if (month < 1 || month > 12) {
+            return res.status(400).json({ error: 'Month must be between 1 and 12' });
+        }
+        
+        await client.query('BEGIN');
+        
+        // Check for existing report
+        const existingResult = await client.query(`
+            SELECT id FROM monthly_reports 
+            WHERE class_id = $1 AND year = $2 AND month = $3
+        `, [class_id, year, month]);
+        
+        if (existingResult.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: 'A monthly report for this class and month already exists' 
+            });
+        }
+        
+        // Insert monthly report
+        const reportResult = await client.query(`
+            INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+        `, [
+            class_id, 
+            year, 
+            month, 
+            monthly_theme || '', 
+            status || 'draft',
+            req.session.userId
+        ]);
+        
+        const reportId = reportResult.rows[0].id;
+        
+        // Insert weekly data if provided
+        if (weeks && Array.isArray(weeks) && weeks.length > 0) {
+            for (const week of weeks) {
+                if (week.week_number) {
+                    await client.query(`
+                        INSERT INTO monthly_report_weeks 
+                        (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, lesson_report_id)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `, [
+                        reportId,
+                        week.week_number,
+                        week.lesson_date || null,
+                        week.target || '',
+                        week.vocabulary || '',
+                        week.phrase || '',
+                        week.others || '',
+                        week.lesson_report_id || null
+                    ]);
+                }
+            }
+        }
+        
+        await client.query('COMMIT');
+        
+        // Fetch complete report
+        const completeResult = await pool.query(`
+            SELECT mr.*, c.name as class_name, c.schedule
+            FROM monthly_reports mr
+            JOIN classes c ON mr.class_id = c.id
+            WHERE mr.id = $1
+        `, [reportId]);
+        
+        const report = completeResult.rows[0];
+        
+        // Get weeks
+        const weeksResult = await pool.query(`
+            SELECT * FROM monthly_report_weeks
+            WHERE monthly_report_id = $1
+            ORDER BY week_number
+        `, [reportId]);
+        
+        report.weeks = weeksResult.rows;
+        
+        res.status(201).json(report);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error creating monthly report:', error);
+        res.status(500).json({ 
+            error: 'Failed to create monthly report',
+            message: error.message 
+        });
+    } finally {
+        client.release();
+    }
+});
+
+/**
+ * PUT /api/monthly-reports/:id
+ * Update monthly report
+ */
+router.put('/:id', async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        const { monthly_theme, status, weeks } = req.body;
+        
+        await client.query('BEGIN');
+        
+        // Update main report
+        await client.query(`
+            UPDATE monthly_reports
+            SET monthly_theme = $1, status = $2, updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+        `, [monthly_theme || '', status || 'draft', req.params.id]);
+        
+        // Delete existing weeks
+        await client.query(`
+            DELETE FROM monthly_report_weeks
+            WHERE monthly_report_id = $1
+        `, [req.params.id]);
+        
+        // Insert updated weeks
+        if (weeks && Array.isArray(weeks) && weeks.length > 0) {
+            for (const week of weeks) {
+                if (week.week_number) {
+                    await client.query(`
+                        INSERT INTO monthly_report_weeks 
+                        (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, lesson_report_id)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `, [
+                        req.params.id,
+                        week.week_number,
+                        week.lesson_date || null,
+                        week.target || '',
+                        week.vocabulary || '',
+                        week.phrase || '',
+                        week.others || '',
+                        week.lesson_report_id || null
+                    ]);
+                }
+            }
+        }
+        
+        await client.query('COMMIT');
+        
+        // Fetch updated report
+        const completeResult = await pool.query(`
+            SELECT mr.*, c.name as class_name, c.schedule
+            FROM monthly_reports mr
+            JOIN classes c ON mr.class_id = c.id
+            WHERE mr.id = $1
+        `, [req.params.id]);
+        
+        const report = completeResult.rows[0];
+        
+        if (!report) {
+            return res.status(404).json({ error: 'Monthly report not found' });
+        }
+        
+        // Get weeks
+        const weeksResult = await pool.query(`
+            SELECT * FROM monthly_report_weeks
+            WHERE monthly_report_id = $1
+            ORDER BY week_number
+        `, [req.params.id]);
+        
+        report.weeks = weeksResult.rows;
+        
+        res.json(report);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error updating monthly report:', error);
+        res.status(500).json({ 
+            error: 'Failed to update monthly report',
+            message: error.message 
+        });
+    } finally {
+        client.release();
+    }
+});
+
+/**
+ * DELETE /api/monthly-reports/:id
+ * Delete monthly report
+ */
+router.delete('/:id', async (req, res) => {
+    try {
+        const result = await pool.query('DELETE FROM monthly_reports WHERE id = $1 RETURNING id', [req.params.id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Monthly report not found' });
+        }
+        
+        res.json({ message: 'Monthly report deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting monthly report:', error);
+        res.status(500).json({ error: 'Failed to delete monthly report' });
+    }
+});
+
+/**
+ * POST /api/monthly-reports/:id/generate-pdf
+ * Generate PDF for monthly report
+ */
+router.post('/:id/generate-pdf', async (req, res) => {
+    try {
+        // Get report data
+        const reportResult = await pool.query(`
+            SELECT mr.*, c.name as class_name, c.schedule
+            FROM monthly_reports mr
+            JOIN classes c ON mr.class_id = c.id
+            WHERE mr.id = $1
+        `, [req.params.id]);
+        
+        const report = reportResult.rows[0];
+        if (!report) {
+            return res.status(404).json({ error: 'Monthly report not found' });
+        }
+        
+        // Get weekly data
+        const weeksResult = await pool.query(`
+            SELECT * FROM monthly_report_weeks
+            WHERE monthly_report_id = $1
+            ORDER BY week_number
+        `, [req.params.id]);
+        
+        const weeks = weeksResult.rows;
+        
+        // Generate PDF
+        const pdfBuffer = await generateMonthlyReportPDF(report, weeks, {
+            name: report.class_name,
+            schedule: report.schedule
+        });
+        
+        // Upload to R2
+        const fileName = `monthly_report_${report.class_id}_${report.year}_${report.month}.pdf`;
+        const uploadResult = await uploadPDF(pdfBuffer, fileName, {
+            reportId: report.id.toString(),
+            classId: report.class_id.toString(),
+            year: report.year.toString(),
+            month: report.month.toString()
+        });
+        
+        // Get signed URL
+        const pdfUrl = await getDownloadUrl(uploadResult.key);
+        
+        // Update report with PDF URL
+        await pool.query(`
+            UPDATE monthly_reports
+            SET pdf_url = $1
+            WHERE id = $2
+        `, [uploadResult.key, req.params.id]);
+        
+        // Store in PDF history
+        await pool.query(`
+            INSERT INTO pdf_history (filename, type, class_id, r2_key, r2_url, file_size, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `, [
+            fileName,
+            'monthly_report',
+            report.class_id,
+            uploadResult.key,
+            pdfUrl,
+            uploadResult.size,
+            req.session.userId
+        ]);
+        
+        res.json({ 
+            success: true,
+            pdfUrl: pdfUrl,
+            key: uploadResult.key
+        });
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate PDF',
+            message: error.message 
+        });
+    }
+});
+
+/**
+ * GET /api/monthly-reports/:id/pdf
+ * Get PDF URL for monthly report
+ */
+router.get('/:id/pdf', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT pdf_url FROM monthly_reports WHERE id = $1
+        `, [req.params.id]);
+        
+        const report = result.rows[0];
+        if (!report) {
+            return res.status(404).json({ error: 'Monthly report not found' });
+        }
+        
+        if (!report.pdf_url) {
+            return res.status(404).json({ error: 'PDF not generated yet' });
+        }
+        
+        // Generate new signed URL
+        const signedUrl = await getDownloadUrl(report.pdf_url);
+        
+        res.json({ pdfUrl: signedUrl });
+    } catch (error) {
+        console.error('Error getting PDF URL:', error);
+        res.status(500).json({ error: 'Failed to get PDF URL' });
+    }
+});
+
+/**
+ * POST /api/monthly-reports/auto-generate
+ * Auto-generate monthly report from existing lesson reports
+ */
+router.post('/auto-generate', async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        const { class_id, year, month } = req.body;
+        
+        if (!class_id || !year || !month) {
+            return res.status(400).json({ 
+                error: 'Missing required fields: class_id, year, month' 
+            });
+        }
+        
+        await client.query('BEGIN');
+        
+        // Check for existing report
+        const existingResult = await client.query(`
+            SELECT id FROM monthly_reports 
+            WHERE class_id = $1 AND year = $2 AND month = $3
+        `, [class_id, year, month]);
+        
+        if (existingResult.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: 'A monthly report for this class and month already exists' 
+            });
+        }
+        
+        // Get lesson reports for this month
+        const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+        const endDate = new Date(year, month, 0);
+        const endDateStr = `${year}-${String(month).padStart(2, '0')}-${endDate.getDate()}`;
+        
+        const lessonsResult = await client.query(`
+            SELECT * FROM lesson_reports
+            WHERE class_id = $1 AND date >= $2 AND date <= $3
+            ORDER BY date
+        `, [class_id, startDate, endDateStr]);
+        
+        const lessons = lessonsResult.rows;
+        
+        if (lessons.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: 'No lesson reports found for this class and month' 
+            });
+        }
+        
+        // Create monthly report
+        const reportResult = await client.query(`
+            INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+        `, [class_id, year, month, '', 'draft', req.session.userId]);
+        
+        const reportId = reportResult.rows[0].id;
+        
+        // Create weekly entries from lesson reports
+        for (let index = 0; index < lessons.length; index++) {
+            const lesson = lessons[index];
+            await client.query(`
+                INSERT INTO monthly_report_weeks 
+                (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, lesson_report_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `, [
+                reportId,
+                index + 1,
+                lesson.date,
+                lesson.target_topic || '',
+                lesson.vocabulary || '',
+                '',
+                lesson.comments || '',
+                lesson.id
+            ]);
+        }
+        
+        await client.query('COMMIT');
+        
+        // Fetch complete report
+        const completeResult = await pool.query(`
+            SELECT mr.*, c.name as class_name, c.schedule
+            FROM monthly_reports mr
+            JOIN classes c ON mr.class_id = c.id
+            WHERE mr.id = $1
+        `, [reportId]);
+        
+        const report = completeResult.rows[0];
+        
+        // Get weeks
+        const weeksResult = await pool.query(`
+            SELECT * FROM monthly_report_weeks
+            WHERE monthly_report_id = $1
+            ORDER BY week_number
+        `, [reportId]);
+        
+        report.weeks = weeksResult.rows;
+        
+        res.status(201).json(report);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error auto-generating monthly report:', error);
+        res.status(500).json({ 
+            error: 'Failed to auto-generate monthly report',
+            message: error.message 
+        });
+    } finally {
+        client.release();
+    }
+});
+
+/**
+ * GET /api/monthly-reports/available-months/:classId
+ * Get months that have lesson data for a class
+ */
+router.get('/available-months/:classId', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT DISTINCT 
+                EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
+                EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
+                COUNT(*) as lesson_count
+            FROM lesson_reports
+            WHERE class_id = $1
+            GROUP BY year, month
+            ORDER BY year DESC, month DESC
+        `, [req.params.classId]);
+        
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching available months:', error);
+        res.status(500).json({ error: 'Failed to fetch available months' });
+    }
+});
+
+module.exports = router;

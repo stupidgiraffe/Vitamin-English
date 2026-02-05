@@ -4065,6 +4065,8 @@ navigateToPage = function(page) {
         // Database page loaded on demand
     } else if (page === 'profile') {
         loadProfilePage();
+    } else if (page === 'monthly-reports') {
+        initializeMonthlyReportsPage();
     }
 };
 
@@ -4099,7 +4101,7 @@ document.addEventListener('keydown', (e) => {
 
 // Get current active page
 function getCurrentPage() {
-    const pages = ['dashboard', 'attendance', 'reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
+    const pages = ['dashboard', 'attendance', 'reports', 'monthly-reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
     for (const page of pages) {
         const pageElement = document.getElementById(`${page}-page`);
         if (pageElement && pageElement.classList.contains('active')) {
@@ -4197,3 +4199,115 @@ showModal = function(title, content) {
         });
     });
 };
+
+// ===== Monthly Reports Section =====
+
+// Global state for monthly reports
+let monthlyReports = [];
+let currentMonthlyReport = null;
+
+// Initialize monthly reports page
+async function initializeMonthlyReportsPage() {
+    // Populate class filter
+    const classFilter = document.getElementById('monthly-report-class-filter');
+    classFilter.innerHTML = '<option value="">All Classes</option>';
+    classes.forEach(c => {
+        const option = document.createElement('option');
+        option.value = c.id;
+        option.textContent = c.name;
+        classFilter.appendChild(option);
+    });
+    
+    // Populate year filter with current year and previous 2 years
+    const yearFilter = document.getElementById('monthly-report-year-filter');
+    const currentYear = new Date().getFullYear();
+    yearFilter.innerHTML = '<option value="">All Years</option>';
+    for (let i = 0; i < 3; i++) {
+        const year = currentYear - i;
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearFilter.appendChild(option);
+    }
+    
+    // Set up event listeners
+    document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
+    document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
+}
+
+// Load monthly reports with filters
+async function loadMonthlyReports() {
+    const classId = document.getElementById('monthly-report-class-filter').value;
+    const year = document.getElementById('monthly-report-year-filter').value;
+    const month = document.getElementById('monthly-report-month-filter').value;
+    const status = document.getElementById('monthly-report-status-filter').value;
+    
+    try {
+        const params = new URLSearchParams();
+        if (classId) params.append('classId', classId);
+        if (year) params.append('year', year);
+        if (month) params.append('month', month);
+        if (status) params.append('status', status);
+        
+        const response = await api(`/monthly-reports?${params.toString()}`);
+        monthlyReports = response;
+        
+        renderMonthlyReportsList();
+    } catch (error) {
+        console.error('Error loading monthly reports:', error);
+        Toast.error('Failed to load monthly reports');
+    }
+}
+
+// Render monthly reports list
+function renderMonthlyReportsList() {
+    const container = document.getElementById('monthly-reports-list');
+    
+    if (monthlyReports.length === 0) {
+        container.innerHTML = '<p class="info-text">No monthly reports found. Create one to get started!</p>';
+        return;
+    }
+    
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    let html = `
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Class</th>
+                    <th>Month/Year</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    monthlyReports.forEach(report => {
+        const monthYear = `${monthNames[report.month - 1]} ${report.year}`;
+        const statusBadge = report.status === 'published' 
+            ? '<span class="badge badge-success">Published</span>' 
+            : '<span class="badge badge-warning">Draft</span>';
+        const createdDate = new Date(report.created_at).toLocaleDateString();
+        
+        html += `
+            <tr>
+                <td>${report.class_name || 'N/A'}</td>
+                <td>${monthYear}</td>
+                <td>${statusBadge}</td>
+                <td>${createdDate}</td>
+                <td class="actions">
+                    <button class="btn btn-sm btn-primary" onclick="viewMonthlyReport(${report.id})">View</button>
+                    <button class="btn btn-sm btn-secondary" onclick="editMonthlyReport(${report.id})">Edit</button>
+                    <button class="btn btn-sm btn-success" onclick="generateMonthlyReportPDF(${report.id})">Generate PDF</button>
+                    ${report.pdf_url ? `<button class="btn btn-sm btn-info" onclick="downloadMonthlyReportPDF(${report.id})">Download PDF</button>` : ''}
+                    <button class="btn btn-sm btn-danger" onclick="deleteMonthlyReport(${report.id})">Delete</button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table>';
+    container.innerHTML = html;
+}
