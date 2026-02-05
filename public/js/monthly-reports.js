@@ -277,7 +277,7 @@ async function autoGenerateFromLessonReports() {
         
         // POPULATE the form fields instead of closing modal
         populateWeekFields(response.weeks);
-        Toast.success(`Found ${response.lessonCount} lesson${response.lessonCount > 1 ? 's' : ''} - review and edit below, then click "Create Report" to save`);
+        Toast.success(`Found ${response.lessonCount} lesson${response.lessonCount > 1 ? 's' : ''} - data populated successfully!`);
         
     } catch (error) {
         console.error('Error generating preview:', error);
@@ -314,7 +314,9 @@ function populateWeekFields(weeks) {
         // Create date field
         const dateGroup = document.createElement('div');
         dateGroup.className = 'form-group';
-        dateGroup.innerHTML = '<label>Date</label>';
+        const dateLabel = document.createElement('label');
+        dateLabel.textContent = 'Date';
+        dateGroup.appendChild(dateLabel);
         const dateInput = document.createElement('input');
         dateInput.type = 'date';
         dateInput.className = 'form-control mr-week-date';
@@ -326,7 +328,9 @@ function populateWeekFields(weeks) {
         // Create target field
         const targetGroup = document.createElement('div');
         targetGroup.className = 'form-group';
-        targetGroup.innerHTML = '<label>Target (目標)</label>';
+        const targetLabel = document.createElement('label');
+        targetLabel.textContent = 'Target (目標)';
+        targetGroup.appendChild(targetLabel);
         const targetTextarea = document.createElement('textarea');
         targetTextarea.className = 'form-control mr-week-target';
         targetTextarea.rows = 2;
@@ -338,7 +342,9 @@ function populateWeekFields(weeks) {
         // Create vocabulary field
         const vocabGroup = document.createElement('div');
         vocabGroup.className = 'form-group';
-        vocabGroup.innerHTML = '<label>Vocabulary (単語)</label>';
+        const vocabLabel = document.createElement('label');
+        vocabLabel.textContent = 'Vocabulary (単語)';
+        vocabGroup.appendChild(vocabLabel);
         const vocabTextarea = document.createElement('textarea');
         vocabTextarea.className = 'form-control mr-week-vocabulary';
         vocabTextarea.rows = 2;
@@ -350,7 +356,9 @@ function populateWeekFields(weeks) {
         // Create phrase field
         const phraseGroup = document.createElement('div');
         phraseGroup.className = 'form-group';
-        phraseGroup.innerHTML = '<label>Phrase (文)</label>';
+        const phraseLabel = document.createElement('label');
+        phraseLabel.textContent = 'Phrase (文)';
+        phraseGroup.appendChild(phraseLabel);
         const phraseTextarea = document.createElement('textarea');
         phraseTextarea.className = 'form-control mr-week-phrase';
         phraseTextarea.rows = 2;
@@ -362,7 +370,9 @@ function populateWeekFields(weeks) {
         // Create others field
         const othersGroup = document.createElement('div');
         othersGroup.className = 'form-group';
-        othersGroup.innerHTML = '<label>Others (その他)</label>';
+        const othersLabel = document.createElement('label');
+        othersLabel.textContent = 'Others (その他)';
+        othersGroup.appendChild(othersLabel);
         const othersTextarea = document.createElement('textarea');
         othersTextarea.className = 'form-control mr-week-others';
         othersTextarea.rows = 2;
