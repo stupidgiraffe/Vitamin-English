@@ -49,7 +49,7 @@ router.get('/', async (req, res) => {
         
         if (end_date) {
             // Add one day to end_date to include the entire end date
-            query += ` AND mr.created_at <= $${paramIndex}::date + interval '1 day'`;
+            query += ` AND mr.created_at < ($${paramIndex}::date + interval '1 day')`;
             params.push(end_date);
             paramIndex++;
         }

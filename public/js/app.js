@@ -2844,6 +2844,7 @@ function renderCleanTable(data, type, options = {}) {
             headers: ['Year', 'Month', 'Class', 'Status'],
             formatters: {
                 month: (val) => {
+                    // Month values are 1-indexed (1-12) but array indices are 0-indexed
                     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     return months[val - 1] || val;
                 }
