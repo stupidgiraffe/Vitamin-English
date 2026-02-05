@@ -219,12 +219,30 @@ router.post('/generate', async (req, res) => {
                 })),
                 // Aggregate all topics covered
                 topicsCovered: [...new Set(lessonReports.map(lr => lr.target_topic).filter(Boolean))],
-                // Aggregate vocabulary
-                allVocabulary: lessonReports.map(lr => lr.vocabulary).filter(Boolean).join('\n'),
-                // Aggregate common mistakes
-                commonMistakes: lessonReports.map(lr => lr.mistakes).filter(Boolean).join('\n'),
-                // Aggregate strengths
-                overallStrengths: lessonReports.map(lr => lr.strengths).filter(Boolean).join('\n'),
+                // Aggregate vocabulary (deduplicated by splitting and rejoining)
+                allVocabulary: [...new Set(
+                    lessonReports
+                        .map(lr => lr.vocabulary)
+                        .filter(Boolean)
+                        .flatMap(v => v.split('\n').map(s => s.trim()))
+                        .filter(Boolean)
+                )].join('\n'),
+                // Aggregate common mistakes (deduplicated by splitting and rejoining)
+                commonMistakes: [...new Set(
+                    lessonReports
+                        .map(lr => lr.mistakes)
+                        .filter(Boolean)
+                        .flatMap(m => m.split('\n').map(s => s.trim()))
+                        .filter(Boolean)
+                )].join('\n'),
+                // Aggregate strengths (deduplicated by splitting and rejoining)
+                overallStrengths: [...new Set(
+                    lessonReports
+                        .map(lr => lr.strengths)
+                        .filter(Boolean)
+                        .flatMap(s => s.split('\n').map(str => str.trim()))
+                        .filter(Boolean)
+                )].join('\n'),
                 // Aggregate comments/homework
                 teacherComments: lessonReports.map(lr => ({
                     date: lr.date,
@@ -396,16 +414,6 @@ router.post('/quick-export', checkR2Config, async (req, res) => {
             return res.status(400).json({ error: 'Invalid parameters' });
         }
         
-        // First generate the report data
-        const generateResponse = await fetch(`${req.protocol}://${req.get('host')}/api/monthly-reports/generate`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Cookie': req.headers.cookie
-            },
-            body: JSON.stringify({ classId, year, month })
-        });
-        
         // Calculate date range for the month
         const startDate = `${parsedYear}-${String(parsedMonth).padStart(2, '0')}-01`;
         const lastDay = new Date(parsedYear, parsedMonth, 0).getDate();
@@ -491,9 +499,30 @@ router.post('/quick-export', checkR2Config, async (req, res) => {
                     comments: lr.comments
                 })),
                 topicsCovered: [...new Set(lessonReports.map(lr => lr.target_topic).filter(Boolean))],
-                allVocabulary: lessonReports.map(lr => lr.vocabulary).filter(Boolean).join('\n'),
-                commonMistakes: lessonReports.map(lr => lr.mistakes).filter(Boolean).join('\n'),
-                overallStrengths: lessonReports.map(lr => lr.strengths).filter(Boolean).join('\n'),
+                // Aggregate vocabulary (deduplicated)
+                allVocabulary: [...new Set(
+                    lessonReports
+                        .map(lr => lr.vocabulary)
+                        .filter(Boolean)
+                        .flatMap(v => v.split('\n').map(s => s.trim()))
+                        .filter(Boolean)
+                )].join('\n'),
+                // Aggregate common mistakes (deduplicated)
+                commonMistakes: [...new Set(
+                    lessonReports
+                        .map(lr => lr.mistakes)
+                        .filter(Boolean)
+                        .flatMap(m => m.split('\n').map(s => s.trim()))
+                        .filter(Boolean)
+                )].join('\n'),
+                // Aggregate strengths (deduplicated)
+                overallStrengths: [...new Set(
+                    lessonReports
+                        .map(lr => lr.strengths)
+                        .filter(Boolean)
+                        .flatMap(s => s.split('\n').map(str => str.trim()))
+                        .filter(Boolean)
+                )].join('\n'),
                 teacherComments: lessonReports.map(lr => ({
                     date: lr.date,
                     comment: lr.comments
