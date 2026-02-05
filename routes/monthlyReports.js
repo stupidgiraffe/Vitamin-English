@@ -149,7 +149,7 @@ router.post('/', async (req, res) => {
                 if (week.week_number) {
                     await client.query(`
                         INSERT INTO monthly_report_weeks 
-                        (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, lesson_report_id)
+                        (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     `, [
                         reportId,
@@ -159,7 +159,7 @@ router.post('/', async (req, res) => {
                         week.vocabulary || '',
                         week.phrase || '',
                         week.others || '',
-                        week.lesson_report_id || null
+                        week.teacher_comment_sheet_id || null
                     ]);
                 }
             }
@@ -230,7 +230,7 @@ router.put('/:id', async (req, res) => {
                 if (week.week_number) {
                     await client.query(`
                         INSERT INTO monthly_report_weeks 
-                        (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, lesson_report_id)
+                        (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     `, [
                         req.params.id,
@@ -240,7 +240,7 @@ router.put('/:id', async (req, res) => {
                         week.vocabulary || '',
                         week.phrase || '',
                         week.others || '',
-                        week.lesson_report_id || null
+                        week.teacher_comment_sheet_id || null
                     ]);
                 }
             }
@@ -446,7 +446,7 @@ router.post('/preview-generate', async (req, res) => {
         
         // Query lesson reports
         const lessonsResult = await pool.query(`
-            SELECT * FROM lesson_reports
+            SELECT * FROM teacher_comment_sheets
             WHERE class_id = $1 AND date >= $2 AND date <= $3
             ORDER BY date
         `, [class_id, startDate, endDate]);
@@ -459,11 +459,9 @@ router.post('/preview-generate', async (req, res) => {
             lesson_date: lesson.date,
             target: lesson.target_topic || '',
             vocabulary: lesson.vocabulary || '',
-            // Use 'mistakes' field for 'phrase' as it contains common errors and practice phrases
-            // that are relevant for the monthly report's phrase section
             phrase: lesson.mistakes || '',
             others: lesson.comments || '',
-            lesson_report_id: lesson.id
+            teacher_comment_sheet_id: lesson.id
         }));
         
         res.json({ 
@@ -482,17 +480,40 @@ router.post('/preview-generate', async (req, res) => {
 
 /**
  * POST /api/monthly-reports/auto-generate
- * Auto-generate monthly report from existing lesson reports
+ * Auto-generate monthly report from existing teacher comment sheets
  */
 router.post('/auto-generate', async (req, res) => {
     const client = await pool.connect();
     
     try {
-        const { class_id, year, month } = req.body;
+        const { class_id, start_date, end_date, year, month } = req.body;
         
-        if (!class_id || !year || !month) {
+        if (!class_id) {
             return res.status(400).json({ 
-                error: 'Missing required fields: class_id, year, month' 
+                error: 'Missing required field: class_id' 
+            });
+        }
+        
+        // Calculate date range based on inputs
+        let startDate, endDate, reportYear, reportMonth;
+        if (start_date && end_date) {
+            // Custom range
+            startDate = start_date;
+            endDate = end_date;
+            // Extract year and month from start_date for the report
+            const startDateObj = new Date(start_date);
+            reportYear = startDateObj.getFullYear();
+            reportMonth = startDateObj.getMonth() + 1;
+        } else if (year && month) {
+            // Monthly (backwards compatibility)
+            reportYear = year;
+            reportMonth = month;
+            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+        } else {
+            return res.status(400).json({ 
+                error: 'Either (year and month) or (start_date and end_date) must be provided' 
             });
         }
         
@@ -502,7 +523,7 @@ router.post('/auto-generate', async (req, res) => {
         const existingResult = await client.query(`
             SELECT id FROM monthly_reports 
             WHERE class_id = $1 AND year = $2 AND month = $3
-        `, [class_id, year, month]);
+        `, [class_id, reportYear, reportMonth]);
         
         if (existingResult.rows.length > 0) {
             await client.query('ROLLBACK');
@@ -511,41 +532,37 @@ router.post('/auto-generate', async (req, res) => {
             });
         }
         
-        // Get lesson reports for this month
-        const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-        const endDate = new Date(year, month, 0);
-        const endDateStr = `${year}-${String(month).padStart(2, '0')}-${endDate.getDate()}`;
-        
+        // Get teacher comment sheets for this date range
         const lessonsResult = await client.query(`
-            SELECT * FROM lesson_reports
+            SELECT * FROM teacher_comment_sheets
             WHERE class_id = $1 AND date >= $2 AND date <= $3
             ORDER BY date
-        `, [class_id, startDate, endDateStr]);
+        `, [class_id, startDate, endDate]);
         
         const lessons = lessonsResult.rows;
         
         if (lessons.length === 0) {
             await client.query('ROLLBACK');
             return res.status(400).json({ 
-                error: 'No lesson reports found for this class and month' 
+                error: 'No teacher comment sheets found for this class and date range' 
             });
         }
         
         // Create monthly report
         const reportResult = await client.query(`
-            INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
-        `, [class_id, year, month, '', 'draft', req.session.userId]);
+        `, [class_id, reportYear, reportMonth, startDate, endDate, '', 'draft', req.session.userId]);
         
         const reportId = reportResult.rows[0].id;
         
-        // Create weekly entries from lesson reports
+        // Create weekly entries from teacher comment sheets
         for (let index = 0; index < lessons.length; index++) {
             const lesson = lessons[index];
             await client.query(`
                 INSERT INTO monthly_report_weeks 
-                (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, lesson_report_id)
+                (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             `, [
                 reportId,
@@ -553,8 +570,6 @@ router.post('/auto-generate', async (req, res) => {
                 lesson.date,
                 lesson.target_topic || '',
                 lesson.vocabulary || '',
-                // Use 'mistakes' field for 'phrase' as it contains common errors and practice phrases
-                // that are relevant for the monthly report's phrase section
                 lesson.mistakes || '',
                 lesson.comments || '',
                 lesson.id
@@ -597,7 +612,7 @@ router.post('/auto-generate', async (req, res) => {
 
 /**
  * GET /api/monthly-reports/available-months/:classId
- * Get months that have lesson data for a class
+ * Get months that have teacher comment sheet data for a class
  */
 router.get('/available-months/:classId', async (req, res) => {
     try {
@@ -606,7 +621,7 @@ router.get('/available-months/:classId', async (req, res) => {
                 EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
                 EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
                 COUNT(*) as lesson_count
-            FROM lesson_reports
+            FROM teacher_comment_sheets
             WHERE class_id = $1
             GROUP BY year, month
             ORDER BY year DESC, month DESC

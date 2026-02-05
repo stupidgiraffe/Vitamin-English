@@ -66,7 +66,7 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
             doc.moveDown(0.5);
             doc.font('Helvetica')
                .text(`Name: ${studentData.name}`, { indent: 20 })
-               .text(`Class: ${studentData.class_name || 'N/A'}`, { indent: 20 })
+               .text(`Class: ${studentData.class_name || ''}`, { indent: 20 })
                .text(`Student Type: ${studentData.student_type || 'regular'}`, { indent: 20 });
             
             if (studentData.email) {
@@ -127,7 +127,7 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
                     else if (record.status === 'X') absentCount++;
                     else if (record.status === '/') lateCount++;
                     
-                    doc.text(record.date || 'N/A', dateX, rowY)
+                    doc.text(record.date || '', dateX, rowY)
                        .text(statusText, statusX, rowY)
                        .text(record.notes || '', notesX, rowY, { width: 250 });
                     
@@ -213,8 +213,8 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
             doc.fontSize(12)
                .font('Helvetica')
                .text(`Class: ${classData.name}`, { indent: 50 })
-               .text(`Teacher: ${classData.teacher_name || 'N/A'}`, { indent: 50 })
-               .text(`Schedule: ${classData.schedule || 'N/A'}`, { indent: 50 })
+               .text(`Teacher: ${classData.teacher_name || ''}`, { indent: 50 })
+               .text(`Schedule: ${classData.schedule || ''}`, { indent: 50 })
                .text(`Date: ${date || new Date().toLocaleDateString()}`, { indent: 50 });
             
             doc.moveDown(1);
@@ -357,7 +357,7 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
             // Class Information
             doc.fontSize(10)
                .font('Helvetica')
-               .text(`Class: ${sanitizeForPDF(classData.name)}  |  Teacher: ${sanitizeForPDF(classData.teacher_name) || 'N/A'}  |  Date Range: ${startDate} to ${endDate}`, 
+               .text(`Class: ${sanitizeForPDF(classData.name)}  |  Teacher: ${sanitizeForPDF(classData.teacher_name) || ''}  |  Date Range: ${startDate} to ${endDate}`, 
                      { align: 'center' });
             
             doc.moveDown(0.8);
@@ -600,7 +600,7 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             doc.fontSize(28)
                .font('Helvetica-Bold')
                .fillColor(THEME.colors.white)
-               .text('🍊 Vitamin English School', 50, 30, { align: 'center' });
+               .text('Vitamin English School', 50, 30, { align: 'center' });
             
             doc.fontSize(18)
                .fillColor(THEME.colors.accentYellow)
@@ -630,9 +630,9 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             
             doc.fontSize(11)
                .font('Helvetica')
-               .text(`Class: ${sanitizeForPDF(classData.name) || 'N/A'}`, 60, detailsY)
-               .text(`Teacher: ${sanitizeForPDF(reportData.teacher_name) || 'N/A'}`, 60, detailsY + 20)
-               .text(`Date: ${reportData.date || 'N/A'}`, 60, detailsY + 40);
+               .text(`Class: ${sanitizeForPDF(classData.name) || ''}`, 60, detailsY)
+               .text(`Teacher: ${sanitizeForPDF(reportData.teacher_name) || ''}`, 60, detailsY + 20)
+               .text(`Date: ${reportData.date || ''}`, 60, detailsY + 40);
             
             doc.moveDown(3);
             
@@ -773,7 +773,7 @@ async function generateMultiClassReportPDF(classReportsData, startDate, endDate)
             doc.fontSize(32)
                .font('Helvetica-Bold')
                .fillColor(THEME.colors.white)
-               .text('🍊 Vitamin English School', 50, 30, { align: 'center' });
+               .text('Vitamin English School', 50, 30, { align: 'center' });
             
             doc.fontSize(22)
                .fillColor(THEME.colors.accentYellow)
@@ -935,7 +935,7 @@ async function generateMultiClassReportPDF(classReportsData, startDate, endDate)
                         doc.fontSize(11)
                            .font('Helvetica-Bold')
                            .fillColor(THEME.colors.textDark)
-                           .text(`📅 ${report.date} - ${sanitizeForPDF(report.teacher_name) || 'N/A'}`, 
+                           .text(`📅 ${report.date} - ${sanitizeForPDF(report.teacher_name) || ''}`, 
                                  60, reportHeaderY + 6);
                         
                         doc.moveDown(1.2);

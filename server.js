@@ -167,6 +167,7 @@ const studentRoutes = require('./routes/students');
 const classRoutes = require('./routes/classes');
 const attendanceRoutes = require('./routes/attendance');
 const reportRoutes = require('./routes/reports');
+const teacherCommentSheetsRoutes = require('./routes/teacherCommentSheets');
 const databaseRoutes = require('./routes/database');
 const makeupRoutes = require('./routes/makeup');
 const pdfRoutes = require('./routes/pdf');
@@ -227,6 +228,7 @@ app.use('/api/students', requireAuth, studentRoutes);
 app.use('/api/classes', requireAuth, classRoutes);
 app.use('/api/attendance', requireAuth, attendanceRoutes);
 app.use('/api/reports', requireAuth, reportRoutes);
+app.use('/api/teacher-comment-sheets', requireAuth, teacherCommentSheetsRoutes);
 app.use('/api/database', requireAuth, databaseRoutes);
 app.use('/api/makeup', requireAuth, makeupRoutes);
 app.use('/api/pdf', requireAuth, pdfRoutes);
@@ -245,7 +247,7 @@ app.get('/api/debug/database-status', requireAuth, async (req, res) => {
         const classCount = await pool.query('SELECT COUNT(*) as count FROM classes');
         const studentCount = await pool.query('SELECT COUNT(*) as count FROM students');
         const attendanceCount = await pool.query('SELECT COUNT(*) as count FROM attendance');
-        const reportCount = await pool.query('SELECT COUNT(*) as count FROM lesson_reports');
+        const reportCount = await pool.query('SELECT COUNT(*) as count FROM teacher_comment_sheets');
         
         const users = await pool.query('SELECT username, full_name, role FROM users');
         const classes = await pool.query('SELECT id, name, teacher_id FROM classes');
