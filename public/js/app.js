@@ -4300,11 +4300,10 @@ async function initializeMonthlyReportsPage() {
     document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
     document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
     
-    // Load existing reports (gracefully handle errors)
+    // Load existing reports (log but don't display errors on initial load)
     try {
         await loadMonthlyReports();
     } catch (error) {
-        // Silently fail on initial load - user can click filter if needed
         console.log('Monthly reports not loaded on init:', error);
     }
 }

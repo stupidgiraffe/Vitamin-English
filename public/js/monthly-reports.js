@@ -55,19 +55,19 @@ async function showNewMonthlyReportModal() {
 async function handleCreateMonthlyReport(e) {
     e.preventDefault();
     
-    const cid = document.getElementById('mr-class').value;
-    const sd = document.getElementById('mr-start-date').value;
-    const ed = document.getElementById('mr-end-date').value;
-    const thm = document.getElementById('mr-theme').value;
-    const sts = document.getElementById('mr-status').value;
+    const classId = document.getElementById('mr-class').value;
+    const startDate = document.getElementById('mr-start-date').value;
+    const endDate = document.getElementById('mr-end-date').value;
+    const monthlyTheme = document.getElementById('mr-theme').value;
+    const reportStatus = document.getElementById('mr-status').value;
     
-    if (!sd || !ed) {
+    if (!startDate || !endDate) {
         Toast.error('Please select start and end dates');
         return;
     }
     
-    const dt = new Date(sd);
-    if (isNaN(dt.getTime())) {
+    const dateObj = new Date(startDate);
+    if (isNaN(dateObj.getTime())) {
         Toast.error('Invalid start date');
         return;
     }
@@ -77,11 +77,11 @@ async function handleCreateMonthlyReport(e) {
         const result = await api('/monthly-reports/auto-generate', {
             method: 'POST',
             body: JSON.stringify({
-                class_id: cid,
-                start_date: sd,
-                end_date: ed,
-                monthly_theme: thm,
-                status: sts
+                class_id: classId,
+                start_date: startDate,
+                end_date: endDate,
+                monthly_theme: monthlyTheme,
+                status: reportStatus
             })
         });
         
