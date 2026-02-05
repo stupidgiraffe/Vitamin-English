@@ -414,6 +414,71 @@ router.get('/:id/pdf', async (req, res) => {
 });
 
 /**
+ * POST /api/monthly-reports/preview-generate
+ * Preview monthly report data from lesson reports without creating the report
+ */
+router.post('/preview-generate', async (req, res) => {
+    try {
+        const { class_id, start_date, end_date, year, month } = req.body;
+        
+        if (!class_id) {
+            return res.status(400).json({ 
+                error: 'Missing required field: class_id' 
+            });
+        }
+        
+        // Calculate date range based on inputs
+        let startDate, endDate;
+        if (start_date && end_date) {
+            // Custom range
+            startDate = start_date;
+            endDate = end_date;
+        } else if (year && month) {
+            // Monthly
+            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+        } else {
+            return res.status(400).json({ 
+                error: 'Either (year and month) or (start_date and end_date) must be provided' 
+            });
+        }
+        
+        // Query lesson reports
+        const lessonsResult = await pool.query(`
+            SELECT * FROM lesson_reports
+            WHERE class_id = $1 AND date >= $2 AND date <= $3
+            ORDER BY date
+        `, [class_id, startDate, endDate]);
+        
+        const lessons = lessonsResult.rows;
+        
+        // Map to weekly format
+        const weeks = lessons.map((lesson, index) => ({
+            week_number: index + 1,
+            lesson_date: lesson.date,
+            target: lesson.target_topic || '',
+            vocabulary: lesson.vocabulary || '',
+            phrase: lesson.mistakes || '', // Use mistakes field for phrases
+            others: lesson.comments || '',
+            lesson_report_id: lesson.id
+        }));
+        
+        res.json({ 
+            success: true, 
+            weeks: weeks,
+            lessonCount: weeks.length 
+        });
+    } catch (error) {
+        console.error('Error previewing monthly report:', error);
+        res.status(500).json({ 
+            error: 'Failed to preview monthly report',
+            message: error.message 
+        });
+    }
+});
+
+/**
  * POST /api/monthly-reports/auto-generate
  * Auto-generate monthly report from existing lesson reports
  */
@@ -486,7 +551,7 @@ router.post('/auto-generate', async (req, res) => {
                 lesson.date,
                 lesson.target_topic || '',
                 lesson.vocabulary || '',
-                '',
+                lesson.mistakes || '', // Use mistakes field for phrases
                 lesson.comments || '',
                 lesson.id
             ]);
