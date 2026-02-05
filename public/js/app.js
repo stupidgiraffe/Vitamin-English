@@ -4289,17 +4289,11 @@ async function initializeMonthlyReportsPage() {
         classFilter.appendChild(option);
     });
     
-    // Populate year filter with current year and previous 2 years
-    const yearFilter = document.getElementById('monthly-report-year-filter');
-    const currentYear = new Date().getFullYear();
-    yearFilter.innerHTML = '<option value="">All Years</option>';
-    for (let i = 0; i < 3; i++) {
-        const year = currentYear - i;
-        const option = document.createElement('option');
-        option.value = year;
-        option.textContent = year;
-        yearFilter.appendChild(option);
-    }
+    // Set default date range: first day of current month to today
+    const today = new Date();
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    document.getElementById('monthly-report-start-date').value = firstDayOfMonth.toISOString().split('T')[0];
+    document.getElementById('monthly-report-end-date').value = today.toISOString().split('T')[0];
     
     // Set up event listeners
     document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
@@ -4309,15 +4303,15 @@ async function initializeMonthlyReportsPage() {
 // Load monthly reports with filters
 async function loadMonthlyReports() {
     const classId = document.getElementById('monthly-report-class-filter').value;
-    const year = document.getElementById('monthly-report-year-filter').value;
-    const month = document.getElementById('monthly-report-month-filter').value;
+    const startDate = document.getElementById('monthly-report-start-date').value;
+    const endDate = document.getElementById('monthly-report-end-date').value;
     const status = document.getElementById('monthly-report-status-filter').value;
     
     try {
         const params = new URLSearchParams();
         if (classId) params.append('classId', classId);
-        if (year) params.append('year', year);
-        if (month) params.append('month', month);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
         if (status) params.append('status', status);
         
         const response = await api(`/monthly-reports?${params.toString()}`);
