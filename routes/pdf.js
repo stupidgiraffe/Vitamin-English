@@ -340,7 +340,7 @@ router.post('/lesson-report/:reportId', checkR2Config, async (req, res) => {
         // Fetch report data
         const reportResult = await pool.query(`
             SELECT lr.*, c.name as class_name, u.full_name as teacher_name
-            FROM lesson_reports lr
+            FROM teacher_comment_sheets lr
             LEFT JOIN classes c ON lr.class_id = c.id
             LEFT JOIN users u ON lr.teacher_id = u.id
             WHERE lr.id = $1
@@ -549,7 +549,7 @@ router.post('/multi-class-reports', checkR2Config, async (req, res) => {
             // Get reports for this class within date range
             const reportsResult = await pool.query(`
                 SELECT lr.*, u.full_name as teacher_name
-                FROM lesson_reports lr
+                FROM teacher_comment_sheets lr
                 LEFT JOIN users u ON lr.teacher_id = u.id
                 WHERE lr.class_id = $1 AND lr.date >= $2 AND lr.date <= $3
                 ORDER BY lr.date ASC

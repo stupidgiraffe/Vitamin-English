@@ -10,7 +10,7 @@ const { uploadPDF, getDownloadUrl } = require('../utils/r2Storage');
  */
 router.get('/', async (req, res) => {
     try {
-        const { classId, year, month, status } = req.query;
+        const { classId, year, month, start_date, end_date, status } = req.query;
         
         let query = `
             SELECT mr.*, c.name as class_name, c.schedule, u.full_name as created_by_name
@@ -28,6 +28,7 @@ router.get('/', async (req, res) => {
             paramIndex++;
         }
         
+        // Support both year/month (for backward compatibility) and date range filtering
         if (year) {
             query += ` AND mr.year = $${paramIndex}`;
             params.push(year);
@@ -37,6 +38,19 @@ router.get('/', async (req, res) => {
         if (month) {
             query += ` AND mr.month = $${paramIndex}`;
             params.push(month);
+            paramIndex++;
+        }
+        
+        if (start_date) {
+            query += ` AND mr.created_at >= $${paramIndex}`;
+            params.push(start_date);
+            paramIndex++;
+        }
+        
+        if (end_date) {
+            // Add one day to end_date to include the entire end date
+            query += ` AND mr.created_at < ($${paramIndex}::date + interval '1 day')`;
+            params.push(end_date);
             paramIndex++;
         }
         

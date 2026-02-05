@@ -80,7 +80,7 @@ router.get('/:id/details', async (req, res) => {
         // Get lesson reports for the student's class (last 20)
         const reportsResult = await pool.query(`
             SELECT lr.*, u.full_name as teacher_name 
-            FROM lesson_reports lr 
+            FROM teacher_comment_sheets lr 
             LEFT JOIN users u ON lr.teacher_id = u.id 
             WHERE lr.class_id = $1 
             ORDER BY lr.date DESC 

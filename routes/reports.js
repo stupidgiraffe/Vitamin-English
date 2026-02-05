@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
         
         let query = `
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM lesson_reports r
+            FROM teacher_comment_sheets r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id
             WHERE 1=1
@@ -57,7 +57,7 @@ router.get('/:id', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM lesson_reports r
+            FROM teacher_comment_sheets r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id
             WHERE r.id = $1
@@ -80,7 +80,7 @@ router.get('/by-date/:classId/:date', async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM lesson_reports r
+            FROM teacher_comment_sheets r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id
             WHERE r.class_id = $1 AND r.date = $2
@@ -114,7 +114,7 @@ router.post('/', async (req, res) => {
         
         // Check if report already exists
         const existingResult = await pool.query(`
-            SELECT id FROM lesson_reports 
+            SELECT id FROM teacher_comment_sheets 
             WHERE class_id = $1 AND date = $2
         `, [class_id, date]);
         const existing = existingResult.rows[0];
@@ -127,12 +127,12 @@ router.post('/', async (req, res) => {
         }
         
         const result = await pool.query(`
-            INSERT INTO lesson_reports (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments) 
+            INSERT INTO teacher_comment_sheets (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments) 
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             RETURNING id
         `, [class_id, teacher_id, date, target_topic || '', vocabulary || '', mistakes || '', strengths || '', comments || '']);
         
-        const reportResult = await pool.query('SELECT * FROM lesson_reports WHERE id = $1', [result.rows[0].id]);
+        const reportResult = await pool.query('SELECT * FROM teacher_comment_sheets WHERE id = $1', [result.rows[0].id]);
         const report = reportResult.rows[0];
         
         console.log('Report created successfully:', report.id); // Debug logging
@@ -160,7 +160,7 @@ router.put('/:id', async (req, res) => {
         }
         
         await pool.query(`
-            UPDATE lesson_reports 
+            UPDATE teacher_comment_sheets 
             SET teacher_id = $1, target_topic = $2, vocabulary = $3, mistakes = $4, strengths = $5, comments = $6
             WHERE id = $7
         `, [
@@ -173,7 +173,7 @@ router.put('/:id', async (req, res) => {
             req.params.id
         ]);
         
-        const result = await pool.query('SELECT * FROM lesson_reports WHERE id = $1', [req.params.id]);
+        const result = await pool.query('SELECT * FROM teacher_comment_sheets WHERE id = $1', [req.params.id]);
         const report = result.rows[0];
         
         if (!report) {
@@ -194,7 +194,7 @@ router.put('/:id', async (req, res) => {
 // Delete a report
 router.delete('/:id', async (req, res) => {
     try {
-        await pool.query('DELETE FROM lesson_reports WHERE id = $1', [req.params.id]);
+        await pool.query('DELETE FROM teacher_comment_sheets WHERE id = $1', [req.params.id]);
         res.json({ message: 'Report deleted successfully' });
     } catch (error) {
         console.error('Error deleting report:', error);
