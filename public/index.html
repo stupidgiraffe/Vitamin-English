@@ -28,6 +28,8 @@
     <script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
     <!-- Internationalization -->
     <script src="/js/i18n.js" defer></script>
+    <!-- Monthly Reports Module -->
+    <script src="/js/monthly-reports.js" defer></script>
 </head>
 <body>
     <!-- Skip to main content link for accessibility -->
@@ -71,6 +73,7 @@
                 <button class="nav-item active" data-page="dashboard" data-i18n="nav.dashboard">Dashboard</button>
                 <button class="nav-item" data-page="attendance" data-i18n="nav.attendance">Attendance</button>
                 <button class="nav-item" data-page="reports" data-i18n="nav.reports">Lesson Reports</button>
+                <button class="nav-item" data-page="monthly-reports" data-i18n="nav.monthlyReports">Monthly Reports</button>
                 <button class="nav-item" data-page="students-profile" data-i18n="nav.students">Students</button>
                 <button class="nav-item" data-page="makeup" data-i18n="nav.makeup">Make-up Lessons</button>
                 <button class="nav-item" data-page="database" data-i18n="nav.database">Database</button>
@@ -306,6 +309,58 @@
                     <div id="multi-class-grid" class="multi-class-grid">
                         <p class="info-text">Select classes and date range, then click "Load Reports"</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- Monthly Reports Page -->
+            <div id="monthly-reports-page" class="page">
+                <h2>Monthly Reports</h2>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Class:</label>
+                        <select id="monthly-report-class-filter" class="form-control">
+                            <option value="">All Classes</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Year:</label>
+                        <select id="monthly-report-year-filter" class="form-control">
+                            <option value="">All Years</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Month:</label>
+                        <select id="monthly-report-month-filter" class="form-control">
+                            <option value="">All Months</option>
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Status:</label>
+                        <select id="monthly-report-status-filter" class="form-control">
+                            <option value="">All Status</option>
+                            <option value="draft">Draft</option>
+                            <option value="published">Published</option>
+                        </select>
+                    </div>
+                    <button id="filter-monthly-reports-btn" class="btn btn-primary">Filter</button>
+                    <button id="new-monthly-report-btn" class="btn btn-success">+ Create Monthly Report</button>
+                </div>
+
+                <div id="monthly-reports-list" class="data-table">
+                    <p class="info-text">Click "Filter" to load monthly reports</p>
                 </div>
             </div>
 

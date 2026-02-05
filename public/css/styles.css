@@ -2646,3 +2646,119 @@ body {
         max-height: 150px;
     }
 }
+
+/* ===== Monthly Reports Styles ===== */
+
+/* Monthly report week rows */
+.mr-week-row {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.mr-week-row h5 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    color: var(--primary-blue);
+}
+
+.mr-week-row .form-group {
+    margin-bottom: 10px;
+}
+
+.mr-week-row .form-group label {
+    font-size: 14px;
+    font-weight: 500;
+    color: #495057;
+}
+
+/* Monthly report view */
+.monthly-report-view {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.monthly-report-view h3 {
+    color: var(--primary-blue);
+    margin-bottom: 15px;
+}
+
+.week-view {
+    background: #f8f9fa;
+    border-left: 4px solid var(--primary-blue);
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 4px;
+}
+
+.week-view h4 {
+    color: var(--primary-blue);
+    margin-bottom: 10px;
+}
+
+.week-view p {
+    margin: 8px 0;
+    line-height: 1.6;
+}
+
+.week-view strong {
+    color: #495057;
+}
+
+/* Badge styles */
+.badge {
+    display: inline-block;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 4px;
+}
+
+.badge-success {
+    background-color: #28a745;
+    color: white;
+}
+
+.badge-warning {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.badge-info {
+    background-color: #17a2b8;
+    color: white;
+}
+
+/* Table actions */
+.table .actions {
+    white-space: nowrap;
+}
+
+.table .actions .btn {
+    margin-right: 5px;
+    margin-bottom: 5px;
+}
+
+/* Responsive for monthly reports */
+@media (max-width: 768px) {
+    .mr-week-row {
+        padding: 10px;
+    }
+    
+    .table .actions {
+        white-space: normal;
+    }
+    
+    .table .actions .btn {
+        width: 100%;
+        margin-right: 0;
+    }
+}
