@@ -268,7 +268,7 @@ async function handleCreateMonthlyReport(e) {
         return;
     }
 
-    if (startDate > endDate) {
+    if (new Date(startDate) > new Date(endDate)) {
         Toast.error('Start date must be before end date');
         return;
     }
