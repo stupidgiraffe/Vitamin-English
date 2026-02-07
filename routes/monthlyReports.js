@@ -223,16 +223,40 @@ router.post('/auto-generate', async (req, res) => {
         
         await client.query('BEGIN');
         
-        // Check for existing report by year/month (matches the UNIQUE constraint)
+        // Check for existing report by exact date range (matches new UNIQUE constraint)
         const existingResult = await client.query(`
             SELECT id FROM monthly_reports 
-            WHERE class_id = $1 AND year = $2 AND month = $3
-        `, [class_id, reportYear, reportMonth]);
+            WHERE class_id = $1 AND start_date = $2 AND end_date = $3
+        `, [class_id, startDate, endDate]);
         
         if (existingResult.rows.length > 0) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                error: 'A monthly report for this class and month already exists' 
+            const existingId = existingResult.rows[0].id;
+            
+            // Fetch the complete existing report
+            const completeResult = await pool.query(`
+                SELECT mr.*, c.name as class_name, c.schedule
+                FROM monthly_reports mr
+                JOIN classes c ON mr.class_id = c.id
+                WHERE mr.id = $1
+            `, [existingId]);
+            
+            const report = completeResult.rows[0];
+            
+            // Get weeks
+            const weeksResult = await pool.query(`
+                SELECT * FROM monthly_report_weeks
+                WHERE monthly_report_id = $1
+                ORDER BY week_number
+            `, [existingId]);
+            
+            report.weeks = weeksResult.rows;
+            
+            // Return existing report with a flag indicating it already existed
+            return res.status(200).json({ 
+                ...report,
+                alreadyExists: true,
+                message: 'A monthly report with this exact date range already exists'
             });
         }
         

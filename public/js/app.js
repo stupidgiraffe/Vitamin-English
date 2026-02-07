@@ -4406,6 +4406,7 @@ async function initializeMonthlyReportsPage() {
     // Set up event listeners
     document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
     document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
+    document.getElementById('generate-test-report-btn').addEventListener('click', generateTestMonthlyReport);
 
     // Auto-load reports on page open
     try {
@@ -4466,8 +4467,9 @@ function renderMonthlyReportsList() {
     
     monthlyReports.forEach(report => {
         const monthYear = `${monthNames[report.month - 1]} ${report.year}`;
+        // Use the new date formatter for date range display
         const dateRange = (report.start_date && report.end_date) 
-            ? `${String(report.start_date).split('T')[0]} — ${String(report.end_date).split('T')[0]}` 
+            ? `${formatDateISO(report.start_date)} — ${formatDateISO(report.end_date)}` 
             : 'N/A';
         const statusBadge = report.status === 'published' 
             ? '<span class="badge badge-success">Published</span>' 
@@ -4493,3 +4495,47 @@ function renderMonthlyReportsList() {
     html += '</tbody></table>';
     container.innerHTML = html;
 }
+
+// Generate test monthly report (admin only)
+async function generateTestMonthlyReport() {
+    // Get first class and first teacher for test data
+    if (classes.length === 0) {
+        Toast.error('No classes found. Please create a class first.');
+        return;
+    }
+    
+    if (teachers.length === 0) {
+        Toast.error('No teachers found. Please create a teacher first.');
+        return;
+    }
+    
+    const classId = classes[0].id;
+    const teacherId = teachers[0].id;
+    
+    try {
+        Toast.info('Generating test report...');
+        
+        const response = await api('/monthly-reports/generate-test-data', {
+            method: 'POST',
+            body: JSON.stringify({
+                class_id: classId,
+                teacher_id: teacherId
+            })
+        });
+        
+        Toast.success(`Test report created! Report ID: ${response.reportId}`);
+        
+        // Reload the list
+        await loadMonthlyReports();
+        
+        // Auto-open the created report after a brief delay
+        setTimeout(() => {
+            viewMonthlyReport(response.reportId);
+        }, 500);
+        
+    } catch (error) {
+        console.error('Error generating test report:', error);
+        Toast.error(error.message || 'Failed to generate test report');
+    }
+}
+
