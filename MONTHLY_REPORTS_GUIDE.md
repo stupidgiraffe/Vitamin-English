@@ -1,45 +1,41 @@
 # Monthly Reports Feature - User Guide
 
 ## Overview
-The Monthly Reports feature allows teachers and administrators to create comprehensive monthly progress reports for each class. These reports track weekly lesson content throughout the month and can be exported as professional PDFs.
+The Monthly Reports feature allows teachers and administrators to create comprehensive monthly progress reports for each class. These reports track weekly lesson content throughout the month and can be exported as professional PDFs with full Japanese text support.
+
+## Recent Improvements (February 2026)
+- **One-Click Creation**: Simplified modal with automatic data population from teacher comment sheets
+- **Proper Japanese Rendering**: All Japanese characters (今月のテーマ, 日付, 目標, etc.) now display correctly in PDFs
+- **Better Date Display**: Lesson dates shown as "Feb. 7, 2026" instead of generic "Week 1/2/3..."
+- **Japan Timezone**: All dates use Asia/Tokyo timezone to avoid confusing GMT timestamps
+- **Auto-Load**: Reports load automatically when you open the page
 
 ## Accessing Monthly Reports
 
 1. Log in to the Vitamin English School Management System
 2. Click on **"Monthly Reports"** in the navigation menu
-3. The Monthly Reports page will display with filtering options
+3. Reports will load automatically with current filters applied
 
 ## Features
 
-### 1. Creating a New Monthly Report
+### 1. Creating a New Monthly Report (Simplified!)
 
-#### Manual Creation
+#### One-Click Auto-Generate (Recommended)
 1. Click the **"+ Create Monthly Report"** button
-2. Fill in the required information:
+2. Fill in the simple form:
    - **Class**: Select the class for the report
-   - **Year**: Select the year
-   - **Month**: Select the month
-3. Add weekly lesson data:
-   - **Date**: Lesson date
-   - **Target (目標)**: Learning objectives for the week
-   - **Vocabulary (単語)**: Words and vocabulary learned
-   - **Phrase (文)**: Sentence patterns practiced
-   - **Others (その他)**: Additional activities (reading practice, make-up lessons, etc.)
-4. Click **"+ Add Week"** to add more weeks (up to 6 weeks)
-5. Enter the **Monthly Theme (今月のテーマ)**: A summary paragraph about the month's theme and overall progress
-6. Select the **Status**:
-   - **Draft**: Work in progress, not yet finalized
-   - **Published**: Finalized and ready to share
-7. Click **"Create Report"**
+   - **Start Date**: First day of the period (defaults to start of current month)
+   - **End Date**: Last day of the period (defaults to today)
+   - **Monthly Theme (今月のテーマ)**: Optional theme or summary
+   - **Status**: Draft or Published
+3. Click **"Create Report"**
+4. The system automatically:
+   - Finds all teacher comment sheets in the date range
+   - Creates weekly entries for each lesson
+   - Populates all fields (Target, Vocabulary, Phrase, Others)
+   - Saves the report immediately
 
-#### Auto-Generate from Lesson Reports
-1. Click **"+ Create Monthly Report"**
-2. Select the **Class**, **Year**, and **Month**
-3. Click **"Auto-Generate from Lesson Reports"**
-4. The system will:
-   - Find all lesson reports for that class and month
-   - Create weekly entries automatically
-   - You can then edit and add the monthly theme
+**Note**: This replaces the old multi-step process. No more manual week entry!
 
 ### 2. Viewing Monthly Reports
 
@@ -61,9 +57,12 @@ The Monthly Reports feature allows teachers and administrators to create compreh
 1. Click the **"View"** button on any report
 2. A modal will display:
    - Class and month information
+   - Date range covered
    - Status
-   - All weekly lesson data
+   - All lesson data organized by actual lesson dates (e.g., "Feb. 7, 2026")
    - Monthly theme
+
+**New**: Lessons are now shown with their actual dates instead of generic "Week 1, Week 2" labels, making it easier to identify specific lessons.
 
 ### 3. Editing a Monthly Report
 
@@ -83,11 +82,14 @@ The Monthly Reports feature allows teachers and administrators to create compreh
    - Header with "Monthly Report" title
    - Class name and schedule
    - Month and year
-   - Weekly progress table with all lesson data
-   - Monthly theme section
+   - Lesson progress table with columns for each lesson date
+   - All fields displayed with both English and Japanese labels (日付, 目標, 単語, 文, その他)
+   - Monthly theme section with Japanese heading support
    - Vitamin English School branding
 3. The PDF will open in a new tab
 4. The PDF is stored securely and can be downloaded later
+
+**Important**: All Japanese text now renders correctly in PDFs using the Noto Sans JP font. No more garbled characters!
 
 #### Download Existing PDF
 - If a PDF has already been generated, a **"Download PDF"** button will appear
@@ -104,22 +106,24 @@ The Monthly Reports feature allows teachers and administrators to create compreh
 The generated PDF includes:
 
 ### Header Section
-- **Title**: "Monthly Report" (large, green)
-- **Month/Year**: e.g., "January 2026"
+- **Title**: "Monthly Report" (large, bold)
+- **Month/Year**: e.g., "Feb. 2026"
 - **Class Info**: e.g., "Elementary, Tue 4PM"
 
-### Weekly Progress Table
-A clean grid table with columns:
-- **Week**: Week number (1-6)
-- **Date (日付)**: Lesson date
-- **Target (目標)**: Learning objectives
-- **Vocabulary (単語)**: Words learned
-- **Phrase (文)**: Sentence patterns
-- **Others (その他)**: Additional activities
+### Lesson Progress Table (Landscape Layout)
+A clean table with:
+- **Columns**: One column for each lesson date (e.g., "Feb. 7", "Feb. 14", etc.)
+- **Rows**: Each row represents a category with bilingual labels:
+  - **Target (目標)**: Learning objectives
+  - **Vocabulary (単語)**: Words learned
+  - **Phrase (文)**: Sentence patterns
+  - **Others (その他)**: Additional activities
+
+All Japanese characters are rendered using the Noto Sans JP font for crystal-clear display.
 
 ### Monthly Theme Section
-- **Header**: "Monthly Theme (今月のテーマ)"
-- **Content**: Teacher's summary and reflections
+- **Header**: "Monthly Theme (今月のテーマ)" in Japanese font
+- **Content**: Teacher's summary and reflections in a bordered box
 
 ### Footer
 - Vitamin English School branding with green outline
@@ -127,42 +131,50 @@ A clean grid table with columns:
 ## Best Practices
 
 ### For Teachers
-1. **Regular Updates**: Create or update monthly reports at the end of each month
-2. **Use Auto-Generate**: If you've been creating lesson reports throughout the month, use the auto-generate feature to save time
-3. **Meaningful Themes**: Write thoughtful monthly theme summaries that highlight student progress and achievements
-4. **Draft First**: Create reports as drafts, review them, then publish when ready
-5. **Japanese Text**: Feel free to use Japanese characters in any field - they are fully supported
+1. **Use One-Click Creation**: Simply select class and date range - the system does the rest!
+2. **Flexible Date Ranges**: Not limited to calendar months - can create reports for any date range
+3. **Regular Updates**: Create monthly reports at the end of each month
+4. **Meaningful Themes**: Write thoughtful monthly theme summaries that highlight student progress
+5. **Draft First**: Create reports as drafts, review them, then publish when ready
+6. **Japanese Text**: All Japanese characters are fully supported in both the web view and PDFs
 
 ### For Administrators
-1. **Review Process**: Check draft reports before they're published
-2. **Consistency**: Ensure all classes have monthly reports for tracking purposes
-3. **PDF Generation**: Generate PDFs for published reports to share with parents or for records
-4. **Filtering**: Use filters to quickly check which classes need reports
+1. **Auto-Load**: Reports load automatically when the page opens
+2. **Review Process**: Check draft reports before they're published
+3. **Consistency**: Ensure all classes have monthly reports for tracking purposes
+4. **PDF Generation**: Generate PDFs for published reports - Japanese text will render perfectly
+5. **Filtering**: Use the date range filters to find specific reports
 
 ## Workflow Example
 
-### Monthly Report Creation Workflow
-1. **End of Month**: Teacher reviews the month's lesson reports
-2. **Auto-Generate**: Click auto-generate to pull in lesson data
-3. **Review & Edit**: Review auto-generated content, make adjustments
-4. **Add Theme**: Write a comprehensive monthly theme paragraph
-5. **Save as Draft**: Save the report as a draft for review
-6. **Admin Review**: Administrator reviews the draft
-7. **Publish**: Teacher publishes the finalized report
-8. **Generate PDF**: Generate PDF for sharing or archiving
+### Simplified Monthly Report Creation Workflow
+1. **End of Month**: Click "Monthly Reports" in navigation
+2. **Create Report**: Click "+ Create Monthly Report"
+3. **Fill Simple Form**: Select class, start date, end date, add optional theme
+4. **Click Create**: System automatically pulls all teacher comment sheets
+5. **Done!**: Report is created with all lesson data populated
+6. **Generate PDF**: Click "Generate PDF" to create shareable document
 
-## Integration with Lesson Reports
+**Time saved**: What used to take 10-15 minutes now takes less than 1 minute!
 
-Monthly Reports work seamlessly with the existing Lesson Reports feature:
-- Auto-generate pulls data from `target_topic`, `vocabulary`, and `comments` fields
-- Each weekly entry can be linked to its source lesson report
-- Changes to lesson reports after auto-generation do not affect the monthly report (they are independent)
+## Integration with Teacher Comment Sheets
+
+Monthly Reports work seamlessly with the Teacher Comment Sheets feature:
+- Auto-generate pulls data from `target_topic`, `vocabulary`, `mistakes`, `strengths`, and `comments` fields
+- Each lesson entry can be linked to its source teacher comment sheet
+- Changes to teacher comment sheets after auto-generation do not affect the monthly report (they are independent)
 
 ## Technical Notes
 
+### Recent Technical Improvements
+- **Japanese Font**: Noto Sans JP font embedded in PDFs for proper Japanese character rendering
+- **Timezone Handling**: All dates use Asia/Tokyo timezone consistently
+- **Date Formatters**: Centralized date formatting utilities for consistency
+- **Defensive Logging**: Added logging for empty weeks to help with debugging
+
 ### Database Schema
-- `monthly_reports` table stores main report metadata
-- `monthly_report_weeks` table stores weekly lesson data
+- `monthly_reports` table stores main report metadata (includes `start_date` and `end_date` columns)
+- `monthly_report_weeks` table stores lesson data (linked via `teacher_comment_sheet_id`)
 - Unique constraint prevents duplicate reports for same class/month
 - Cascade delete ensures data consistency
 
@@ -171,37 +183,50 @@ Monthly Reports work seamlessly with the existing Lesson Reports feature:
 - Parameterized queries prevent SQL injection
 - Input validation on both server and client side
 - PDFs stored securely with time-limited signed URLs
+- Japanese text sanitized for PDF security
 
 ### Limitations
-- Maximum 6 weeks per report
-- One report per class per month
-- PDF URLs expire after 1 hour (new links can be generated)
+- Maximum 6 lessons per report (expandable if needed)
+- One report per class per calendar month (based on start_date month)
+- PDF URLs expire after 1 hour (new links can be generated anytime)
 
 ## Troubleshooting
 
 ### "A monthly report for this class and month already exists"
-- Each class can only have one report per month
+- Each class can only have one report per calendar month
 - Edit the existing report instead of creating a new one
 - Or delete the existing report first (if appropriate)
 
-### "No lesson reports found for this class and month"
-- Auto-generate requires existing lesson reports for that class and month
-- Create the monthly report manually instead
-- Or create lesson reports first, then use auto-generate
+### "No teacher comment sheets found for this class and date range"
+- Auto-generate requires existing teacher comment sheets for that class and date range
+- Create teacher comment sheets first, then use auto-generate
+- Or manually edit the report after creation
 
 ### "PDF not available. Please generate it first"
 - PDFs are not created automatically
 - Click "Generate PDF" to create one
-- PDF generation may take a few seconds for reports with lots of data
+- PDF generation may take a few seconds
 
-### PDF Japanese characters not displaying
-- This should not occur as the PDF generator supports Japanese
-- If you encounter this, report it as a bug
+### PDF Japanese characters not displaying correctly
+- **This issue has been fixed!** All PDFs now use Noto Sans JP font
+- If you see old PDFs with garbled text, regenerate them
+- New PDFs will display all Japanese characters (今月のテーマ, 日付, 目標, etc.) correctly
+
+### Dates showing wrong timezone or GMT strings
+- **This issue has been fixed!** All dates now use Asia/Tokyo timezone
+- Dates are formatted as "Feb. 7, 2026" instead of long GMT strings
+- Both web view and PDFs use consistent Japan time
 
 ## Support
 
 For issues, questions, or feature requests related to Monthly Reports, contact your system administrator or refer to the main application documentation.
 
 ---
-**Feature Version**: 1.0.0
-**Last Updated**: 2026-02-05
+**Feature Version**: 2.0.0
+**Last Updated**: 2026-02-07
+**Recent Updates**:
+- Fixed Japanese text rendering in PDFs with Noto Sans JP font
+- Simplified creation flow to one-click auto-generate
+- Improved date display (actual dates vs. "Week 1/2/3...")
+- Centralized timezone handling (Asia/Tokyo)
+- Added auto-load for better UX

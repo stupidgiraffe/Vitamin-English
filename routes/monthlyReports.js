@@ -665,6 +665,13 @@ router.post('/:id/generate-pdf', async (req, res) => {
         
         const weeks = weeksResult.rows;
         
+        // Defensive logging for empty weeks
+        if (weeks.length === 0) {
+            console.warn(`⚠️  No weekly data found for monthly report ${req.params.id}`);
+        } else {
+            console.log(`✓ Generating PDF for report ${req.params.id} with ${weeks.length} week(s)`);
+        }
+        
         // Generate PDF
         const pdfBuffer = await generateMonthlyReportPDF(report, weeks, {
             name: report.class_name,

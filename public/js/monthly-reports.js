@@ -302,12 +302,18 @@ async function viewMonthlyReport(reportId) {
         
         let weeksHtml = '';
         if (report.weeks && report.weeks.length > 0) {
-            report.weeks.forEach(week => {
-                const date = week.lesson_date ? new Date(week.lesson_date).toLocaleDateString() : 'N/A';
+            report.weeks.forEach((week, index) => {
+                // Use the actual lesson date as the primary heading using shared formatter
+                let dateLabel = 'Lesson';
+                if (week.lesson_date) {
+                    dateLabel = formatDateReadable(week.lesson_date) || `Lesson ${index + 1}`;
+                } else {
+                    dateLabel = `Lesson ${index + 1}`;
+                }
+                
                 weeksHtml += `
                     <div class="week-view">
-                        <h4>Week ${week.week_number}</h4>
-                        <p><strong>Date:</strong> ${date}</p>
+                        <h4>${escapeHtml(dateLabel)}</h4>
                         <p><strong>Target (目標):</strong> ${escapeHtml(week.target || 'N/A')}</p>
                         <p><strong>Vocabulary (単語):</strong> ${escapeHtml(week.vocabulary || 'N/A')}</p>
                         <p><strong>Phrase (文):</strong> ${escapeHtml(week.phrase || 'N/A')}</p>
@@ -329,7 +335,7 @@ async function viewMonthlyReport(reportId) {
                 ${weeksHtml}
                 <hr>
                 <h4>Monthly Theme (今月のテーマ)</h4>
-                <p>${report.monthly_theme || 'No theme provided.'}</p>
+                <p>${escapeHtml(report.monthly_theme || 'No theme provided.')}</p>
             </div>
         `;
         

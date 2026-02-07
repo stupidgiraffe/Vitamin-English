@@ -180,6 +180,32 @@ function escapeHtml(text) {
     return text ? String(text).replace(/[&<>"']/g, m => map[m]) : '';
 }
 
+// Shared month abbreviations for consistent date formatting
+const MONTH_ABBR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
+                    'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
+
+/**
+ * Format a date in a readable format (e.g., "Feb. 7, 2026")
+ * Uses Japan timezone to avoid GMT strings
+ * @param {string|Date} dateInput - Date to format
+ * @param {boolean} includeYear - Whether to include year (default: true)
+ * @returns {string} Formatted date
+ */
+function formatDateReadable(dateInput, includeYear = true) {
+    if (!dateInput) return '';
+    try {
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return '';
+        
+        // Use Japan timezone
+        const japanDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+        const formatted = `${MONTH_ABBR[japanDate.getMonth()]} ${japanDate.getDate()}`;
+        return includeYear ? `${formatted}, ${japanDate.getFullYear()}` : formatted;
+    } catch (e) {
+        return dateInput.toString().split('T')[0];
+    }
+}
+
 // Date normalization helper - ensures dates are in ISO format (YYYY-MM-DD)
 function normalizeToISO(dateInput) {
     if (!dateInput) {

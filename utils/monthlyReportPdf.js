@@ -1,4 +1,6 @@
 const PDFDocument = require('pdfkit');
+const path = require('path');
+const { formatShortDate } = require('./dateUtils');
 
 /**
  * Sanitize text for PDF output to prevent PDF injection attacks
@@ -13,20 +15,13 @@ function sanitizeForPDF(text) {
 }
 
 /**
- * Format date for display (e.g., "Jul. 1")
+ * Format date for display using Japan timezone (e.g., "Feb. 7")
  * @param {String} dateStr - Date string
  * @returns {String} Formatted date
  */
 function formatDate(dateStr) {
     if (!dateStr) return '';
-    try {
-        const date = new Date(dateStr);
-        const monthAbbr = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
-                          'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
-        return `${monthAbbr[date.getMonth()]} ${date.getDate()}`;
-    } catch (error) {
-        return dateStr;
-    }
+    return formatShortDate(dateStr);
 }
 
 /**
@@ -78,6 +73,9 @@ function wrapText(text, maxLength) {
 async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
     return new Promise((resolve, reject) => {
         try {
+            // Path to Japanese font
+            const fontPath = path.join(__dirname, '..', 'fonts', 'NotoSansJP-Regular.ttf');
+            
             const doc = new PDFDocument({ 
                 size: 'A4',
                 margin: 30,
@@ -93,6 +91,9 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             });
             doc.on('error', reject);
             
+            // Register Japanese font
+            doc.registerFont('NotoJP', fontPath);
+            
             // Constants for layout
             const pageWidth = doc.page.width;
             const pageHeight = doc.page.height;
@@ -105,6 +106,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                 const dateB = new Date(b.lesson_date);
                 return dateA - dateB;
             });
+            
+            // Log if no weeks data for debugging
+            if (sortedWeeks.length === 0) {
+                console.warn('⚠️  No weekly data found for PDF generation');
+            }
             
             // Header Section
             const headerLeft = margin;
@@ -136,7 +142,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             const colWidth = contentWidth / numColumns;
             const rowHeight = 60;
             
-            // Category labels (bilingual)
+            // Category labels (bilingual) - use Japanese font
             const categories = [
                 { en: 'Date', jp: '日付' },
                 { en: 'Target', jp: '目標' },
@@ -187,7 +193,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                 
                 doc.fillColor('#333333');
                 
-                // Category label (bilingual)
+                // Category label (bilingual) - use Japanese font for Japanese text
                 xPos = margin + 2;
                 doc.fontSize(7)
                    .font('Helvetica-Bold')
@@ -195,7 +201,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                        width: colWidth - 4, 
                        align: 'center' 
                    });
-                doc.font('Helvetica')
+                // Use Japanese font for Japanese labels
+                doc.font('NotoJP')
                    .text(`(${category.jp})`, xPos, rowY + 18, { 
                        width: colWidth - 4, 
                        align: 'center' 
@@ -203,7 +210,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                 
                 xPos += colWidth;
                 
-                // Data cells for this category
+                // Data cells for this category - use Japanese font for content
                 sortedWeeks.forEach((week) => {
                     let cellText = '';
                     
@@ -229,7 +236,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                     const lines = wrappedText.split('\n').slice(0, 3); // Max 3 lines
                     
                     doc.fontSize(6)
-                       .font('Helvetica')
+                       .font('NotoJP') // Use Japanese font for all content
                        .text(lines.join('\n'), xPos, rowY + 5, { 
                            width: colWidth - 4,
                            height: rowHeight - 10,
@@ -246,13 +253,13 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             doc.moveDown(2);
             const themeY = currentY + 20;
             
-            // Monthly theme header with green background
+            // Monthly theme header with green background - use Japanese font
             doc.rect(margin, themeY, contentWidth, 25)
                .fillAndStroke('#2E7D32', '#2E7D32');
             
             doc.fontSize(12)
                .fillColor('#FFFFFF')
-               .font('Helvetica-Bold')
+               .font('NotoJP') // Use Japanese font for Japanese header
                .text('Monthly Theme (今月のテーマ)', margin + 10, themeY + 7);
             
             // Monthly theme content box
@@ -272,7 +279,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             if (themeText) {
                 doc.fontSize(9)
                    .fillColor('#333333')
-                   .font('Helvetica')
+                   .font('NotoJP') // Use Japanese font for theme text
                    .text(themeText, margin + 10, themeBoxTop + 10, {
                       width: contentWidth - 20,
                       align: 'left',

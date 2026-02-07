@@ -3,6 +3,10 @@
  * Ensures all dates are in ISO format (YYYY-MM-DD)
  */
 
+// Shared month abbreviations
+const MONTH_ABBR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
+                    'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
+
 /**
  * Normalizes a date to ISO format (YYYY-MM-DD)
  * @param {string|Date} dateInput - Date in various formats
@@ -74,7 +78,78 @@ function isValidISODate(dateStr) {
     return isoDate !== null;
 }
 
+/**
+ * Format a date to Japan time (Asia/Tokyo) in a readable format
+ * @param {string|Date} dateInput - Date to format
+ * @param {string} format - Format type: 'date' (default), 'datetime', 'short'
+ * @returns {string} Formatted date string
+ */
+function formatJapanTime(dateInput, format = 'date') {
+    if (!dateInput) return '';
+    
+    try {
+        const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+        
+        // Validate date
+        if (isNaN(date.getTime())) {
+            return '';
+        }
+        
+        // Use Intl.DateTimeFormat for Asia/Tokyo timezone
+        const options = {
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        };
+        
+        if (format === 'datetime') {
+            options.hour = '2-digit';
+            options.minute = '2-digit';
+            options.hour12 = false;
+        } else if (format === 'short') {
+            // Short format like "Feb 7"
+            const jpDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+            return `${MONTH_ABBR[jpDate.getMonth()]} ${jpDate.getDate()}`;
+        }
+        
+        // Return formatted date
+        const formatter = new Intl.DateTimeFormat('en-CA', options); // en-CA gives YYYY-MM-DD format
+        const parts = formatter.formatToParts(date);
+        
+        if (format === 'datetime') {
+            // Return YYYY-MM-DD HH:mm format
+            const year = parts.find(p => p.type === 'year').value;
+            const month = parts.find(p => p.type === 'month').value;
+            const day = parts.find(p => p.type === 'day').value;
+            const hour = parts.find(p => p.type === 'hour')?.value || '00';
+            const minute = parts.find(p => p.type === 'minute')?.value || '00';
+            return `${year}-${month}-${day} ${hour}:${minute}`;
+        } else {
+            // Return YYYY-MM-DD format (default)
+            const year = parts.find(p => p.type === 'year').value;
+            const month = parts.find(p => p.type === 'month').value;
+            const day = parts.find(p => p.type === 'day').value;
+            return `${year}-${month}-${day}`;
+        }
+    } catch (error) {
+        console.error('Error formatting Japan time:', error);
+        return '';
+    }
+}
+
+/**
+ * Get a human-readable date for display (e.g., "Feb. 7")
+ * @param {string|Date} dateInput - Date to format
+ * @returns {string} Short formatted date
+ */
+function formatShortDate(dateInput) {
+    return formatJapanTime(dateInput, 'short');
+}
+
 module.exports = {
     normalizeToISO,
-    isValidISODate
+    isValidISODate,
+    formatJapanTime,
+    formatShortDate
 };
