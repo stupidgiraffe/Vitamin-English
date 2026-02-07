@@ -12,6 +12,27 @@ router.get('/', async (req, res) => {
     try {
         const { classId, year, month, start_date, end_date, status } = req.query;
         
+        // Check if monthly_reports table exists
+        const client = await pool.connect();
+        try {
+            const tableCheck = await client.query(`
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'monthly_reports'
+            `);
+            
+            if (tableCheck.rows.length === 0) {
+                console.warn('⚠️  monthly_reports table does not exist (migration 004 not applied)');
+                return res.status(503).json({ 
+                    error: 'Monthly reports feature not available',
+                    message: 'Database migration 004 is required. Please run: node scripts/apply-migrations.js',
+                    needsMigration: true
+                });
+            }
+        } finally {
+            client.release();
+        }
+        
         let query = `
             SELECT mr.*, c.name as class_name, c.schedule, u.full_name as created_by_name
             FROM monthly_reports mr
@@ -65,6 +86,16 @@ router.get('/', async (req, res) => {
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching monthly reports:', error);
+        
+        // Check if error is because table doesn't exist
+        if (error.message && error.message.includes('does not exist') && error.message.includes('monthly_reports')) {
+            return res.status(503).json({ 
+                error: 'Monthly reports feature not available',
+                message: 'Database migration 004 is required. Please run: node scripts/apply-migrations.js',
+                needsMigration: true
+            });
+        }
+        
         res.status(500).json({ error: 'Failed to fetch monthly reports' });
     }
 });
@@ -101,12 +132,26 @@ router.post('/preview-generate', async (req, res) => {
             });
         }
         
-        // Query lesson reports
-        const lessonsResult = await pool.query(`
-            SELECT * FROM teacher_comment_sheets
-            WHERE class_id = $1 AND date >= $2 AND date <= $3
-            ORDER BY date
-        `, [class_id, startDate, endDate]);
+        // Query lesson reports - try teacher_comment_sheets first, fallback to lesson_reports
+        let lessonsResult;
+        try {
+            lessonsResult = await pool.query(`
+                SELECT * FROM teacher_comment_sheets
+                WHERE class_id = $1 AND date >= $2 AND date <= $3
+                ORDER BY date
+            `, [class_id, startDate, endDate]);
+        } catch (tableError) {
+            if (tableError.message && tableError.message.includes('does not exist')) {
+                console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
+                lessonsResult = await pool.query(`
+                    SELECT * FROM lesson_reports
+                    WHERE class_id = $1 AND date >= $2 AND date <= $3
+                    ORDER BY date
+                `, [class_id, startDate, endDate]);
+            } else {
+                throw tableError;
+            }
+        }
         
         const lessons = lessonsResult.rows;
         
@@ -191,12 +236,26 @@ router.post('/auto-generate', async (req, res) => {
             });
         }
         
-        // Get teacher comment sheets for this date range
-        const lessonsResult = await client.query(`
-            SELECT * FROM teacher_comment_sheets
-            WHERE class_id = $1 AND date >= $2 AND date <= $3
-            ORDER BY date
-        `, [class_id, startDate, endDate]);
+        // Get teacher comment sheets for this date range - try teacher_comment_sheets first
+        let lessonsResult;
+        try {
+            lessonsResult = await client.query(`
+                SELECT * FROM teacher_comment_sheets
+                WHERE class_id = $1 AND date >= $2 AND date <= $3
+                ORDER BY date
+            `, [class_id, startDate, endDate]);
+        } catch (tableError) {
+            if (tableError.message && tableError.message.includes('does not exist')) {
+                console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
+                lessonsResult = await client.query(`
+                    SELECT * FROM lesson_reports
+                    WHERE class_id = $1 AND date >= $2 AND date <= $3
+                    ORDER BY date
+                `, [class_id, startDate, endDate]);
+            } else {
+                throw tableError;
+            }
+        }
         
         const lessons = lessonsResult.rows;
         
@@ -293,16 +352,36 @@ router.post('/auto-generate', async (req, res) => {
  */
 router.get('/available-months/:classId', async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT DISTINCT 
-                EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
-                EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
-                COUNT(*) as lesson_count
-            FROM teacher_comment_sheets
-            WHERE class_id = $1
-            GROUP BY year, month
-            ORDER BY year DESC, month DESC
-        `, [req.params.classId]);
+        // Try teacher_comment_sheets first, fallback to lesson_reports
+        let result;
+        try {
+            result = await pool.query(`
+                SELECT DISTINCT 
+                    EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
+                    EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
+                    COUNT(*) as lesson_count
+                FROM teacher_comment_sheets
+                WHERE class_id = $1
+                GROUP BY year, month
+                ORDER BY year DESC, month DESC
+            `, [req.params.classId]);
+        } catch (tableError) {
+            if (tableError.message && tableError.message.includes('does not exist')) {
+                console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
+                result = await pool.query(`
+                    SELECT DISTINCT 
+                        EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
+                        EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
+                        COUNT(*) as lesson_count
+                    FROM lesson_reports
+                    WHERE class_id = $1
+                    GROUP BY year, month
+                    ORDER BY year DESC, month DESC
+                `, [req.params.classId]);
+            } else {
+                throw tableError;
+            }
+        }
         
         res.json(result.rows);
     } catch (error) {
