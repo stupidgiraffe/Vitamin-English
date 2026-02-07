@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../database/init');
 const { normalizeToISO } = require('../utils/dateUtils');
+const { buildAttendanceMatrix } = require('../utils/attendanceDataBuilder');
 
 // Get attendance records
 router.get('/', async (req, res) => {
@@ -73,95 +74,13 @@ router.get('/matrix', async (req, res) => {
             return res.status(400).json({ error: 'classId is required' });
         }
         
-        // Get students in the class
-        const studentsResult = await pool.query(`
-            SELECT * FROM students 
-            WHERE class_id = $1 AND active = true
-            ORDER BY student_type, name
-        `, [classId]);
-        const students = studentsResult.rows;
-        
-        // Normalize date inputs to ISO format (YYYY-MM-DD)
-        const normalizedStartDate = startDate ? normalizeToISO(startDate) : null;
-        const normalizedEndDate = endDate ? normalizeToISO(endDate) : null;
-        
-        let dates = [];
-        
-        // If date range is provided, generate all dates in range
-        if (normalizedStartDate && normalizedEndDate) {
-            // Parse dates safely without timezone issues
-            const [startYear, startMonth, startDay] = normalizedStartDate.split('-').map(Number);
-            const [endYear, endMonth, endDay] = normalizedEndDate.split('-').map(Number);
-            
-            const start = new Date(startYear, startMonth - 1, startDay);
-            const end = new Date(endYear, endMonth - 1, endDay);
-            const current = new Date(start);
-            
-            while (current <= end) {
-                const year = current.getFullYear();
-                const month = String(current.getMonth() + 1).padStart(2, '0');
-                const day = String(current.getDate()).padStart(2, '0');
-                dates.push(`${year}-${month}-${day}`);
-                current.setDate(current.getDate() + 1);
-            }
-        } else {
-            // Otherwise, get dates from existing attendance records
-            let dateQuery = 'SELECT DISTINCT date FROM attendance WHERE class_id = $1';
-            const dateParams = [classId];
-            let paramIndex = 2;
-            
-            if (normalizedStartDate) {
-                dateQuery += ` AND date >= $${paramIndex}`;
-                dateParams.push(normalizedStartDate);
-                paramIndex++;
-            }
-            
-            if (normalizedEndDate) {
-                dateQuery += ` AND date <= $${paramIndex}`;
-                dateParams.push(normalizedEndDate);
-                paramIndex++;
-            }
-            
-            dateQuery += ' ORDER BY date';
-            
-            const datesResult = await pool.query(dateQuery, dateParams);
-            // Normalize all dates to ISO format
-            dates = datesResult.rows.map(row => normalizeToISO(row.date) || row.date);
-        }
-        
-        // Get attendance records
-        let attendanceQuery = `
-            SELECT student_id, date, status 
-            FROM attendance 
-            WHERE class_id = $1
-        `;
-        const attendanceParams = [classId];
-        let paramIndex = 2;
-        if (normalizedStartDate) {
-            attendanceQuery += ` AND date >= $${paramIndex}`;
-            attendanceParams.push(normalizedStartDate);
-            paramIndex++;
-        }
-        if (normalizedEndDate) {
-            attendanceQuery += ` AND date <= $${paramIndex}`;
-            attendanceParams.push(normalizedEndDate);
-        }
-        
-        const attendanceResult = await pool.query(attendanceQuery, attendanceParams);
-        const attendanceRecords = attendanceResult.rows;
-        
-        // Create attendance matrix with normalized dates
-        const attendanceMap = {};
-        attendanceRecords.forEach(record => {
-            const normalizedDate = normalizeToISO(record.date) || record.date;
-            const key = `${record.student_id}-${normalizedDate}`;
-            attendanceMap[key] = record.status;
-        });
+        // Use shared data builder for consistency between UI and PDF
+        const matrixData = await buildAttendanceMatrix(pool, parseInt(classId), startDate, endDate);
         
         res.json({
-            students,
-            dates,
-            attendance: attendanceMap
+            students: matrixData.students,
+            dates: matrixData.dates,
+            attendance: matrixData.attendanceMap
         });
     } catch (error) {
         console.error('Error fetching attendance matrix:', error);

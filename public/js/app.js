@@ -1938,7 +1938,7 @@ function renderMultiClassGrid(classReports) {
         return `
             <div class="class-card">
                 <div class="class-card-header ${classInfo.color}">
-                    <span class="class-name">${classInfo.name}</span>
+                    <span class="class-name">${escapeHtml(classInfo.name)}</span>
                     <span class="report-count">${reports.length} report${reports.length !== 1 ? 's' : ''}</span>
                 </div>
                 <div class="class-card-body">
@@ -1947,9 +1947,9 @@ function renderMultiClassGrid(classReports) {
                         ${recentReports.length > 0 ? recentReports.map(report => `
                             <li class="report-mini-item ${!report.target_topic ? 'no-topic' : ''}" 
                                 onclick="viewReportDetails(${report.id})">
-                                <div class="report-mini-date">📅 ${report.date}</div>
+                                <div class="report-mini-date">📅 ${formatDisplayDate(report.date)}</div>
                                 <div class="report-mini-topic">
-                                    ${report.target_topic || 'No topic specified'}
+                                    ${escapeHtml(report.target_topic || 'No topic specified')}
                                 </div>
                             </li>
                         `).join('') : '<li class="info-text">No recent reports</li>'}
@@ -1957,7 +1957,7 @@ function renderMultiClassGrid(classReports) {
                 </div>
                 <div class="class-card-footer">
                     <span style="font-size: 12px; color: var(--text-secondary);">
-                        Teacher: ${reports[0]?.teacher_name || 'N/A'}
+                        Teacher: ${escapeHtml(reports[0]?.teacher_name || 'N/A')}
                     </span>
                 </div>
             </div>
@@ -3293,12 +3293,72 @@ async function viewReportDetail(reportId) {
 // View attendance detail modal
 async function viewAttendanceDetail(attendanceId) {
     try {
-        // Attendance records don't have individual IDs in the search results
-        // Just show a simple message
-        Toast.info('Attendance record details are shown in the table');
+        // Fetch the attendance record
+        const result = await api(`/database/table/attendance`);
+        const record = result.data.find(r => r.id === attendanceId);
+        
+        if (!record) {
+            Toast.error('Attendance record not found');
+            return;
+        }
+        
+        // Format status for display
+        const statusInfo = formatAttendanceStatus(record.status);
+        
+        showModal(`Attendance Record - ${record.student_name}`, `
+            <div class="attendance-detail">
+                <p><strong>Date:</strong> ${formatDisplayDate(record.date)}</p>
+                <p><strong>Student:</strong> ${escapeHtml(record.student_name)}</p>
+                <p><strong>Class:</strong> ${escapeHtml(record.class_name)}</p>
+                <p><strong>Status:</strong> <span class="${statusInfo.class}">${statusInfo.icon} ${statusInfo.text}</span></p>
+                ${record.time ? `<p><strong>Time:</strong> ${escapeHtml(record.time)}</p>` : ''}
+                ${record.notes ? `<p><strong>Notes:</strong> ${escapeHtml(record.notes)}</p>` : ''}
+                
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="openAttendanceGrid(${record.class_id}, '${record.date}')">
+                        📊 Open in Attendance Grid
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                </div>
+            </div>
+        `);
     } catch (error) {
         Toast.error('Failed to load attendance: ' + error.message);
     }
+}
+
+// Open attendance grid for a specific class and date
+function openAttendanceGrid(classId, date) {
+    // Navigate to attendance page
+    navigateToPage('attendance');
+    
+    // Wait for page to load, then select the class and set the date
+    setTimeout(() => {
+        const classSelect = document.getElementById('class-select');
+        if (classSelect) {
+            classSelect.value = classId;
+            // Trigger change event to load students
+            classSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Set the start and end date to focus on the specific date
+        const startDateInput = document.getElementById('start-date');
+        const endDateInput = document.getElementById('end-date');
+        if (startDateInput && endDateInput) {
+            startDateInput.value = date;
+            endDateInput.value = date;
+        }
+        
+        // Load the attendance grid
+        setTimeout(() => {
+            const loadBtn = document.getElementById('load-attendance-btn');
+            if (loadBtn) {
+                loadBtn.click();
+            }
+        }, 300);
+    }, 100);
+    
+    closeModal();
 }
 
 // View monthly report detail modal
