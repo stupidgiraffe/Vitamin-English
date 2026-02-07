@@ -4403,10 +4403,23 @@ async function initializeMonthlyReportsPage() {
     document.getElementById('monthly-report-start-date').value = firstDayOfMonth.toISOString().split('T')[0];
     document.getElementById('monthly-report-end-date').value = today.toISOString().split('T')[0];
     
-    // Set up event listeners
-    document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
-    document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
-    document.getElementById('generate-test-report-btn').addEventListener('click', generateTestMonthlyReport);
+    // Set up event listeners (remove existing ones first to prevent duplicates)
+    const filterBtn = document.getElementById('filter-monthly-reports-btn');
+    const newBtn = document.getElementById('new-monthly-report-btn');
+    const testBtn = document.getElementById('generate-test-report-btn');
+    
+    // Clone and replace to remove old listeners
+    const newFilterBtn = filterBtn.cloneNode(true);
+    const newNewBtn = newBtn.cloneNode(true);
+    const newTestBtn = testBtn.cloneNode(true);
+    
+    filterBtn.parentNode.replaceChild(newFilterBtn, filterBtn);
+    newBtn.parentNode.replaceChild(newNewBtn, newBtn);
+    testBtn.parentNode.replaceChild(newTestBtn, testBtn);
+    
+    newFilterBtn.addEventListener('click', loadMonthlyReports);
+    newNewBtn.addEventListener('click', showNewMonthlyReportModal);
+    newTestBtn.addEventListener('click', generateTestMonthlyReport);
 
     // Auto-load reports on page open
     try {
@@ -4528,6 +4541,12 @@ async function generateTestMonthlyReport() {
         } else {
             Toast.success(`Test report created! Report ID: ${response.reportId}`);
         }
+        
+        // Clear filters to show all reports (so test report for Jan 2024 is visible)
+        document.getElementById('monthly-report-class-filter').value = '';
+        document.getElementById('monthly-report-start-date').value = '';
+        document.getElementById('monthly-report-end-date').value = '';
+        document.getElementById('monthly-report-status-filter').value = '';
         
         // Reload the list
         await loadMonthlyReports();
