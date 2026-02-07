@@ -1,0 +1,13 @@
+PLACEHOLDER: Replace this with the actual orange logo PNG file.
+
+The orange logo file should be named "orange-logo.png" and should be:
+- A high-resolution PNG (500x500px or larger recommended)
+- Have a transparent background
+- Feature the Vitamin English School orange logo
+
+Once you have the actual logo file:
+1. Save it as "orange-logo.png" in this directory
+2. Generate favicon files from it using an online tool or ImageMagick
+3. Delete this placeholder file
+
+For now, a temporary orange circle placeholder has been created.
