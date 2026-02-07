@@ -4,6 +4,7 @@ const pool = require('../database/init');
 const { generateStudentAttendancePDF, generateClassAttendancePDF, generateAttendanceGridPDF, generateLessonReportPDF, generateMultiClassReportPDF } = require('../utils/pdfGenerator');
 const { uploadPDF, getDownloadUrl, listPDFs, isConfigured } = require('../utils/r2Storage');
 const { normalizeToISO } = require('../utils/dateUtils');
+const { buildAttendanceMatrix } = require('../utils/attendanceDataBuilder');
 
 // Middleware to check if R2 is configured
 const checkR2Config = (req, res, next) => {
@@ -222,74 +223,26 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
             return res.status(400).json({ error: 'Date range cannot exceed 90 days' });
         }
         
-        // Fetch class data
-        const classResult = await pool.query(`
-            SELECT c.*, u.full_name as teacher_name
-            FROM classes c
-            LEFT JOIN users u ON c.teacher_id = u.id
-            WHERE c.id = $1
-        `, [classId]);
+        // Use shared data builder to ensure UI and PDF have identical data
+        const matrixData = await buildAttendanceMatrix(pool, classId, startDate, endDate);
         
-        if (classResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Class not found' });
-        }
-        
-        const classData = classResult.rows[0];
-        
-        // Fetch students in class
-        const studentsResult = await pool.query(`
-            SELECT * FROM students
-            WHERE class_id = $1 AND active = true
-            ORDER BY student_type, name
-        `, [classId]);
-        
-        const students = studentsResult.rows;
-        
-        // Generate date range
-        const dates = [];
-        const current = new Date(start);
-        
-        while (current <= end) {
-            const year = current.getFullYear();
-            const month = String(current.getMonth() + 1).padStart(2, '0');
-            const day = String(current.getDate()).padStart(2, '0');
-            dates.push(`${year}-${month}-${day}`);
-            current.setDate(current.getDate() + 1);
-        }
-        
-        // Fetch attendance records for the date range
-        const attendanceResult = await pool.query(`
-            SELECT student_id, date, status 
-            FROM attendance
-            WHERE class_id = $1 AND date >= $2 AND date <= $3
-        `, [classId, startDate, endDate]);
-        
-        // Create attendance map with normalized dates to ensure key consistency
-        const attendanceMap = {};
-        attendanceResult.rows.forEach(record => {
-            // Normalize the date from DB to ISO format (YYYY-MM-DD) to match dates array
-            const normalizedDate = normalizeToISO(record.date) || record.date;
-            const key = `${record.student_id}-${normalizedDate}`;
-            attendanceMap[key] = record.status;
-        });
-        
-        // Generate PDF
+        // Generate PDF using the same data structure as the UI
         const pdfBuffer = await generateAttendanceGridPDF(
-            classData, 
-            students, 
-            dates, 
-            attendanceMap, 
-            startDate, 
-            endDate
+            matrixData.classData, 
+            matrixData.students, 
+            matrixData.dates, 
+            matrixData.attendanceMap, 
+            matrixData.startDate, 
+            matrixData.endDate
         );
         
         // Upload to R2 - sanitize filename (only alphanumeric characters)
-        const sanitizedClassName = classData.name.replace(/[^a-zA-Z0-9]/g, '_');
+        const sanitizedClassName = matrixData.classData.name.replace(/[^a-zA-Z0-9]/g, '_');
         const fileName = `attendance_grid_${sanitizedClassName}_${startDate}_to_${endDate}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             type: 'attendance_grid',
             classId: classId.toString(),
-            className: classData.name,
+            className: matrixData.classData.name,
             startDate: startDate,
             endDate: endDate
         });

@@ -1798,11 +1798,11 @@ async function loadReportsList() {
         container.innerHTML = reports.map(report => `
             <div class="report-item" onclick="loadReportById(${report.id})">
                 <div class="report-header">
-                    <span class="report-date">${report.date}</span>
-                    <span class="report-class">${report.class_name}</span>
+                    <span class="report-date">${formatDisplayDate(report.date)}</span>
+                    <span class="report-class">${escapeHtml(report.class_name)}</span>
                 </div>
-                <div><strong>Teacher:</strong> ${report.teacher_name}</div>
-                <div><strong>Topic:</strong> ${report.target_topic || 'N/A'}</div>
+                <div><strong>Teacher:</strong> ${escapeHtml(report.teacher_name)}</div>
+                <div><strong>Topic:</strong> ${escapeHtml(report.target_topic || 'N/A')}</div>
             </div>
         `).join('');
     } catch (error) {
@@ -1931,38 +1931,57 @@ function renderMultiClassGrid(classReports) {
         return;
     }
     
-    grid.innerHTML = classReports.map(({ classInfo, reports }) => {
-        const sortedReports = reports.sort((a, b) => new Date(b.date) - new Date(a.date));
-        const recentReports = sortedReports.slice(0, 5);
-        
-        return `
-            <div class="class-card">
-                <div class="class-card-header ${classInfo.color}">
-                    <span class="class-name">${classInfo.name}</span>
-                    <span class="report-count">${reports.length} report${reports.length !== 1 ? 's' : ''}</span>
-                </div>
-                <div class="class-card-body">
-                    <h4>Recent Reports:</h4>
-                    <ul class="report-mini-list">
-                        ${recentReports.length > 0 ? recentReports.map(report => `
-                            <li class="report-mini-item ${!report.target_topic ? 'no-topic' : ''}" 
-                                onclick="viewReportDetails(${report.id})">
-                                <div class="report-mini-date">📅 ${report.date}</div>
-                                <div class="report-mini-topic">
-                                    ${report.target_topic || 'No topic specified'}
-                                </div>
-                            </li>
-                        `).join('') : '<li class="info-text">No recent reports</li>'}
-                    </ul>
-                </div>
-                <div class="class-card-footer">
-                    <span style="font-size: 12px; color: var(--text-secondary);">
-                        Teacher: ${reports[0]?.teacher_name || 'N/A'}
-                    </span>
-                </div>
-            </div>
-        `;
-    }).join('');
+    // Flatten all reports from all classes into a single list
+    const allReports = [];
+    classReports.forEach(({ classInfo, reports }) => {
+        reports.forEach(report => {
+            allReports.push({
+                ...report,
+                className: classInfo.name,
+                classColor: classInfo.color
+            });
+        });
+    });
+    
+    // Sort by date (newest first)
+    allReports.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    // Render as a clean table/list view
+    grid.innerHTML = `
+        <div class="all-reports-header">
+            <h3>All Reports (${allReports.length})</h3>
+        </div>
+        <div class="all-reports-list">
+            <table class="reports-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Class</th>
+                        <th>Teacher</th>
+                        <th>Topic</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${allReports.map(report => `
+                        <tr class="report-row">
+                            <td class="report-date">${formatDisplayDate(report.date)}</td>
+                            <td class="report-class">
+                                <span class="class-badge ${report.classColor}">${escapeHtml(report.className)}</span>
+                            </td>
+                            <td class="report-teacher">${escapeHtml(report.teacher_name)}</td>
+                            <td class="report-topic">${escapeHtml(report.target_topic || 'No topic specified')}</td>
+                            <td class="report-actions">
+                                <button class="btn btn-small btn-primary" onclick="viewReportDetails(${report.id})" title="Open Report">
+                                    📖 Open
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
+    `;
 }
 
 function viewReportDetails(reportId) {
@@ -3293,12 +3312,74 @@ async function viewReportDetail(reportId) {
 // View attendance detail modal
 async function viewAttendanceDetail(attendanceId) {
     try {
-        // Attendance records don't have individual IDs in the search results
-        // Just show a simple message
-        Toast.info('Attendance record details are shown in the table');
+        // Fetch the attendance record
+        const result = await api(`/database/table/attendance`);
+        const record = result.data.find(r => r.id === attendanceId);
+        
+        if (!record) {
+            Toast.error('Attendance record not found');
+            return;
+        }
+        
+        // Format status for display
+        const statusInfo = formatAttendanceStatus(record.status);
+        
+        showModal(`Attendance Record - ${record.student_name}`, `
+            <div class="attendance-detail">
+                <p><strong>Date:</strong> ${formatDisplayDate(record.date)}</p>
+                <p><strong>Student:</strong> ${escapeHtml(record.student_name)}</p>
+                <p><strong>Class:</strong> ${escapeHtml(record.class_name)}</p>
+                <p><strong>Status:</strong> <span class="${statusInfo.class}">${statusInfo.icon} ${statusInfo.text}</span></p>
+                ${record.time ? `<p><strong>Time:</strong> ${escapeHtml(record.time)}</p>` : ''}
+                ${record.notes ? `<p><strong>Notes:</strong> ${escapeHtml(record.notes)}</p>` : ''}
+                
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button class="btn btn-primary" onclick="openAttendanceGrid(${record.class_id}, '${record.date}')">
+                        📊 Open in Attendance Grid
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                </div>
+            </div>
+        `);
     } catch (error) {
         Toast.error('Failed to load attendance: ' + error.message);
     }
+}
+
+// Open attendance grid for a specific class and date
+function openAttendanceGrid(classId, date) {
+    // Navigate to attendance page
+    navigateToPage('attendance');
+    
+    // Close modal first
+    closeModal();
+    
+    // Wait for page to render, then configure the filters
+    // Using requestAnimationFrame for smoother DOM updates
+    requestAnimationFrame(() => {
+        const classSelect = document.getElementById('class-select');
+        if (classSelect) {
+            classSelect.value = classId;
+            // Trigger change event to load students
+            classSelect.dispatchEvent(new Event('change'));
+        }
+        
+        // Set the start and end date to focus on the specific date
+        const startDateInput = document.getElementById('start-date');
+        const endDateInput = document.getElementById('end-date');
+        if (startDateInput && endDateInput) {
+            startDateInput.value = date;
+            endDateInput.value = date;
+        }
+        
+        // Wait for next frame to ensure change event has processed
+        requestAnimationFrame(() => {
+            const loadBtn = document.getElementById('load-attendance-btn');
+            if (loadBtn) {
+                loadBtn.click();
+            }
+        });
+    });
 }
 
 // View monthly report detail modal

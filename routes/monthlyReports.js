@@ -747,4 +747,145 @@ router.get('/:id/pdf', async (req, res) => {
     }
 });
 
+/**
+ * POST /api/monthly-reports/generate-test-data
+ * Generate test data for January 2024 (admin only, safe - doesn't overwrite existing data)
+ */
+router.post('/generate-test-data', async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        // Admin-only check (if session userId is set, check if user is admin)
+        if (req.session.userId) {
+            const userCheck = await client.query('SELECT role FROM users WHERE id = $1', [req.session.userId]);
+            if (userCheck.rows.length === 0 || userCheck.rows[0].role !== 'admin') {
+                return res.status(403).json({ error: 'Admin access required' });
+            }
+        }
+        
+        const { class_id, teacher_id } = req.body;
+        
+        if (!class_id || !teacher_id) {
+            return res.status(400).json({ 
+                error: 'class_id and teacher_id are required' 
+            });
+        }
+        
+        // Check if January 2024 report already exists
+        const existingCheck = await client.query(`
+            SELECT id FROM monthly_reports 
+            WHERE class_id = $1 AND year = 2024 AND month = 1
+        `, [class_id]);
+        
+        if (existingCheck.rows.length > 0) {
+            return res.status(400).json({ 
+                error: 'January 2024 monthly report already exists for this class. Not overwriting.' 
+            });
+        }
+        
+        await client.query('BEGIN');
+        
+        // Generate 4 sample teacher comment sheets for January 2024
+        const sampleDates = ['2024-01-08', '2024-01-15', '2024-01-22', '2024-01-29'];
+        const sampleTopics = [
+            'Past Simple Tense',
+            'Food & Restaurants Vocabulary',
+            'Comparative Adjectives',
+            'Daily Routines Discussion'
+        ];
+        const sampleVocab = [
+            'went, saw, ate, visited, enjoyed',
+            'delicious, spicy, menu, order, waiter',
+            'bigger, smaller, more expensive, better, worse',
+            'wake up, get ready, commute, exercise, relax'
+        ];
+        
+        const createdSheets = [];
+        
+        for (let i = 0; i < sampleDates.length; i++) {
+            // Check if sheet already exists for this date
+            const sheetCheck = await client.query(`
+                SELECT id FROM teacher_comment_sheets
+                WHERE class_id = $1 AND date = $2
+            `, [class_id, sampleDates[i]]);
+            
+            if (sheetCheck.rows.length === 0) {
+                const sheetResult = await client.query(`
+                    INSERT INTO teacher_comment_sheets 
+                    (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    RETURNING id
+                `, [
+                    class_id,
+                    teacher_id,
+                    sampleDates[i],
+                    sampleTopics[i],
+                    sampleVocab[i],
+                    'Some minor pronunciation issues with past tense endings',
+                    'Students actively participated and showed good comprehension',
+                    'Practice exercises for homework assigned'
+                ]);
+                createdSheets.push(sheetResult.rows[0].id);
+            } else {
+                createdSheets.push(sheetCheck.rows[0].id);
+            }
+        }
+        
+        // Create monthly report
+        const reportResult = await client.query(`
+            INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
+        `, [
+            class_id,
+            2024,
+            1,
+            '2024-01-01',
+            '2024-01-31',
+            'Winter Communication Skills',
+            'draft',
+            req.session.userId || null
+        ]);
+        
+        const reportId = reportResult.rows[0].id;
+        
+        // Create monthly report weeks
+        for (let i = 0; i < createdSheets.length; i++) {
+            await client.query(`
+                INSERT INTO monthly_report_weeks 
+                (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `, [
+                reportId,
+                i + 1,
+                sampleDates[i],
+                sampleTopics[i],
+                sampleVocab[i],
+                'Common mistakes noted',
+                'Good participation and engagement',
+                createdSheets[i]
+            ]);
+        }
+        
+        await client.query('COMMIT');
+        
+        res.json({
+            success: true,
+            message: 'January 2024 test data generated successfully',
+            reportId: reportId,
+            sheetsCreated: createdSheets.length
+        });
+        
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error generating test data:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate test data',
+            message: error.message 
+        });
+    } finally {
+        client.release();
+    }
+});
+
 module.exports = router;
