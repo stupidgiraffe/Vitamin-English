@@ -70,6 +70,233 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * POST /api/monthly-reports/preview-generate
+ * Preview monthly report data from lesson reports without creating the report
+ * NOTE: Must be defined before /:id routes to avoid Express matching 'preview-generate' as :id
+ */
+router.post('/preview-generate', async (req, res) => {
+    try {
+        const { class_id, start_date, end_date, year, month } = req.body;
+        
+        if (!class_id) {
+            return res.status(400).json({ 
+                error: 'Missing required field: class_id' 
+            });
+        }
+        
+        // Calculate date range based on inputs
+        let startDate, endDate;
+        if (start_date && end_date) {
+            // Custom range
+            startDate = start_date;
+            endDate = end_date;
+        } else if (year && month) {
+            // Monthly
+            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+        } else {
+            return res.status(400).json({ 
+                error: 'Either (year and month) or (start_date and end_date) must be provided' 
+            });
+        }
+        
+        // Query lesson reports
+        const lessonsResult = await pool.query(`
+            SELECT * FROM teacher_comment_sheets
+            WHERE class_id = $1 AND date >= $2 AND date <= $3
+            ORDER BY date
+        `, [class_id, startDate, endDate]);
+        
+        const lessons = lessonsResult.rows;
+        
+        // Map to weekly format, combining strengths+comments into others
+        const weeks = lessons.map((lesson, index) => ({
+            week_number: index + 1,
+            lesson_date: lesson.date,
+            target: lesson.target_topic || '',
+            vocabulary: lesson.vocabulary || '',
+            phrase: lesson.mistakes || '',
+            others: [lesson.strengths, lesson.comments].filter(Boolean).join(' | '),
+            teacher_comment_sheet_id: lesson.id
+        }));
+        
+        res.json({ 
+            success: true, 
+            weeks: weeks,
+            lessonCount: weeks.length 
+        });
+    } catch (error) {
+        console.error('Error previewing monthly report:', error);
+        res.status(500).json({ 
+            error: 'Failed to preview monthly report',
+            message: error.message 
+        });
+    }
+});
+
+/**
+ * POST /api/monthly-reports/auto-generate
+ * Auto-generate monthly report from existing teacher comment sheets
+ * NOTE: Must be defined before /:id routes to avoid Express matching 'auto-generate' as :id
+ */
+router.post('/auto-generate', async (req, res) => {
+    const client = await pool.connect();
+    
+    try {
+        const { class_id, start_date, end_date, year, month, monthly_theme, status } = req.body;
+        
+        if (!class_id) {
+            return res.status(400).json({ 
+                error: 'Missing required field: class_id' 
+            });
+        }
+        
+        // Calculate date range based on inputs
+        // Precedence: start_date/end_date takes priority over year/month if both are provided
+        let startDate, endDate, reportYear, reportMonth;
+        if (start_date && end_date) {
+            // Custom range
+            startDate = start_date;
+            endDate = end_date;
+            // Extract year and month from start_date for the report
+            const startDateObj = new Date(start_date);
+            reportYear = startDateObj.getFullYear();
+            reportMonth = startDateObj.getMonth() + 1;
+        } else if (year && month) {
+            // Monthly (backwards compatibility)
+            reportYear = year;
+            reportMonth = month;
+            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+            const lastDay = new Date(year, month, 0).getDate();
+            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+        } else {
+            return res.status(400).json({ 
+                error: 'Either (year and month) or (start_date and end_date) must be provided' 
+            });
+        }
+        
+        await client.query('BEGIN');
+        
+        // Check for existing report with overlapping date range for this class
+        const existingResult = await client.query(`
+            SELECT id FROM monthly_reports 
+            WHERE class_id = $1 AND start_date = $2 AND end_date = $3
+        `, [class_id, startDate, endDate]);
+        
+        if (existingResult.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: 'A monthly report for this class and month already exists' 
+            });
+        }
+        
+        // Get teacher comment sheets for this date range
+        const lessonsResult = await client.query(`
+            SELECT * FROM teacher_comment_sheets
+            WHERE class_id = $1 AND date >= $2 AND date <= $3
+            ORDER BY date
+        `, [class_id, startDate, endDate]);
+        
+        const lessons = lessonsResult.rows;
+        
+        if (lessons.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ 
+                error: 'No teacher comment sheets found for this class and date range' 
+            });
+        }
+        
+        // Create monthly report
+        const reportResult = await client.query(`
+            INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            RETURNING id
+        `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
+        
+        const reportId = reportResult.rows[0].id;
+        
+        // Create weekly entries from teacher comment sheets
+        for (let index = 0; index < lessons.length; index++) {
+            const lesson = lessons[index];
+            // Combine strengths and comments into 'others' since weekly schema has no strengths column
+            const othersContent = [lesson.strengths, lesson.comments].filter(Boolean).join(' | ');
+            await client.query(`
+                INSERT INTO monthly_report_weeks 
+                (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `, [
+                reportId,
+                index + 1,
+                lesson.date,
+                lesson.target_topic || '',
+                lesson.vocabulary || '',
+                lesson.mistakes || '',
+                othersContent,
+                lesson.id
+            ]);
+        }
+        
+        await client.query('COMMIT');
+        
+        // Fetch complete report
+        const completeResult = await pool.query(`
+            SELECT mr.*, c.name as class_name, c.schedule
+            FROM monthly_reports mr
+            JOIN classes c ON mr.class_id = c.id
+            WHERE mr.id = $1
+        `, [reportId]);
+        
+        const report = completeResult.rows[0];
+        
+        // Get weeks
+        const weeksResult = await pool.query(`
+            SELECT * FROM monthly_report_weeks
+            WHERE monthly_report_id = $1
+            ORDER BY week_number
+        `, [reportId]);
+        
+        report.weeks = weeksResult.rows;
+        
+        res.status(201).json(report);
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error auto-generating monthly report:', error);
+        res.status(500).json({ 
+            error: 'Failed to auto-generate monthly report',
+            message: error.message 
+        });
+    } finally {
+        client.release();
+    }
+});
+
+/**
+ * GET /api/monthly-reports/available-months/:classId
+ * Get months that have teacher comment sheet data for a class
+ * NOTE: Must be defined before /:id routes to avoid Express matching 'available-months' as :id
+ */
+router.get('/available-months/:classId', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT DISTINCT 
+                EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
+                EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
+                COUNT(*) as lesson_count
+            FROM teacher_comment_sheets
+            WHERE class_id = $1
+            GROUP BY year, month
+            ORDER BY year DESC, month DESC
+        `, [req.params.classId]);
+        
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching available months:', error);
+        res.status(500).json({ error: 'Failed to fetch available months' });
+    }
+});
+
+/**
  * GET /api/monthly-reports/:id
  * Get single monthly report with all weeks
  */
@@ -423,230 +650,6 @@ router.get('/:id/pdf', async (req, res) => {
     } catch (error) {
         console.error('Error getting PDF URL:', error);
         res.status(500).json({ error: 'Failed to get PDF URL' });
-    }
-});
-
-/**
- * POST /api/monthly-reports/preview-generate
- * Preview monthly report data from lesson reports without creating the report
- */
-router.post('/preview-generate', async (req, res) => {
-    try {
-        const { class_id, start_date, end_date, year, month } = req.body;
-        
-        if (!class_id) {
-            return res.status(400).json({ 
-                error: 'Missing required field: class_id' 
-            });
-        }
-        
-        // Calculate date range based on inputs
-        let startDate, endDate;
-        if (start_date && end_date) {
-            // Custom range
-            startDate = start_date;
-            endDate = end_date;
-        } else if (year && month) {
-            // Monthly
-            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-            const lastDay = new Date(year, month, 0).getDate();
-            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-        } else {
-            return res.status(400).json({ 
-                error: 'Either (year and month) or (start_date and end_date) must be provided' 
-            });
-        }
-        
-        // Query lesson reports
-        const lessonsResult = await pool.query(`
-            SELECT * FROM teacher_comment_sheets
-            WHERE class_id = $1 AND date >= $2 AND date <= $3
-            ORDER BY date
-        `, [class_id, startDate, endDate]);
-        
-        const lessons = lessonsResult.rows;
-        
-        // Map to weekly format, combining strengths+comments into others
-        const weeks = lessons.map((lesson, index) => ({
-            week_number: index + 1,
-            lesson_date: lesson.date,
-            target: lesson.target_topic || '',
-            vocabulary: lesson.vocabulary || '',
-            phrase: lesson.mistakes || '',
-            others: [lesson.strengths, lesson.comments].filter(Boolean).join(' | '),
-            teacher_comment_sheet_id: lesson.id
-        }));
-        
-        res.json({ 
-            success: true, 
-            weeks: weeks,
-            lessonCount: weeks.length 
-        });
-    } catch (error) {
-        console.error('Error previewing monthly report:', error);
-        res.status(500).json({ 
-            error: 'Failed to preview monthly report',
-            message: error.message 
-        });
-    }
-});
-
-/**
- * POST /api/monthly-reports/auto-generate
- * Auto-generate monthly report from existing teacher comment sheets
- */
-router.post('/auto-generate', async (req, res) => {
-    const client = await pool.connect();
-    
-    try {
-        const { class_id, start_date, end_date, year, month, monthly_theme, status } = req.body;
-        
-        if (!class_id) {
-            return res.status(400).json({ 
-                error: 'Missing required field: class_id' 
-            });
-        }
-        
-        // Calculate date range based on inputs
-        // Precedence: start_date/end_date takes priority over year/month if both are provided
-        let startDate, endDate, reportYear, reportMonth;
-        if (start_date && end_date) {
-            // Custom range
-            startDate = start_date;
-            endDate = end_date;
-            // Extract year and month from start_date for the report
-            const startDateObj = new Date(start_date);
-            reportYear = startDateObj.getFullYear();
-            reportMonth = startDateObj.getMonth() + 1;
-        } else if (year && month) {
-            // Monthly (backwards compatibility)
-            reportYear = year;
-            reportMonth = month;
-            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-            const lastDay = new Date(year, month, 0).getDate();
-            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
-        } else {
-            return res.status(400).json({ 
-                error: 'Either (year and month) or (start_date and end_date) must be provided' 
-            });
-        }
-        
-        await client.query('BEGIN');
-        
-        // Check for existing report with overlapping date range for this class
-        const existingResult = await client.query(`
-            SELECT id FROM monthly_reports 
-            WHERE class_id = $1 AND start_date = $2 AND end_date = $3
-        `, [class_id, startDate, endDate]);
-        
-        if (existingResult.rows.length > 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                error: 'A monthly report for this class and month already exists' 
-            });
-        }
-        
-        // Get teacher comment sheets for this date range
-        const lessonsResult = await client.query(`
-            SELECT * FROM teacher_comment_sheets
-            WHERE class_id = $1 AND date >= $2 AND date <= $3
-            ORDER BY date
-        `, [class_id, startDate, endDate]);
-        
-        const lessons = lessonsResult.rows;
-        
-        if (lessons.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                error: 'No teacher comment sheets found for this class and date range' 
-            });
-        }
-        
-        // Create monthly report
-        const reportResult = await client.query(`
-            INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
-        `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
-        
-        const reportId = reportResult.rows[0].id;
-        
-        // Create weekly entries from teacher comment sheets
-        for (let index = 0; index < lessons.length; index++) {
-            const lesson = lessons[index];
-            // Combine strengths and comments into 'others' since weekly schema has no strengths column
-            const othersContent = [lesson.strengths, lesson.comments].filter(Boolean).join(' | ');
-            await client.query(`
-                INSERT INTO monthly_report_weeks 
-                (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            `, [
-                reportId,
-                index + 1,
-                lesson.date,
-                lesson.target_topic || '',
-                lesson.vocabulary || '',
-                lesson.mistakes || '',
-                othersContent,
-                lesson.id
-            ]);
-        }
-        
-        await client.query('COMMIT');
-        
-        // Fetch complete report
-        const completeResult = await pool.query(`
-            SELECT mr.*, c.name as class_name, c.schedule
-            FROM monthly_reports mr
-            JOIN classes c ON mr.class_id = c.id
-            WHERE mr.id = $1
-        `, [reportId]);
-        
-        const report = completeResult.rows[0];
-        
-        // Get weeks
-        const weeksResult = await pool.query(`
-            SELECT * FROM monthly_report_weeks
-            WHERE monthly_report_id = $1
-            ORDER BY week_number
-        `, [reportId]);
-        
-        report.weeks = weeksResult.rows;
-        
-        res.status(201).json(report);
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Error auto-generating monthly report:', error);
-        res.status(500).json({ 
-            error: 'Failed to auto-generate monthly report',
-            message: error.message 
-        });
-    } finally {
-        client.release();
-    }
-});
-
-/**
- * GET /api/monthly-reports/available-months/:classId
- * Get months that have teacher comment sheet data for a class
- */
-router.get('/available-months/:classId', async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT DISTINCT 
-                EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
-                EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
-                COUNT(*) as lesson_count
-            FROM teacher_comment_sheets
-            WHERE class_id = $1
-            GROUP BY year, month
-            ORDER BY year DESC, month DESC
-        `, [req.params.classId]);
-        
-        res.json(result.rows);
-    } catch (error) {
-        console.error('Error fetching available months:', error);
-        res.status(500).json({ error: 'Failed to fetch available months' });
     }
 });
 

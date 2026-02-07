@@ -52,6 +52,26 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get report by class and date
+// NOTE: Must be defined before /:id to avoid Express matching 'by-date' as :id
+router.get('/by-date/:classId/:date', async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT r.*, c.name as class_name, u.full_name as teacher_name
+            FROM teacher_comment_sheets r
+            JOIN classes c ON r.class_id = c.id
+            JOIN users u ON r.teacher_id = u.id
+            WHERE r.class_id = $1 AND r.date = $2
+        `, [req.params.classId, req.params.date]);
+        const report = result.rows[0];
+        
+        res.json(report || null);
+    } catch (error) {
+        console.error('Error fetching report by date:', error);
+        res.status(500).json({ error: 'Failed to fetch report' });
+    }
+});
+
 // Get a single report
 router.get('/:id', async (req, res) => {
     try {
@@ -71,25 +91,6 @@ router.get('/:id', async (req, res) => {
         res.json(report);
     } catch (error) {
         console.error('Error fetching report:', error);
-        res.status(500).json({ error: 'Failed to fetch report' });
-    }
-});
-
-// Get report by class and date
-router.get('/by-date/:classId/:date', async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM teacher_comment_sheets r
-            JOIN classes c ON r.class_id = c.id
-            JOIN users u ON r.teacher_id = u.id
-            WHERE r.class_id = $1 AND r.date = $2
-        `, [req.params.classId, req.params.date]);
-        const report = result.rows[0];
-        
-        res.json(report || null);
-    } catch (error) {
-        console.error('Error fetching report by date:', error);
         res.status(500).json({ error: 'Failed to fetch report' });
     }
 });
