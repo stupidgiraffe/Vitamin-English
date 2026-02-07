@@ -4360,7 +4360,7 @@ function renderMonthlyReportsList() {
     monthlyReports.forEach(report => {
         const monthYear = `${monthNames[report.month - 1]} ${report.year}`;
         const dateRange = (report.start_date && report.end_date) 
-            ? `${report.start_date} — ${report.end_date}` 
+            ? `${report.start_date.split('T')[0]} — ${report.end_date.split('T')[0]}` 
             : 'N/A';
         const statusBadge = report.status === 'published' 
             ? '<span class="badge badge-success">Published</span>' 

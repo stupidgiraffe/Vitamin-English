@@ -178,11 +178,11 @@ router.post('/auto-generate', async (req, res) => {
         
         await client.query('BEGIN');
         
-        // Check for existing report with overlapping date range for this class
+        // Check for existing report by year/month (matches the UNIQUE constraint)
         const existingResult = await client.query(`
             SELECT id FROM monthly_reports 
-            WHERE class_id = $1 AND start_date = $2 AND end_date = $3
-        `, [class_id, startDate, endDate]);
+            WHERE class_id = $1 AND year = $2 AND month = $3
+        `, [class_id, reportYear, reportMonth]);
         
         if (existingResult.rows.length > 0) {
             await client.query('ROLLBACK');
@@ -207,12 +207,27 @@ router.post('/auto-generate', async (req, res) => {
             });
         }
         
-        // Create monthly report
-        const reportResult = await client.query(`
-            INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
-        `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
+        // Create monthly report - try with start_date/end_date first, fall back without them
+        let reportResult;
+        try {
+            reportResult = await client.query(`
+                INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                RETURNING id
+            `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
+        } catch (insertErr) {
+            // If start_date/end_date columns don't exist yet, fall back to basic insert
+            if (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')) {
+                console.warn('monthly_reports missing start_date/end_date columns, using fallback INSERT');
+                reportResult = await client.query(`
+                    INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    RETURNING id
+                `, [class_id, reportYear, reportMonth, monthly_theme || '', status || 'draft', req.session.userId]);
+            } else {
+                throw insertErr;
+            }
+        }
         
         const reportId = reportResult.rows[0].id;
         

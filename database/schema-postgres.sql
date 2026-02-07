@@ -98,6 +98,43 @@ CREATE INDEX IF NOT EXISTS idx_makeup_date ON makeup_lessons(scheduled_date);
 CREATE INDEX IF NOT EXISTS idx_makeup_student ON makeup_lessons(student_id);
 CREATE INDEX IF NOT EXISTS idx_makeup_status ON makeup_lessons(status);
 
+-- Monthly reports table
+CREATE TABLE IF NOT EXISTS monthly_reports (
+    id SERIAL PRIMARY KEY,
+    class_id INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
+    monthly_theme TEXT,
+    status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+    pdf_url TEXT,
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by INTEGER REFERENCES users(id),
+    UNIQUE(class_id, year, month)
+);
+
+-- Monthly report weeks table
+CREATE TABLE IF NOT EXISTS monthly_report_weeks (
+    id SERIAL PRIMARY KEY,
+    monthly_report_id INTEGER NOT NULL REFERENCES monthly_reports(id) ON DELETE CASCADE,
+    week_number INTEGER NOT NULL CHECK (week_number >= 1 AND week_number <= 6),
+    lesson_date DATE,
+    target TEXT,
+    vocabulary TEXT,
+    phrase TEXT,
+    others TEXT,
+    teacher_comment_sheet_id INTEGER REFERENCES teacher_comment_sheets(id),
+    UNIQUE(monthly_report_id, week_number)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_reports_class ON monthly_reports(class_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_reports_date ON monthly_reports(year, month);
+CREATE INDEX IF NOT EXISTS idx_monthly_reports_status ON monthly_reports(status);
+CREATE INDEX IF NOT EXISTS idx_monthly_report_weeks_report ON monthly_report_weeks(monthly_report_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_report_weeks_lesson ON monthly_report_weeks(teacher_comment_sheet_id);
+
 -- PDF history table
 CREATE TABLE IF NOT EXISTS pdf_history (
     id SERIAL PRIMARY KEY,
