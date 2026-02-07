@@ -1489,6 +1489,50 @@ body {
     .page {
         overflow-x: hidden;
     }
+    
+    /* Mobile attendance grid improvements */
+    .attendance-sheet {
+        padding: 1rem;
+        /* Enable horizontal scroll but prevent jumpy behavior */
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .attendance-table {
+        /* Ensure table doesn't collapse on mobile */
+        min-width: 600px;
+    }
+    
+    /* Keep edit buttons visible but less intrusive on mobile */
+    .edit-student-btn {
+        font-size: 0.85rem;
+        padding: 0.15rem;
+        /* Ensure button stays within sticky column */
+        flex-shrink: 0;
+    }
+    
+    .student-name-cell {
+        /* Prevent text overflow while keeping button visible */
+        min-width: 120px;
+    }
+    
+    .student-name-cell span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex: 1;
+    }
+    
+    /* Attendance controls wrap better on mobile */
+    .attendance-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+    
+    .view-toggle-group {
+        justify-content: center;
+    }
 }
 
 @media (max-width: 480px) {

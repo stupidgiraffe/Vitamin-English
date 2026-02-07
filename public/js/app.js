@@ -110,6 +110,7 @@ const AttendanceSaveQueue = {
 // Toast Notification System
 const Toast = {
     container: null,
+    activeToasts: new Map(), // Track active toasts by message+type
     
     init() {
         if (!this.container) {
@@ -121,6 +122,13 @@ const Toast = {
     
     show(message, type = 'info', title = '', duration = 4000) {
         this.init();
+        
+        // Deduplicate: check if same message+type is already showing
+        const toastKey = `${type}:${message}`;
+        if (this.activeToasts.has(toastKey)) {
+            // Don't show duplicate, just return existing toast
+            return this.activeToasts.get(toastKey);
+        }
         
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
@@ -147,11 +155,18 @@ const Toast = {
         `;
         
         this.container.appendChild(toast);
+        this.activeToasts.set(toastKey, toast);
+        
+        // Remove from tracking when toast is removed
+        const removeToast = () => {
+            this.activeToasts.delete(toastKey);
+            toast.remove();
+        };
         
         if (duration > 0) {
             setTimeout(() => {
                 toast.classList.add('hiding');
-                setTimeout(() => toast.remove(), 300);
+                setTimeout(removeToast, 300);
             }, duration);
         }
         
@@ -928,14 +943,22 @@ async function showNewAttendanceModal() {
                 </div>
                 <div class="form-group">
                     <label for="attendance-notes">Notes (Optional)</label>
-                    <textarea id="attendance-notes" class="form-control" rows="3"></textarea>
+                    <textarea id="attendance-notes" class="form-control" rows="3" placeholder="Add notes for this attendance sheet (applies to all students)"></textarea>
                 </div>
-                <button type="submit" class="btn btn-primary">Create Attendance Sheet</button>
+                <button type="submit" id="create-attendance-submit-btn" class="btn btn-primary">Create Attendance Sheet</button>
             </form>
         `);
         
-        document.getElementById('new-attendance-form').addEventListener('submit', async (e) => {
+        const form = document.getElementById('new-attendance-form');
+        const submitBtn = document.getElementById('create-attendance-submit-btn');
+        
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Prevent duplicate submissions
+            if (submitBtn.disabled) {
+                return;
+            }
             
             try {
                 const classId = document.getElementById('attendance-class').value;
@@ -954,6 +977,10 @@ async function showNewAttendanceModal() {
                     return;
                 }
                 
+                // Disable submit button during request
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Creating...';
+                
                 // Get teacher_id from the selected class
                 const selectedClass = classes.find(c => c.id == classId);
                 const teacherId = selectedClass ? selectedClass.teacher_id : null;
@@ -963,28 +990,45 @@ async function showNewAttendanceModal() {
                 
                 if (studentsInClass.length === 0) {
                     Toast.error('No students in this class. Add students first.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Create Attendance Sheet';
                     return;
                 }
                 
-                // Create attendance records for all students in parallel
-                const attendancePromises = studentsInClass.map(student => 
-                    api('/attendance', {
-                        method: 'POST',
-                        body: JSON.stringify({ 
-                            student_id: student.id,
-                            class_id: classId, 
-                            date: normalizedDate, 
-                            status: '', // Empty status - to be filled in
-                            notes: notes || '',
-                            teacher_id: teacherId
-                        })
-                    })
-                );
+                // Create attendance records for all students
+                // Use sequential creation to better handle errors
+                const results = [];
+                const errors = [];
                 
-                await Promise.all(attendancePromises);
+                for (const student of studentsInClass) {
+                    try {
+                        const result = await api('/attendance', {
+                            method: 'POST',
+                            body: JSON.stringify({ 
+                                student_id: student.id,
+                                class_id: classId, 
+                                date: normalizedDate, 
+                                status: '', // Empty status - to be filled in
+                                notes: notes || '',
+                                teacher_id: teacherId
+                            })
+                        });
+                        results.push(result);
+                    } catch (error) {
+                        // Collect errors but continue creating for other students
+                        errors.push({ student: student.name, error: error.message });
+                    }
+                }
                 
-                Toast.success(`Attendance sheet created for ${studentsInClass.length} students!`);
-                closeModal();
+                // Show appropriate success/error message
+                if (errors.length === 0) {
+                    Toast.success(`Attendance sheet created for ${studentsInClass.length} students!`);
+                    closeModal();
+                } else if (results.length > 0) {
+                    Toast.error(`Created for ${results.length} students, but ${errors.length} failed. Some records may already exist.`);
+                } else {
+                    Toast.error('Failed to create attendance sheet. Records may already exist for this date.');
+                }
                 
                 // Reload attendance if the same class is selected
                 const currentClassId = document.getElementById('attendance-class-select').value;
