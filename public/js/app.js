@@ -6,14 +6,14 @@ let teachers = [];
 
 // Autosave mechanism for attendance
 const AttendanceSaveQueue = {
-    queue: new Map(), // key: "studentId-classId-date", value: { studentId, classId, date, status, time }
+    queue: new Map(), // key: "studentId-classId-date", value: { studentId, classId, date, status, time, teacherId }
     saveTimeout: null,
     debounceDelay: 1500, // 1.5 seconds
     
     // Add item to queue and schedule save
-    add(studentId, classId, date, status, time = null) {
+    add(studentId, classId, date, status, time = null, teacherId = null) {
         const key = `${studentId}-${classId}-${date}`;
-        this.queue.set(key, { studentId, classId, date, status, time });
+        this.queue.set(key, { studentId, classId, date, status, time, teacherId });
         
         // Show saving status
         this.updateSaveStatus('saving');
@@ -45,7 +45,8 @@ const AttendanceSaveQueue = {
                         class_id: parseInt(item.classId),
                         date: item.date,
                         status: item.status,
-                        time: item.time
+                        time: item.time,
+                        teacher_id: item.teacherId ? parseInt(item.teacherId) : null
                     })
                 })
             );
@@ -951,6 +952,10 @@ async function showNewAttendanceModal() {
                     return;
                 }
                 
+                // Get teacher_id from the selected class
+                const selectedClass = classes.find(c => c.id == classId);
+                const teacherId = selectedClass ? selectedClass.teacher_id : null;
+                
                 // Get all students in the class
                 const studentsInClass = await api(`/students?classId=${classId}`);
                 
@@ -968,7 +973,8 @@ async function showNewAttendanceModal() {
                             class_id: classId, 
                             date: normalizedDate, 
                             status: '', // Empty status - to be filled in
-                            notes: notes || ''
+                            notes: notes || '',
+                            teacher_id: teacherId
                         })
                     })
                 );
@@ -1354,6 +1360,10 @@ async function toggleAttendance(cell) {
         }
     }
 
+    // Get teacher_id from the selected class
+    const selectedClass = classes.find(c => c.id == classId);
+    const teacherId = selectedClass ? selectedClass.teacher_id : null;
+
     // Optimistic UI update - update immediately without waiting for server
     cell.textContent = newStatus;
     cell.className = 'attendance-cell';
@@ -1365,8 +1375,8 @@ async function toggleAttendance(cell) {
         // Normalize date to ISO format before queueing
         const normalizedDate = normalizeToISO(date) || date;
         
-        // Add to save queue with debouncing
-        AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, time);
+        // Add to save queue with debouncing, including teacher_id
+        AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, time, teacherId);
         
     } catch (error) {
         console.error('Error updating attendance:', error);
