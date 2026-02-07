@@ -66,6 +66,13 @@ async function checkMigrationStatus(client) {
                 start_date_column: false,
                 end_date_column: false
             }
+        },
+        migration_006: {
+            applied: false,
+            checks: {
+                new_unique_constraint: false,
+                old_unique_constraint: false
+            }
         }
     };
     
@@ -88,6 +95,34 @@ async function checkMigrationStatus(client) {
                                      !status.migration_005.checks.lesson_reports &&
                                      status.migration_005.checks.start_date_column &&
                                      status.migration_005.checks.end_date_column;
+    
+    // Check migration 006 - check for new unique constraint
+    if (status.migration_004.checks.monthly_reports) {
+        const constraintCheck = await client.query(`
+            SELECT conname 
+            FROM pg_constraint 
+            WHERE conrelid = 'monthly_reports'::regclass 
+              AND conname = 'monthly_reports_class_date_range_unique'
+        `);
+        status.migration_006.checks.new_unique_constraint = constraintCheck.rows.length > 0;
+        
+        // Check if old constraint still exists
+        const oldConstraintCheck = await client.query(`
+            SELECT conname 
+            FROM pg_constraint 
+            WHERE conrelid = 'monthly_reports'::regclass 
+              AND contype = 'u'
+              AND array_length(conkey, 1) = 3
+              AND conkey @> ARRAY[
+                  (SELECT attnum FROM pg_attribute WHERE attrelid = 'monthly_reports'::regclass AND attname = 'class_id'),
+                  (SELECT attnum FROM pg_attribute WHERE attrelid = 'monthly_reports'::regclass AND attname = 'year'),
+                  (SELECT attnum FROM pg_attribute WHERE attrelid = 'monthly_reports'::regclass AND attname = 'month')
+              ]
+        `);
+        status.migration_006.checks.old_unique_constraint = oldConstraintCheck.rows.length > 0;
+        status.migration_006.applied = status.migration_006.checks.new_unique_constraint && 
+                                         !status.migration_006.checks.old_unique_constraint;
+    }
     
     return status;
 }
@@ -113,7 +148,16 @@ function displayStatus(status) {
         console.log(`  - end_date column: ${status.migration_005.checks.end_date_column ? '✓' : '✗'}`);
     }
     console.log();
+    
+    // Migration 006
+    if (status.migration_006) {
+        console.log(`Migration 006 (Unique Constraint Update): ${status.migration_006.applied ? '✅ Applied' : '❌ Not Applied'}`);
+        console.log(`  - new unique constraint (class_id, start_date, end_date): ${status.migration_006.checks.new_unique_constraint ? '✓' : '✗'}`);
+        console.log(`  - old unique constraint (class_id, year, month): ${status.migration_006.checks.old_unique_constraint ? '✗ (should be removed)' : '✓'}`);
+        console.log();
+    }
 }
+
 
 /**
  * Apply migration 004
@@ -196,6 +240,30 @@ async function applyMigration005(client) {
 }
 
 /**
+ * Apply migration 006
+ */
+async function applyMigration006(client) {
+    console.log('🔄 Applying migration 006 (Update uniqueness constraint)...\n');
+    
+    const migrationPath = path.join(__dirname, '../database/migrations/006_monthly_reports_unique_range.sql');
+    
+    if (!fs.existsSync(migrationPath)) {
+        throw new Error(`Migration file not found: ${migrationPath}`);
+    }
+    
+    const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+    
+    try {
+        await client.query(migrationSQL);
+        console.log('✅ Migration 006 applied successfully\n');
+        return true;
+    } catch (error) {
+        console.error('❌ Error applying migration 006:', error.message);
+        throw error;
+    }
+}
+
+/**
  * Main migration function
  */
 async function runMigrations() {
@@ -213,7 +281,8 @@ async function runMigrations() {
         let status = await checkMigrationStatus(client);
         displayStatus(status);
         
-        if (status.migration_004.applied && status.migration_005.applied) {
+        if (status.migration_004.applied && status.migration_005.applied && 
+            (status.migration_006 && status.migration_006.applied)) {
             console.log('✅ All migrations are already applied. Nothing to do.\n');
             return { success: true, message: 'All migrations already applied' };
         }
@@ -236,6 +305,13 @@ async function runMigrations() {
                 console.log('ℹ️  Migration 005 already applied, skipping...\n');
             }
             
+            // Apply migration 006 if needed
+            if (!status.migration_006 || !status.migration_006.applied) {
+                await applyMigration006(client);
+            } else {
+                console.log('ℹ️  Migration 006 already applied, skipping...\n');
+            }
+            
             // Commit transaction
             await client.query('COMMIT');
             console.log('✅ Transaction committed successfully\n');
@@ -252,7 +328,8 @@ async function runMigrations() {
         status = await checkMigrationStatus(client);
         displayStatus(status);
         
-        if (status.migration_004.applied && status.migration_005.applied) {
+        if (status.migration_004.applied && status.migration_005.applied && 
+            (status.migration_006 && status.migration_006.applied)) {
             console.log('🎉 All migrations completed successfully!\n');
             console.log('Next steps:');
             console.log('  1. Restart your application server');
@@ -260,6 +337,7 @@ async function runMigrations() {
             console.log('     - Login and fetch reports');
             console.log('     - Save teacher comment sheets');
             console.log('     - Create and save monthly reports');
+            console.log('     - Test duplicate date range handling');
             console.log();
             return { success: true, message: 'All migrations completed successfully' };
         } else {

@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS monthly_reports (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES users(id),
-    UNIQUE(class_id, year, month)
+    CONSTRAINT monthly_reports_class_date_range_unique UNIQUE (class_id, start_date, end_date)
 );
 
 -- Monthly report weeks table

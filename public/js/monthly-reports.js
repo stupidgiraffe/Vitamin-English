@@ -7,9 +7,13 @@ async function showNewMonthlyReportModal() {
     const defaultStart = monthStart.toISOString().split('T')[0];
     const defaultEnd = now.toISOString().split('T')[0];
 
+    // Get currently selected class from filter to pre-select it
+    const selectedClassId = document.getElementById('monthly-report-class-filter')?.value || '';
+
     let classOpts = '<option value="">Select Class</option>';
     classes.forEach(c => {
-        classOpts += `<option value="${c.id}">${escapeHtml(c.name)}</option>`;
+        const isSelected = c.id == selectedClassId ? 'selected' : '';
+        classOpts += `<option value="${c.id}" ${isSelected}>${escapeHtml(c.name)}</option>`;
     });
 
     const formHtml = `
@@ -274,7 +278,7 @@ async function handleCreateMonthlyReport(e) {
     }
 
     try {
-        await api('/monthly-reports/auto-generate', {
+        const response = await api('/monthly-reports/auto-generate', {
             method: 'POST',
             body: JSON.stringify({
                 class_id: classId,
@@ -285,9 +289,18 @@ async function handleCreateMonthlyReport(e) {
             })
         });
 
-        Toast.success('Monthly report created successfully!');
-        closeModal();
-        loadMonthlyReports();
+        if (response.alreadyExists) {
+            // Report already exists - show friendly message and open it
+            Toast.info('This report already exists. Opening existing report...');
+            closeModal();
+            loadMonthlyReports();
+            // Open the existing report after a brief delay to allow list to reload
+            setTimeout(() => viewMonthlyReport(response.id), 500);
+        } else {
+            Toast.success('Monthly report created successfully!');
+            closeModal();
+            loadMonthlyReports();
+        }
     } catch (error) {
         console.error('Error creating monthly report:', error);
         Toast.error(error.message || 'Failed to create monthly report');
@@ -303,10 +316,11 @@ async function viewMonthlyReport(reportId) {
         let weeksHtml = '';
         if (report.weeks && report.weeks.length > 0) {
             report.weeks.forEach((week, index) => {
-                // Use the actual lesson date as the primary heading using shared formatter
+                // Use the new smart date formatter for lesson dates
                 let dateLabel = 'Lesson';
                 if (week.lesson_date) {
-                    dateLabel = formatDateReadable(week.lesson_date) || `Lesson ${index + 1}`;
+                    // Use formatDateJP for date-only display (no time needed for lesson dates)
+                    dateLabel = formatDateJP(week.lesson_date) || formatDateReadableEN(week.lesson_date) || `Lesson ${index + 1}`;
                 } else {
                     dateLabel = `Lesson ${index + 1}`;
                 }
@@ -325,10 +339,14 @@ async function viewMonthlyReport(reportId) {
             weeksHtml = '<p>No weekly data available.</p>';
         }
         
+        // Format date range using smart formatter
+        const startDateFormatted = report.start_date ? formatDateJP(report.start_date) : 'N/A';
+        const endDateFormatted = report.end_date ? formatDateJP(report.end_date) : 'N/A';
+        
         const content = `
             <div class="monthly-report-view">
                 <h3>${escapeHtml(report.class_name)} - ${monthNames[report.month - 1]} ${report.year}</h3>
-                <p><strong>Date Range:</strong> ${report.start_date ? String(report.start_date).split('T')[0] : 'N/A'} to ${report.end_date ? String(report.end_date).split('T')[0] : 'N/A'}</p>
+                <p><strong>Date Range:</strong> ${startDateFormatted} — ${endDateFormatted}</p>
                 <p><strong>Status:</strong> ${report.status === 'published' ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>'}</p>
                 <hr>
                 <h4>Weekly Lessons</h4>

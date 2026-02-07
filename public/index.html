@@ -26,6 +26,8 @@
     <!-- Flatpickr for Date/Time Pickers -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr" defer></script>
+    <!-- Date/Time Formatting Utilities -->
+    <script src="/js/dateTime.js" defer></script>
     <!-- Internationalization -->
     <script src="/js/i18n.js" defer></script>
     <!-- Monthly Reports Module -->
@@ -335,6 +337,7 @@
                     </div>
                     <button id="filter-monthly-reports-btn" class="btn btn-primary">Filter</button>
                     <button id="new-monthly-report-btn" class="btn btn-success">+ Create Monthly Report</button>
+                    <button id="generate-test-report-btn" class="btn btn-info" title="Generate test report (Admin only)">🧪 Generate Test Report</button>
                 </div>
 
                 <div id="monthly-reports-list" class="data-table">
@@ -432,6 +435,7 @@
                             <option value="classes">Classes</option>
                             <option value="attendance">Attendance</option>
                             <option value="teacher_comment_sheets">Teacher Comment Sheets</option>
+                            <option value="monthly_reports">Monthly Reports</option>
                             <option value="makeup_lessons">Make-up Lessons</option>
                             <option value="users">Users</option>
                         </select>

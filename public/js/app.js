@@ -4403,9 +4403,23 @@ async function initializeMonthlyReportsPage() {
     document.getElementById('monthly-report-start-date').value = firstDayOfMonth.toISOString().split('T')[0];
     document.getElementById('monthly-report-end-date').value = today.toISOString().split('T')[0];
     
-    // Set up event listeners
-    document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
-    document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
+    // Set up event listeners (remove existing ones first to prevent duplicates)
+    const filterBtn = document.getElementById('filter-monthly-reports-btn');
+    const newBtn = document.getElementById('new-monthly-report-btn');
+    const testBtn = document.getElementById('generate-test-report-btn');
+    
+    // Clone and replace to remove old listeners
+    const newFilterBtn = filterBtn.cloneNode(true);
+    const newNewBtn = newBtn.cloneNode(true);
+    const newTestBtn = testBtn.cloneNode(true);
+    
+    filterBtn.parentNode.replaceChild(newFilterBtn, filterBtn);
+    newBtn.parentNode.replaceChild(newNewBtn, newBtn);
+    testBtn.parentNode.replaceChild(newTestBtn, testBtn);
+    
+    newFilterBtn.addEventListener('click', loadMonthlyReports);
+    newNewBtn.addEventListener('click', showNewMonthlyReportModal);
+    newTestBtn.addEventListener('click', generateTestMonthlyReport);
 
     // Auto-load reports on page open
     try {
@@ -4466,8 +4480,9 @@ function renderMonthlyReportsList() {
     
     monthlyReports.forEach(report => {
         const monthYear = `${monthNames[report.month - 1]} ${report.year}`;
+        // Use the new date formatter for date range display
         const dateRange = (report.start_date && report.end_date) 
-            ? `${String(report.start_date).split('T')[0]} — ${String(report.end_date).split('T')[0]}` 
+            ? `${formatDateISO(report.start_date)} — ${formatDateISO(report.end_date)}` 
             : 'N/A';
         const statusBadge = report.status === 'published' 
             ? '<span class="badge badge-success">Published</span>' 
@@ -4493,3 +4508,57 @@ function renderMonthlyReportsList() {
     html += '</tbody></table>';
     container.innerHTML = html;
 }
+
+// Generate test monthly report (admin only)
+async function generateTestMonthlyReport() {
+    // Get first class and first teacher for test data
+    if (classes.length === 0) {
+        Toast.error('No classes found. Please create a class first.');
+        return;
+    }
+    
+    if (teachers.length === 0) {
+        Toast.error('No teachers found. Please create a teacher first.');
+        return;
+    }
+    
+    const classId = classes[0].id;
+    const teacherId = teachers[0].id;
+    
+    try {
+        Toast.info('Generating test report...');
+        
+        const response = await api('/monthly-reports/generate-test-data', {
+            method: 'POST',
+            body: JSON.stringify({
+                class_id: classId,
+                teacher_id: teacherId
+            })
+        });
+        
+        if (response.alreadyExists) {
+            Toast.info(`Test report already exists! Report ID: ${response.reportId} - Opening existing report...`);
+        } else {
+            Toast.success(`Test report created! Report ID: ${response.reportId}`);
+        }
+        
+        // Clear filters to show all reports (so test report for Jan 2024 is visible)
+        document.getElementById('monthly-report-class-filter').value = '';
+        document.getElementById('monthly-report-start-date').value = '';
+        document.getElementById('monthly-report-end-date').value = '';
+        document.getElementById('monthly-report-status-filter').value = '';
+        
+        // Reload the list
+        await loadMonthlyReports();
+        
+        // Auto-open the created report after a brief delay
+        setTimeout(() => {
+            viewMonthlyReport(response.reportId);
+        }, 500);
+        
+    } catch (error) {
+        console.error('Error generating test report:', error);
+        Toast.error(error.message || 'Failed to generate test report');
+    }
+}
+
