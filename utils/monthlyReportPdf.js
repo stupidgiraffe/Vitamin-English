@@ -1,6 +1,6 @@
 const PDFDocument = require('pdfkit');
 const path = require('path');
-const { formatShortDate } = require('./dateUtils');
+const { formatShortDate, formatJapanTime } = require('./dateUtils');
 
 /**
  * Sanitize text for PDF output to prevent PDF injection attacks
@@ -68,9 +68,10 @@ function wrapText(text, maxLength) {
  * @param {Object} reportData - Monthly report data
  * @param {Array} weeklyData - Array of weekly lesson data
  * @param {Object} classData - Class information
+ * @param {Array} teachers - Array of unique teacher names (optional)
  * @returns {Promise<Buffer>} PDF buffer
  */
-async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
+async function generateMonthlyReportPDF(reportData, weeklyData, classData, teachers = []) {
     return new Promise((resolve, reject) => {
         try {
             // Path to Japanese font
@@ -112,29 +113,56 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                 console.warn('⚠️  No weekly data found for PDF generation');
             }
             
+            // Calculate period from sorted weeks
+            let periodText = '';
+            if (reportData.start_date && reportData.end_date) {
+                periodText = `Period: ${formatJapanTime(reportData.start_date)} → ${formatJapanTime(reportData.end_date)}`;
+            } else if (sortedWeeks.length > 0) {
+                const firstDate = sortedWeeks[0].lesson_date;
+                const lastDate = sortedWeeks[sortedWeeks.length - 1].lesson_date;
+                periodText = `Period: ${formatJapanTime(firstDate)} → ${formatJapanTime(lastDate)}`;
+            }
+            
             // Header Section
             const headerLeft = margin;
-            const headerRight = pageWidth - margin;
             
             doc.fontSize(18)
                .font('Helvetica-Bold')
                .fillColor('#333333')
-               .text('Monthly Report', headerLeft, margin, { align: 'left', width: contentWidth / 2 });
+               .text('Monthly Report', headerLeft, margin, { align: 'left' });
             
-            doc.fontSize(12)
+            // Status badge (optional - can be added later)
+            const statusColor = reportData.status === 'published' ? '#2E7D32' : '#666666';
+            
+            // Period and Month info
+            let currentY = margin + 25;
+            doc.fontSize(10)
                .font('Helvetica')
-               .text(`Month: ${formatMonth(reportData.year, reportData.month)}.`, 
-                     pageWidth / 2, margin, 
-                     { align: 'right', width: contentWidth / 2 });
+               .fillColor('#333333');
             
-            // Class info centered below
+            if (periodText) {
+                doc.text(periodText, margin, currentY, { align: 'left' });
+                currentY += 15;
+            }
+            
+            // Class info
             doc.fontSize(10)
                .fillColor('#666666')
                .text(sanitizeForPDF(classData.name + (classData.schedule ? ', ' + classData.schedule : '')), 
-                     margin, margin + 25, 
-                     { align: 'center', width: contentWidth });
+                     margin, currentY, 
+                     { align: 'left' });
+            currentY += 15;
             
-            doc.moveDown(1);
+            // Teachers info (if available)
+            if (teachers && teachers.length > 0) {
+                const teacherNames = teachers.filter(t => t).join(', ');
+                doc.fontSize(9)
+                   .fillColor('#666666')
+                   .text(`Teachers: ${sanitizeForPDF(teacherNames)}`, margin, currentY, { align: 'left' });
+                currentY += 15;
+            }
+            
+            doc.y = currentY + 10;
             
             // Table Section - Rows as categories, Columns as dates
             const tableTop = doc.y + 10;
@@ -142,16 +170,15 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             const colWidth = contentWidth / numColumns;
             const rowHeight = 60;
             
-            // Category labels (bilingual) - use Japanese font
+            // Category labels (bilingual) - REMOVED Date row as dates are in header
             const categories = [
-                { en: 'Date', jp: '日付' },
                 { en: 'Target', jp: '目標' },
                 { en: 'Vocabulary', jp: '単語' },
                 { en: 'Phrase', jp: '文' },
                 { en: 'Others', jp: 'その他' }
             ];
             
-            let currentY = tableTop;
+            currentY = tableTop;
             
             // Draw header row (dates)
             doc.rect(margin, currentY, contentWidth, rowHeight)
@@ -161,9 +188,9 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                .fillColor('#333333')
                .font('Helvetica-Bold');
             
-            // Empty top-left cell
+            // Category label in top-left cell
             let xPos = margin + 2;
-            doc.text('', xPos, currentY + 5, { width: colWidth - 4, align: 'center' });
+            doc.text('Category', xPos, currentY + rowHeight / 2 - 5, { width: colWidth - 4, align: 'center' });
             xPos += colWidth;
             
             // Date headers
@@ -182,13 +209,13 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             categories.forEach((category, catIndex) => {
                 const rowY = currentY;
                 
-                // Draw row background
+                // Draw row background with clearer gridlines
                 if (catIndex % 2 === 0) {
                     doc.rect(margin, rowY, contentWidth, rowHeight)
-                       .fillAndStroke('#F5F5F5', '#333333');
+                       .fillAndStroke('#F9F9F9', '#333333');
                 } else {
                     doc.rect(margin, rowY, contentWidth, rowHeight)
-                       .stroke('#333333');
+                       .fillAndStroke('#FFFFFF', '#333333');
                 }
                 
                 doc.fillColor('#333333');
@@ -215,18 +242,15 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                     let cellText = '';
                     
                     if (catIndex === 0) {
-                        // Date row - show formatted date
-                        cellText = '';
-                    } else if (catIndex === 1) {
                         // Target
                         cellText = sanitizeForPDF(week.target);
-                    } else if (catIndex === 2) {
+                    } else if (catIndex === 1) {
                         // Vocabulary
                         cellText = sanitizeForPDF(week.vocabulary);
-                    } else if (catIndex === 3) {
+                    } else if (catIndex === 2) {
                         // Phrase
                         cellText = sanitizeForPDF(week.phrase);
-                    } else if (catIndex === 4) {
+                    } else if (catIndex === 3) {
                         // Others
                         cellText = sanitizeForPDF(week.others);
                     }
@@ -235,10 +259,12 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                     const wrappedText = wrapText(cellText, 20);
                     const lines = wrappedText.split('\n').slice(0, 3); // Max 3 lines
                     
+                    // Use darker text (#333333) for better readability
                     doc.fontSize(6)
+                       .fillColor('#333333')
                        .font('NotoJP') // Use Japanese font for all content
-                       .text(lines.join('\n'), xPos, rowY + 5, { 
-                           width: colWidth - 4,
+                       .text(lines.join('\n'), xPos + 2, rowY + 5, { 
+                           width: colWidth - 6,
                            height: rowHeight - 10,
                            align: 'left'
                        });

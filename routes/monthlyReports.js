@@ -696,11 +696,24 @@ router.post('/:id/generate-pdf', async (req, res) => {
             console.log(`✓ Generating PDF for report ${req.params.id} with ${weeks.length} week(s)`);
         }
         
-        // Generate PDF
+        // Get unique teachers for this monthly report
+        // Join through teacher_comment_sheets to get teacher names
+        const teachersResult = await pool.query(`
+            SELECT DISTINCT u.full_name
+            FROM monthly_report_weeks mrw
+            JOIN teacher_comment_sheets tcs ON mrw.teacher_comment_sheet_id = tcs.id
+            JOIN users u ON tcs.teacher_id = u.id
+            WHERE mrw.monthly_report_id = $1 AND u.full_name IS NOT NULL
+            ORDER BY u.full_name
+        `, [req.params.id]);
+        
+        const teachers = teachersResult.rows.map(t => t.full_name);
+        
+        // Generate PDF with teacher information
         const pdfBuffer = await generateMonthlyReportPDF(report, weeks, {
             name: report.class_name,
             schedule: report.schedule
-        });
+        }, teachers);
         
         // Upload to R2
         const fileName = `monthly_report_${report.class_id}_${report.year}_${report.month}.pdf`;
