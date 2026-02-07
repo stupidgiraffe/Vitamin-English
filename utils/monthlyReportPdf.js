@@ -1,6 +1,6 @@
 const PDFDocument = require('pdfkit');
 const path = require('path');
-const { formatShortDate } = require('./dateUtils');
+const { formatShortDate, formatJapanTime } = require('./dateUtils');
 
 /**
  * Sanitize text for PDF output to prevent PDF injection attacks
@@ -68,9 +68,10 @@ function wrapText(text, maxLength) {
  * @param {Object} reportData - Monthly report data
  * @param {Array} weeklyData - Array of weekly lesson data
  * @param {Object} classData - Class information
+ * @param {Array} teachers - Array of unique teacher names (optional)
  * @returns {Promise<Buffer>} PDF buffer
  */
-async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
+async function generateMonthlyReportPDF(reportData, weeklyData, classData, teachers = []) {
     return new Promise((resolve, reject) => {
         try {
             // Path to Japanese font
@@ -112,65 +113,87 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                 console.warn('⚠️  No weekly data found for PDF generation');
             }
             
-            // Header Section
+            // Calculate period from sorted weeks
+            let periodText = '';
+            if (reportData.start_date && reportData.end_date) {
+                periodText = `Period: ${formatJapanTime(reportData.start_date)} to ${formatJapanTime(reportData.end_date)}`;
+            } else if (sortedWeeks.length > 0) {
+                const firstDate = sortedWeeks[0].lesson_date;
+                const lastDate = sortedWeeks[sortedWeeks.length - 1].lesson_date;
+                periodText = `Period: ${formatJapanTime(firstDate)} to ${formatJapanTime(lastDate)}`;
+            }
+            
+            // Header Section with colored background
             const headerLeft = margin;
-            const headerRight = pageWidth - margin;
             
-            doc.fontSize(18)
+            // Add a colored header background
+            doc.rect(margin, margin - 5, contentWidth, 70)
+               .fillAndStroke('#4A90E2', '#4A90E2');
+            
+            doc.fontSize(20)
                .font('Helvetica-Bold')
-               .fillColor('#333333')
-               .text('Monthly Report', headerLeft, margin, { align: 'left', width: contentWidth / 2 });
+               .fillColor('#FFFFFF')
+               .text('Monthly Report', headerLeft, margin + 5, { align: 'left' });
             
-            doc.fontSize(12)
+            // Period and Month info
+            let currentY = margin + 30;
+            doc.fontSize(11)
                .font('Helvetica')
-               .text(`Month: ${formatMonth(reportData.year, reportData.month)}.`, 
-                     pageWidth / 2, margin, 
-                     { align: 'right', width: contentWidth / 2 });
+               .fillColor('#FFFFFF');
             
-            // Class info centered below
+            if (periodText) {
+                doc.text(periodText, margin, currentY, { align: 'left' });
+                currentY += 15;
+            }
+            
+            // Class info and Teachers on same line
+            let infoText = sanitizeForPDF(classData.name + (classData.schedule ? ', ' + classData.schedule : ''));
+            if (teachers && teachers.length > 0) {
+                const teacherNames = teachers.filter(t => t && t.trim()).join(', ');
+                if (teacherNames) {
+                    infoText += ` | Teachers: ${sanitizeForPDF(teacherNames)}`;
+                }
+            }
+            
             doc.fontSize(10)
-               .fillColor('#666666')
-               .text(sanitizeForPDF(classData.name + (classData.schedule ? ', ' + classData.schedule : '')), 
-                     margin, margin + 25, 
-                     { align: 'center', width: contentWidth });
+               .fillColor('#FFFFFF')
+               .text(infoText, margin, currentY, { align: 'left', width: contentWidth });
             
-            doc.moveDown(1);
+            currentY = margin + 75;
             
             // Table Section - Rows as categories, Columns as dates
-            const tableTop = doc.y + 10;
+            const tableTop = currentY + 10;
             const numColumns = sortedWeeks.length + 1; // +1 for category column
             const colWidth = contentWidth / numColumns;
-            const rowHeight = 60;
+            const rowHeight = 65;
             
-            // Category labels (bilingual) - use Japanese font
+            // Category labels (bilingual) - REMOVED Date row as dates are in header
             const categories = [
-                { en: 'Date', jp: '日付' },
-                { en: 'Target', jp: '目標' },
-                { en: 'Vocabulary', jp: '単語' },
-                { en: 'Phrase', jp: '文' },
-                { en: 'Others', jp: 'その他' }
+                { en: 'Target', jp: '目標', color: '#E3F2FD' },
+                { en: 'Vocabulary', jp: '単語', color: '#F3E5F5' },
+                { en: 'Phrase', jp: '文', color: '#FFF3E0' },
+                { en: 'Others', jp: 'その他', color: '#E8F5E9' }
             ];
             
-            let currentY = tableTop;
+            currentY = tableTop;
             
-            // Draw header row (dates)
+            // Draw header row (dates) with colored background
             doc.rect(margin, currentY, contentWidth, rowHeight)
-               .fillAndStroke('#FFFFFF', '#333333');
+               .fillAndStroke('#4A90E2', '#2C5AA0');
             
-            doc.fontSize(8)
-               .fillColor('#333333')
+            doc.fontSize(9)
+               .fillColor('#FFFFFF')
                .font('Helvetica-Bold');
             
-            // Empty top-left cell
-            let xPos = margin + 2;
-            doc.text('', xPos, currentY + 5, { width: colWidth - 4, align: 'center' });
+            // Empty top-left cell (for category labels column)
+            let xPos = margin + 5;
             xPos += colWidth;
             
-            // Date headers
+            // Date headers - vertically centered
             sortedWeeks.forEach((week) => {
                 const dateText = formatDate(week.lesson_date);
-                doc.text(dateText, xPos, currentY + rowHeight / 2 - 5, { 
-                    width: colWidth - 4, 
+                doc.text(dateText, xPos, currentY + rowHeight / 2 - 6, { 
+                    width: colWidth - 10, 
                     align: 'center' 
                 });
                 xPos += colWidth;
@@ -182,29 +205,25 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             categories.forEach((category, catIndex) => {
                 const rowY = currentY;
                 
-                // Draw row background
-                if (catIndex % 2 === 0) {
-                    doc.rect(margin, rowY, contentWidth, rowHeight)
-                       .fillAndStroke('#F5F5F5', '#333333');
-                } else {
-                    doc.rect(margin, rowY, contentWidth, rowHeight)
-                       .stroke('#333333');
-                }
-                
-                doc.fillColor('#333333');
+                // Draw row background with category-specific colors
+                doc.rect(margin, rowY, contentWidth, rowHeight)
+                   .fillAndStroke(category.color, '#2C5AA0');
                 
                 // Category label (bilingual) - use Japanese font for Japanese text
-                xPos = margin + 2;
-                doc.fontSize(7)
+                xPos = margin + 5;
+                doc.fontSize(8)
+                   .fillColor('#000000')
                    .font('Helvetica-Bold')
-                   .text(category.en, xPos, rowY + 5, { 
-                       width: colWidth - 4, 
+                   .text(category.en, xPos, rowY + 10, { 
+                       width: colWidth - 10, 
                        align: 'center' 
                    });
                 // Use Japanese font for Japanese labels
                 doc.font('NotoJP')
-                   .text(`(${category.jp})`, xPos, rowY + 18, { 
-                       width: colWidth - 4, 
+                   .fontSize(7)
+                   .fillColor('#000000')
+                   .text(`(${category.jp})`, xPos, rowY + 25, { 
+                       width: colWidth - 10, 
                        align: 'center' 
                    });
                 
@@ -215,31 +234,30 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                     let cellText = '';
                     
                     if (catIndex === 0) {
-                        // Date row - show formatted date
-                        cellText = '';
-                    } else if (catIndex === 1) {
                         // Target
                         cellText = sanitizeForPDF(week.target);
-                    } else if (catIndex === 2) {
+                    } else if (catIndex === 1) {
                         // Vocabulary
                         cellText = sanitizeForPDF(week.vocabulary);
-                    } else if (catIndex === 3) {
+                    } else if (catIndex === 2) {
                         // Phrase
                         cellText = sanitizeForPDF(week.phrase);
-                    } else if (catIndex === 4) {
+                    } else if (catIndex === 3) {
                         // Others
                         cellText = sanitizeForPDF(week.others);
                     }
                     
                     // Wrap and truncate text
                     const wrappedText = wrapText(cellText, 20);
-                    const lines = wrappedText.split('\n').slice(0, 3); // Max 3 lines
+                    const lines = wrappedText.split('\n').slice(0, 4); // Max 4 lines
                     
-                    doc.fontSize(6)
+                    // Use dark text (#000000) for maximum readability
+                    doc.fontSize(7)
+                       .fillColor('#000000')
                        .font('NotoJP') // Use Japanese font for all content
-                       .text(lines.join('\n'), xPos, rowY + 5, { 
-                           width: colWidth - 4,
-                           height: rowHeight - 10,
+                       .text(lines.join('\n'), xPos + 5, rowY + 8, { 
+                           width: colWidth - 10,
+                           height: rowHeight - 16,
                            align: 'left'
                        });
                     
@@ -254,16 +272,16 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             const themeY = currentY + 20;
             
             // Monthly theme header with green background - use Japanese font
-            doc.rect(margin, themeY, contentWidth, 25)
-               .fillAndStroke('#2E7D32', '#2E7D32');
+            doc.rect(margin, themeY, contentWidth, 28)
+               .fillAndStroke('#4CAF50', '#4CAF50');
             
-            doc.fontSize(12)
+            doc.fontSize(13)
                .fillColor('#FFFFFF')
                .font('NotoJP') // Use Japanese font for Japanese header
-               .text('Monthly Theme (今月のテーマ)', margin + 10, themeY + 7);
+               .text('Monthly Theme (今月のテーマ)', margin + 10, themeY + 8);
             
-            // Monthly theme content box
-            const themeBoxTop = themeY + 25;
+            // Monthly theme content box with light background
+            const themeBoxTop = themeY + 28;
             const themeText = sanitizeForPDF(reportData.monthly_theme) || '';
             
             // Calculate height needed for text
@@ -274,11 +292,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
             const boxHeight = Math.max(textHeight + 20, 50);
             
             doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
-               .stroke('#333333');
+               .fillAndStroke('#F1F8E9', '#4CAF50');
             
             if (themeText) {
-                doc.fontSize(9)
-                   .fillColor('#333333')
+                doc.fontSize(10)
+                   .fillColor('#000000')
                    .font('NotoJP') // Use Japanese font for theme text
                    .text(themeText, margin + 10, themeBoxTop + 10, {
                       width: contentWidth - 20,
@@ -287,16 +305,15 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData) {
                    });
             }
             
-            // Footer
+            // Footer with colored background
             const footerY = pageHeight - 50;
             
-            // Green outline box around footer
-            doc.rect(margin, footerY - 5, contentWidth, 30)
-               .lineWidth(2)
-               .stroke('#2E7D32');
+            // Colored footer background
+            doc.rect(margin, footerY - 5, contentWidth, 35)
+               .fillAndStroke('#4A90E2', '#4A90E2');
             
-            doc.fontSize(12)
-               .fillColor('#2E7D32')
+            doc.fontSize(14)
+               .fillColor('#FFFFFF')
                .font('Helvetica-Bold')
                .text('VitaminEnglishSchool', margin, footerY + 5, { align: 'center', width: contentWidth });
             
