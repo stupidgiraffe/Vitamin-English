@@ -7,9 +7,11 @@ router.get('/', async (req, res) => {
     try {
         const { classId, teacherId, startDate, endDate } = req.query;
         
+        // Try teacher_comment_sheets first (new table name)
+        let tableName = 'teacher_comment_sheets';
         let query = `
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM teacher_comment_sheets r
+            FROM ${tableName} r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id
             WHERE 1=1
@@ -43,9 +45,22 @@ router.get('/', async (req, res) => {
         
         query += ' ORDER BY r.date DESC';
         
-        const result = await pool.query(query, params);
-        const reports = result.rows;
-        res.json(reports);
+        try {
+            const result = await pool.query(query, params);
+            const reports = result.rows;
+            res.json(reports);
+        } catch (tableError) {
+            // If teacher_comment_sheets doesn't exist, fall back to lesson_reports
+            if (tableError.message && tableError.message.includes('does not exist')) {
+                console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports (migration 005 not applied)');
+                query = query.replace('teacher_comment_sheets', 'lesson_reports');
+                const result = await pool.query(query, params);
+                const reports = result.rows;
+                res.json(reports);
+            } else {
+                throw tableError;
+            }
+        }
     } catch (error) {
         console.error('Error fetching reports:', error);
         res.status(500).json({ error: 'Failed to fetch reports' });
