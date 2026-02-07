@@ -136,8 +136,18 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const svgLogoPath = path.join(__dirname, '..', 'public', 'assets', 'temp-logo.svg');
             let logoAdded = false;
             
-            // Try to add PNG logo first, fallback to SVG placeholder
-            if (fs.existsSync(logoPath)) {
+            // Try to add SVG logo first (better quality), fallback to PNG
+            if (fs.existsSync(svgLogoPath)) {
+                try {
+                    // PDFKit may not support SVG directly - skip for now
+                    // Will use PNG when actual logo is available
+                } catch (err) {
+                    console.warn('⚠️  Failed to add SVG logo to PDF:', err.message);
+                }
+            }
+            
+            // Try PNG logo
+            if (!logoAdded && fs.existsSync(logoPath)) {
                 try {
                     const logoSize = 50;
                     const logoX = margin + 10;
@@ -148,22 +158,10 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                     });
                     logoAdded = true;
                 } catch (err) {
+                    // Logo failed to load - continue without logo
                     console.warn('⚠️  Failed to add logo to PDF:', err.message);
-                }
-            } else if (fs.existsSync(svgLogoPath)) {
-                try {
-                    const logoSize = 50;
-                    const logoX = margin + 10;
-                    const logoY = margin;
-                    // PDFKit supports SVG
-                    const svgContent = fs.readFileSync(svgLogoPath, 'utf8');
-                    doc.svg(svgContent, logoX, logoY, { 
-                        width: logoSize, 
-                        height: logoSize 
-                    });
-                    logoAdded = true;
-                } catch (err) {
-                    console.warn('⚠️  Failed to add SVG logo to PDF:', err.message);
+                    console.warn('    PDF will be generated without logo.');
+                    console.warn('    Replace placeholder logo with actual Vitamin English logo.');
                 }
             }
             
