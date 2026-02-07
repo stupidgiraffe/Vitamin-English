@@ -133,21 +133,10 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             
             // Add logo to header if available
             const logoPath = path.join(__dirname, '..', 'public', 'assets', 'orange-logo.png');
-            const svgLogoPath = path.join(__dirname, '..', 'public', 'assets', 'temp-logo.svg');
             let logoAdded = false;
             
-            // Try to add SVG logo first (better quality), fallback to PNG
-            if (fs.existsSync(svgLogoPath)) {
-                try {
-                    // PDFKit may not support SVG directly - skip for now
-                    // Will use PNG when actual logo is available
-                } catch (err) {
-                    console.warn('⚠️  Failed to add SVG logo to PDF:', err.message);
-                }
-            }
-            
             // Try PNG logo
-            if (!logoAdded && fs.existsSync(logoPath)) {
+            if (fs.existsSync(logoPath)) {
                 try {
                     const logoSize = 50;
                     const logoX = margin + 10;
