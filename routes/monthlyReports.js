@@ -217,7 +217,7 @@ router.post('/auto-generate', async (req, res) => {
             `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
         } catch (insertErr) {
             // If start_date/end_date columns don't exist yet, fall back to basic insert
-            if (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')) {
+            if (insertErr.code === '42703' || insertErr.message.includes('start_date') || insertErr.message.includes('end_date')) {
                 console.warn('monthly_reports missing start_date/end_date columns, using fallback INSERT');
                 reportResult = await client.query(`
                     INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)

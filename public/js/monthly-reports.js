@@ -322,7 +322,7 @@ async function viewMonthlyReport(reportId) {
         const content = `
             <div class="monthly-report-view">
                 <h3>${escapeHtml(report.class_name)} - ${monthNames[report.month - 1]} ${report.year}</h3>
-                <p><strong>Date Range:</strong> ${report.start_date ? report.start_date.split('T')[0] : 'N/A'} to ${report.end_date ? report.end_date.split('T')[0] : 'N/A'}</p>
+                <p><strong>Date Range:</strong> ${report.start_date ? String(report.start_date).split('T')[0] : 'N/A'} to ${report.end_date ? String(report.end_date).split('T')[0] : 'N/A'}</p>
                 <p><strong>Status:</strong> ${report.status === 'published' ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>'}</p>
                 <hr>
                 <h4>Weekly Lessons</h4>
