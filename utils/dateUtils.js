@@ -3,6 +3,10 @@
  * Ensures all dates are in ISO format (YYYY-MM-DD)
  */
 
+// Shared month abbreviations
+const MONTH_ABBR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
+                    'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
+
 /**
  * Normalizes a date to ISO format (YYYY-MM-DD)
  * @param {string|Date} dateInput - Date in various formats
@@ -105,10 +109,8 @@ function formatJapanTime(dateInput, format = 'date') {
             options.hour12 = false;
         } else if (format === 'short') {
             // Short format like "Feb 7"
-            const monthAbbr = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
-                              'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
             const jpDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
-            return `${monthAbbr[jpDate.getMonth()]} ${jpDate.getDate()}`;
+            return `${MONTH_ABBR[jpDate.getMonth()]} ${jpDate.getDate()}`;
         }
         
         // Return formatted date

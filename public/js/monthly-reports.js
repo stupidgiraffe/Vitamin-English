@@ -303,17 +303,10 @@ async function viewMonthlyReport(reportId) {
         let weeksHtml = '';
         if (report.weeks && report.weeks.length > 0) {
             report.weeks.forEach((week, index) => {
-                // Use the actual lesson date as the primary heading
+                // Use the actual lesson date as the primary heading using shared formatter
                 let dateLabel = 'Lesson';
                 if (week.lesson_date) {
-                    try {
-                        const d = new Date(week.lesson_date);
-                        const monthAbbr = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
-                                          'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
-                        dateLabel = `${monthAbbr[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-                    } catch (e) {
-                        dateLabel = week.lesson_date.split('T')[0];
-                    }
+                    dateLabel = formatDateReadable(week.lesson_date) || `Lesson ${index + 1}`;
                 } else {
                     dateLabel = `Lesson ${index + 1}`;
                 }
