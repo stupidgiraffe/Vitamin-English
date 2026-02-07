@@ -128,7 +128,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const headerLeft = margin;
             
             // Add a colored header background with subtle border
-            doc.rect(margin, margin - 5, contentWidth, 70)
+            doc.rect(margin, margin - 5, contentWidth, 75)
                .fillAndStroke('#4A90E2', '#2C5AA0');
             
             // Add logo to header if available
@@ -155,20 +155,20 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             }
             
             // Adjust title position if logo was added
-            const titleX = logoAdded ? headerLeft + 70 : headerLeft;
+            const titleX = logoAdded ? headerLeft + 70 : headerLeft + 10;
             doc.fontSize(20)
                .font('Helvetica-Bold')
                .fillColor('#FFFFFF')
-               .text('Monthly Report', titleX, margin + 5, { align: 'left' });
+               .text('Monthly Report', titleX, margin + 8, { align: 'left' });
             
             // Period and Month info
-            let currentY = margin + 30;
+            let currentY = margin + 33;
             doc.fontSize(11)
                .font('Helvetica')
                .fillColor('#FFFFFF');
             
             if (periodText) {
-                doc.text(periodText, margin, currentY, { align: 'left' });
+                doc.text(periodText, margin + 10, currentY, { align: 'left' });
                 currentY += 15;
             }
             
@@ -183,9 +183,9 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             
             doc.fontSize(10)
                .fillColor('#FFFFFF')
-               .text(infoText, margin, currentY, { align: 'left', width: contentWidth });
+               .text(infoText, margin + 10, currentY, { align: 'left', width: contentWidth - 20 });
             
-            currentY = margin + 75;
+            currentY = margin + 80;
             
             // Table Section - Rows as categories, Columns as dates
             const tableTop = currentY + 10;

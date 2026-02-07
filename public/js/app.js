@@ -700,7 +700,7 @@ async function loadDashboard() {
         
         recentActivityDiv.innerHTML = reports.slice(0, 5).map(report => `
             <div class="recent-activity-item">
-                <div class="activity-date">${escapeHtml(report.date)}</div>
+                <div class="activity-date">${formatDateReadable(report.date)}</div>
                 <div class="activity-class">${escapeHtml(report.class_name)}</div>
                 <div class="activity-teacher">by ${escapeHtml(report.teacher_name)}</div>
             </div>
