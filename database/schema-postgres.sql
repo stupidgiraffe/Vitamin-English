@@ -48,10 +48,12 @@ CREATE TABLE IF NOT EXISTS attendance (
     time VARCHAR(20) CHECK (time IS NULL OR time ~ '^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$'),
     status VARCHAR(10) DEFAULT '' CHECK(status IN ('O', 'X', '/', '')),
     notes TEXT,
+    teacher_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(student_id, date),
     FOREIGN KEY (student_id) REFERENCES students(id),
-    FOREIGN KEY (class_id) REFERENCES classes(id)
+    FOREIGN KEY (class_id) REFERENCES classes(id),
+    FOREIGN KEY (teacher_id) REFERENCES users(id)
 );
 
 -- Teacher Comment Sheets table (renamed from lesson_reports per migration 005)
@@ -75,6 +77,7 @@ CREATE TABLE IF NOT EXISTS teacher_comment_sheets (
 CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
 CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_class ON attendance(class_id);
+CREATE INDEX IF NOT EXISTS idx_attendance_teacher ON attendance(teacher_id);
 CREATE INDEX IF NOT EXISTS idx_teacher_comment_sheets_date ON teacher_comment_sheets(date);
 CREATE INDEX IF NOT EXISTS idx_teacher_comment_sheets_class ON teacher_comment_sheets(class_id);
 CREATE INDEX IF NOT EXISTS idx_students_class ON students(class_id);
