@@ -4523,7 +4523,11 @@ async function generateTestMonthlyReport() {
             })
         });
         
-        Toast.success(`Test report created! Report ID: ${response.reportId}`);
+        if (response.alreadyExists) {
+            Toast.info(`Test report already exists! Report ID: ${response.reportId} - Opening existing report...`);
+        } else {
+            Toast.success(`Test report created! Report ID: ${response.reportId}`);
+        }
         
         // Reload the list
         await loadMonthlyReports();

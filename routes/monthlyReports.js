@@ -802,15 +802,43 @@ router.post('/generate-test-data', async (req, res) => {
             });
         }
         
-        // Check if January 2024 report already exists
+        // Check if January 2024 report already exists using the new date range constraint
         const existingCheck = await client.query(`
             SELECT id FROM monthly_reports 
-            WHERE class_id = $1 AND year = 2024 AND month = 1
-        `, [class_id]);
+            WHERE class_id = $1 AND start_date = $2 AND end_date = $3
+        `, [class_id, '2024-01-01', '2024-01-31']);
         
         if (existingCheck.rows.length > 0) {
-            return res.status(400).json({ 
-                error: 'January 2024 monthly report already exists for this class. Not overwriting.' 
+            // Report already exists - return it instead of erroring
+            const existingId = existingCheck.rows[0].id;
+            
+            // Fetch the complete existing report
+            const completeResult = await pool.query(`
+                SELECT mr.*, c.name as class_name, c.schedule
+                FROM monthly_reports mr
+                JOIN classes c ON mr.class_id = c.id
+                WHERE mr.id = $1
+            `, [existingId]);
+            
+            const report = completeResult.rows[0];
+            
+            // Get weeks
+            const weeksResult = await pool.query(`
+                SELECT * FROM monthly_report_weeks
+                WHERE monthly_report_id = $1
+                ORDER BY week_number
+            `, [existingId]);
+            
+            report.weeks = weeksResult.rows;
+            
+            // Return existing report with a flag indicating it already existed
+            return res.status(200).json({ 
+                success: true,
+                message: 'January 2024 test report already exists - returning existing report',
+                reportId: existingId,
+                sheetsCreated: weeksResult.rows.length,
+                alreadyExists: true,
+                ...report
             });
         }
         
