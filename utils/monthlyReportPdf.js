@@ -131,10 +131,6 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             doc.rect(margin, margin - 5, contentWidth, 75)
                .fillAndStroke('#4A90E2', '#2C5AA0');
             
-            // Add thin orange accent line under header for branding
-            doc.rect(margin, margin + 70, contentWidth, 2)
-               .fillAndStroke('#FF8C42', '#FF8C42');
-            
             // Add logo to header if available
             const logoPath = path.join(__dirname, '..', 'public', 'assets', 'orange-logo.png');
             let logoAdded = false;
