@@ -122,6 +122,8 @@ async function buildAttendanceMatrix(pool, classId, startDate, endDate) {
 
 /**
  * Format attendance status for display
+ * NOTE: This function returns emoji symbols and colors for UI display.
+ * PDF rendering uses the raw status characters ('O', 'X', '/') directly.
  * @param {String} status - Status code ('O', 'X', '/', '')
  * @returns {Object} - { symbol, text, color }
  */

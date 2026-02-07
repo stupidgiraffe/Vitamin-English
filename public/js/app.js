@@ -3351,8 +3351,12 @@ function openAttendanceGrid(classId, date) {
     // Navigate to attendance page
     navigateToPage('attendance');
     
-    // Wait for page to load, then select the class and set the date
-    setTimeout(() => {
+    // Close modal first
+    closeModal();
+    
+    // Wait for page to render, then configure the filters
+    // Using requestAnimationFrame for smoother DOM updates
+    requestAnimationFrame(() => {
         const classSelect = document.getElementById('class-select');
         if (classSelect) {
             classSelect.value = classId;
@@ -3368,16 +3372,14 @@ function openAttendanceGrid(classId, date) {
             endDateInput.value = date;
         }
         
-        // Load the attendance grid
-        setTimeout(() => {
+        // Wait for next frame to ensure change event has processed
+        requestAnimationFrame(() => {
             const loadBtn = document.getElementById('load-attendance-btn');
             if (loadBtn) {
                 loadBtn.click();
             }
-        }, 300);
-    }, 100);
-    
-    closeModal();
+        });
+    });
 }
 
 // View monthly report detail modal

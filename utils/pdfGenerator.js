@@ -347,21 +347,25 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
             const regularStudents = students.filter(s => s.student_type === 'regular');
             const trialStudents = students.filter(s => s.student_type !== 'regular');
             
-            // Calculate column widths based on number of dates
-            const pageWidth = doc.page.width - 60; // 30px margin on each side
-            const nameColumnWidth = 120;
-            const availableWidth = pageWidth - nameColumnWidth;
+            // Layout constants for better maintainability
+            const PAGE_MARGIN = 30;
+            const NAME_COLUMN_WIDTH = 120;
+            const MIN_DATE_COLUMN_WIDTH = 35; // Minimum pixels per date column for readability
+            const ROW_HEIGHT = 20;
             
-            // Auto-split into pages if too many dates (max ~20 dates per page for readability)
-            const maxDatesPerPage = Math.floor(availableWidth / 35); // Minimum 35px per date column
+            // Calculate column widths based on number of dates
+            const pageWidth = doc.page.width - (PAGE_MARGIN * 2);
+            const availableWidth = pageWidth - NAME_COLUMN_WIDTH;
+            
+            // Auto-split into pages if too many dates (for readability)
+            const maxDatesPerPage = Math.floor(availableWidth / MIN_DATE_COLUMN_WIDTH);
             const dateChunks = [];
             
             for (let i = 0; i < dates.length; i += maxDatesPerPage) {
                 dateChunks.push(dates.slice(i, i + maxDatesPerPage));
             }
             
-            const startX = 30;
-            const rowHeight = 20; // Slightly increased for better readability
+            const startX = PAGE_MARGIN;
             
             // Function to draw header on each page
             const drawPageHeader = () => {
@@ -388,10 +392,10 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                 if (sectionStudents.length === 0) return currentY;
                 
                 const dateColumnWidth = Math.min(40, availableWidth / dateChunk.length);
-                const totalTableWidth = nameColumnWidth + (dateColumnWidth * dateChunk.length);
+                const totalTableWidth = NAME_COLUMN_WIDTH + (dateColumnWidth * dateChunk.length);
                 
                 // Section header with blue background
-                doc.rect(startX, currentY - 3, totalTableWidth, rowHeight)
+                doc.rect(startX, currentY - 3, totalTableWidth, ROW_HEIGHT)
                    .fillAndStroke('#8FAADC', '#4472C4');
                 
                 doc.font('Helvetica-Bold')
@@ -399,11 +403,11 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                    .fillColor('#1F3A5F')
                    .text(sectionTitle, startX + 5, currentY, { 
                        width: totalTableWidth - 10, 
-                       height: rowHeight,
+                       height: ROW_HEIGHT,
                        valign: 'center'
                    });
                 
-                currentY += rowHeight;
+                currentY += ROW_HEIGHT;
                 
                 // Reset fill color
                 doc.fillColor('black');
@@ -413,20 +417,20 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                    .fontSize(7);
                 
                 // Student name header
-                doc.rect(startX, currentY, nameColumnWidth, rowHeight)
+                doc.rect(startX, currentY, NAME_COLUMN_WIDTH, ROW_HEIGHT)
                    .lineWidth(2) // Thicker border for header
                    .fillAndStroke('#4472C4', '#2B5797');
                 doc.lineWidth(1); // Reset line width
                 doc.fillColor('white')
                    .text('Student Name', startX + 3, currentY + 5, { 
-                       width: nameColumnWidth - 6,
-                       height: rowHeight 
+                       width: NAME_COLUMN_WIDTH - 6,
+                       height: ROW_HEIGHT 
                    });
                 
                 // Date column headers
                 dateChunk.forEach((date, idx) => {
-                    const x = startX + nameColumnWidth + (idx * dateColumnWidth);
-                    doc.rect(x, currentY, dateColumnWidth, rowHeight)
+                    const x = startX + NAME_COLUMN_WIDTH + (idx * dateColumnWidth);
+                    doc.rect(x, currentY, dateColumnWidth, ROW_HEIGHT)
                        .lineWidth(2)
                        .fillAndStroke('#4472C4', '#2B5797');
                     doc.lineWidth(1);
@@ -438,12 +442,12 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                     doc.fillColor('white')
                        .text(shortDate, x + 2, currentY + 5, { 
                            width: dateColumnWidth - 4,
-                           height: rowHeight,
+                           height: ROW_HEIGHT,
                            align: 'center'
                        });
                 });
                 
-                currentY += rowHeight;
+                currentY += ROW_HEIGHT;
                 doc.fillColor('black');
                 
                 // Student rows
@@ -470,7 +474,7 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                     }
                     
                     if (bgColor) {
-                        doc.rect(startX, currentY, totalTableWidth, rowHeight)
+                        doc.rect(startX, currentY, totalTableWidth, ROW_HEIGHT)
                            .fill(bgColor);
                         doc.fillColor('black');
                     }
@@ -483,17 +487,17 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                         : sanitizedName;
                     
                     // Draw border around name cell
-                    doc.rect(startX, currentY, nameColumnWidth, rowHeight)
+                    doc.rect(startX, currentY, NAME_COLUMN_WIDTH, ROW_HEIGHT)
                        .stroke('#CCCCCC');
                     
                     doc.text(studentName, startX + 3, currentY + 5, { 
-                        width: nameColumnWidth - 6,
-                        height: rowHeight 
+                        width: NAME_COLUMN_WIDTH - 6,
+                        height: ROW_HEIGHT 
                     });
                     
                     // Attendance cells
                     dateChunk.forEach((date, dateIdx) => {
-                        const x = startX + nameColumnWidth + (dateIdx * dateColumnWidth);
+                        const x = startX + NAME_COLUMN_WIDTH + (dateIdx * dateColumnWidth);
                         const key = `${student.id}-${date}`;
                         const status = attendanceMap[key] || '';
                         
@@ -513,12 +517,12 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                         
                         // Draw cell background with color if status exists
                         if (cellBgColor) {
-                            doc.rect(x, currentY, dateColumnWidth, rowHeight)
+                            doc.rect(x, currentY, dateColumnWidth, ROW_HEIGHT)
                                .fill(cellBgColor);
                         }
                         
                         // Draw cell border (thicker for better printing)
-                        doc.rect(x, currentY, dateColumnWidth, rowHeight)
+                        doc.rect(x, currentY, dateColumnWidth, ROW_HEIGHT)
                            .lineWidth(1.5)
                            .stroke('#999999');
                         doc.lineWidth(1);
@@ -532,7 +536,7 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                                .fillColor(textColor)
                                .text(status, x + 2, currentY + 4, { 
                                    width: dateColumnWidth - 4,
-                                   height: rowHeight,
+                                   height: ROW_HEIGHT,
                                    align: 'center'
                                });
                             doc.font('Helvetica')
@@ -541,7 +545,7 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                         }
                     });
                     
-                    currentY += rowHeight;
+                    currentY += ROW_HEIGHT;
                 });
                 
                 currentY += 10; // Space after section
