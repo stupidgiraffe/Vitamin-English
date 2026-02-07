@@ -62,6 +62,10 @@ These migrations fix:
 
 3. **Run the migration script**:
    ```bash
+   # Using npm script (recommended)
+   npm run migrate
+   
+   # Or directly
    node scripts/apply-migrations.js
    ```
 
