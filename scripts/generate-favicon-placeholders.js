@@ -1,0 +1,41 @@
+/**
+ * Generate placeholder favicon files
+ * These are simple orange circle placeholders that should be replaced with the actual logo
+ */
+const fs = require('fs');
+const path = require('path');
+
+const assetsDir = path.join(__dirname, '..', 'public', 'assets');
+
+// Ensure assets directory exists
+if (!fs.existsSync(assetsDir)) {
+    fs.mkdirSync(assetsDir, { recursive: true });
+}
+
+console.log('Creating placeholder favicon files...');
+console.log('Note: These are simple placeholders. Replace with actual orange logo for best results.\n');
+
+// Create a simple 32x32 PNG with an orange circle (base64 encoded)
+// This is a minimal valid PNG file
+const favicon32Base64 = 'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAsTAAALEwEAmpwYAAABQklEQVR4nO2WsU7DMBCG/QQIhq4IiYkHYGHpM/AArL0BEg9AwdqFBwAJhpYHQGJBYmRlhQdhQUJC/JIsxXZsJ04Slv5S5JN9d/7On3MhxP+FiPRVVR0ZY+611ldEdCsi90S0YK1dlmU5OxgAY8wjEd0AuATwBuAdwBeADwBfAL4BfAP4BPDxA+DdP/sC8AngE8CHf/YB4N0/+wTw4Z99AnjH3v6XYK1dKaWOieg6bdJaexbHGLM2xqwoHFrrk9IAlFLTNC6Oe0II5QGUwsVxPp/PC4OpAMrlcpkdjKoCaJomCyYLoCiKLJgsgDGGsq8gY0weQLlcrgZQLpcHkKYpAKh6HSeANE3TAKrex18utwdQPIASuVwegMvl8gCKB1AilwdQPIASubwLoHgucrnc3wEol8vlARQP4AcpjdXp8vgIjQAAAABJRU5ErkJggg==';
+
+const favicon32Path = path.join(assetsDir, 'favicon-32x32.png');
+fs.writeFileSync(favicon32Path, Buffer.from(favicon32Base64, 'base64'));
+console.log('✓ Created favicon-32x32.png');
+
+// For favicon.ico, we'll create a simple copy of the PNG
+// Modern browsers support PNG in .ico containers
+const faviconIcoPath = path.join(assetsDir, 'favicon.ico');
+fs.writeFileSync(faviconIcoPath, Buffer.from(favicon32Base64, 'base64'));
+console.log('✓ Created favicon.ico (using PNG format)');
+
+// Create apple-touch-icon (180x180) - simplified version
+const appleIconBase64 = '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';
+
+const appleIconPath = path.join(assetsDir, 'apple-touch-icon.png');
+fs.writeFileSync(appleIconPath, Buffer.from(appleIconBase64, 'base64'));
+console.log('✓ Created apple-touch-icon.png');
+
+console.log('\n📝 Important: These are placeholder images.');
+console.log('Replace them with the actual Vitamin English orange logo for production use.');
+console.log('See public/assets/README.md for more information.\n');

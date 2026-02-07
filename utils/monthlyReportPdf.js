@@ -1,5 +1,6 @@
 const PDFDocument = require('pdfkit');
 const path = require('path');
+const fs = require('fs');
 const { formatShortDate, formatJapanTime } = require('./dateUtils');
 
 /**
@@ -126,14 +127,39 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             // Header Section with colored background
             const headerLeft = margin;
             
-            // Add a colored header background
+            // Add a colored header background with subtle border
             doc.rect(margin, margin - 5, contentWidth, 70)
-               .fillAndStroke('#4A90E2', '#4A90E2');
+               .fillAndStroke('#4A90E2', '#2C5AA0');
             
+            // Add logo to header if available
+            const logoPath = path.join(__dirname, '..', 'public', 'assets', 'orange-logo.png');
+            let logoAdded = false;
+            
+            // Try PNG logo
+            if (fs.existsSync(logoPath)) {
+                try {
+                    const logoSize = 50;
+                    const logoX = margin + 10;
+                    const logoY = margin;
+                    doc.image(logoPath, logoX, logoY, { 
+                        width: logoSize, 
+                        height: logoSize 
+                    });
+                    logoAdded = true;
+                } catch (err) {
+                    // Logo failed to load - continue without logo
+                    console.warn('⚠️  Failed to add logo to PDF:', err.message);
+                    console.warn('    PDF will be generated without logo.');
+                    console.warn('    Replace placeholder logo with actual Vitamin English logo.');
+                }
+            }
+            
+            // Adjust title position if logo was added
+            const titleX = logoAdded ? headerLeft + 70 : headerLeft;
             doc.fontSize(20)
                .font('Helvetica-Bold')
                .fillColor('#FFFFFF')
-               .text('Monthly Report', headerLeft, margin + 5, { align: 'left' });
+               .text('Monthly Report', titleX, margin + 5, { align: 'left' });
             
             // Period and Month info
             let currentY = margin + 30;
@@ -252,7 +278,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                     const lines = wrappedText.split('\n').slice(0, 4); // Max 4 lines
                     
                     // Use dark text (#000000) for maximum readability
-                    doc.fontSize(7)
+                    // Increased font size from 7 to 8 for better readability
+                    doc.fontSize(8)
                        .fillColor('#000000')
                        .font('NotoJP') // Use Japanese font for all content
                        .text(lines.join('\n'), xPos + 5, rowY + 8, { 
@@ -305,12 +332,12 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                    });
             }
             
-            // Footer with colored background
+            // Footer with colored background and subtle border
             const footerY = pageHeight - 50;
             
-            // Colored footer background
+            // Colored footer background with border matching header
             doc.rect(margin, footerY - 5, contentWidth, 35)
-               .fillAndStroke('#4A90E2', '#4A90E2');
+               .fillAndStroke('#4A90E2', '#2C5AA0');
             
             doc.fontSize(14)
                .fillColor('#FFFFFF')
