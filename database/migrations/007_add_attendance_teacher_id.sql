@@ -7,7 +7,7 @@ ADD COLUMN IF NOT EXISTS teacher_id INTEGER;
 
 -- Add foreign key constraint to users table
 ALTER TABLE attendance 
-ADD CONSTRAINT IF NOT EXISTS fk_attendance_teacher 
+ADD CONSTRAINT fk_attendance_teacher 
 FOREIGN KEY (teacher_id) REFERENCES users(id);
 
 -- Add index for better performance

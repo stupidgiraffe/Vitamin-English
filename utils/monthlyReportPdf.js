@@ -155,11 +155,13 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             
             // Teachers info (if available)
             if (teachers && teachers.length > 0) {
-                const teacherNames = teachers.filter(t => t).join(', ');
-                doc.fontSize(9)
-                   .fillColor('#666666')
-                   .text(`Teachers: ${sanitizeForPDF(teacherNames)}`, margin, currentY, { align: 'left' });
-                currentY += 15;
+                const teacherNames = teachers.filter(t => t && t.trim()).join(', ');
+                if (teacherNames) {
+                    doc.fontSize(9)
+                       .fillColor('#666666')
+                       .text(`Teachers: ${sanitizeForPDF(teacherNames)}`, margin, currentY, { align: 'left' });
+                    currentY += 15;
+                }
             }
             
             doc.y = currentY + 10;

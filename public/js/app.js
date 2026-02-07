@@ -13,7 +13,9 @@ const AttendanceSaveQueue = {
     // Add item to queue and schedule save
     add(studentId, classId, date, status, time = null, teacherId = null) {
         const key = `${studentId}-${classId}-${date}`;
-        this.queue.set(key, { studentId, classId, date, status, time, teacherId });
+        // Store teacherId as integer if provided
+        const parsedTeacherId = teacherId ? parseInt(teacherId) : null;
+        this.queue.set(key, { studentId, classId, date, status, time, teacherId: parsedTeacherId });
         
         // Show saving status
         this.updateSaveStatus('saving');
@@ -46,7 +48,7 @@ const AttendanceSaveQueue = {
                         date: item.date,
                         status: item.status,
                         time: item.time,
-                        teacher_id: item.teacherId ? parseInt(item.teacherId) : null
+                        teacher_id: item.teacherId // Already parsed to integer in add()
                     })
                 })
             );
