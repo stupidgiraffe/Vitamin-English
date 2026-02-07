@@ -3,6 +3,7 @@ const pool = require('./connection');
 /**
  * Schema Guard - Ensures required columns exist in Postgres database
  * This module detects missing columns and adds them with safe defaults
+ * Also checks for missing migrations and provides warnings
  * Only runs for PostgreSQL (not SQLite)
  */
 
@@ -19,6 +20,9 @@ async function ensureSchemaColumns() {
         const client = await pool.connect();
         
         try {
+            // Check for missing migrations first
+            await checkMigrationStatus(client);
+            
             // Check and add missing columns in students table
             await ensureStudentColumns(client);
             
@@ -39,6 +43,57 @@ async function ensureSchemaColumns() {
         console.error('Stack trace:', error.stack);
         // Don't throw - allow app to continue even if schema guard fails
     }
+}
+
+/**
+ * Check if migrations are needed and log warnings
+ */
+async function checkMigrationStatus(client) {
+    try {
+        const hasTeacherCommentSheets = await tableExists(client, 'teacher_comment_sheets');
+        const hasLessonReports = await tableExists(client, 'lesson_reports');
+        const hasMonthlyReports = await tableExists(client, 'monthly_reports');
+        const hasMonthlyReportWeeks = await tableExists(client, 'monthly_report_weeks');
+        
+        let needsMigration = false;
+        
+        // Check migration 004
+        if (!hasMonthlyReports || !hasMonthlyReportWeeks) {
+            console.log('⚠️  WARNING: Migration 004 not applied');
+            console.log('   Missing tables: monthly_reports and/or monthly_report_weeks');
+            console.log('   Run: node scripts/apply-migrations.js');
+            needsMigration = true;
+        }
+        
+        // Check migration 005
+        if (hasLessonReports && !hasTeacherCommentSheets) {
+            console.log('⚠️  WARNING: Migration 005 not applied');
+            console.log('   Table "lesson_reports" should be renamed to "teacher_comment_sheets"');
+            console.log('   Run: node scripts/apply-migrations.js');
+            needsMigration = true;
+        }
+        
+        if (needsMigration) {
+            console.log('\n🚨 DATABASE SCHEMA IS OUTDATED');
+            console.log('   Application may not work correctly until migrations are applied.');
+            console.log('   See MIGRATION_INSTRUCTIONS.md for details.\n');
+        }
+        
+    } catch (error) {
+        console.error('Error checking migration status:', error.message);
+    }
+}
+
+/**
+ * Check if a table exists
+ */
+async function tableExists(client, tableName) {
+    const result = await client.query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = $1
+    `, [tableName]);
+    return result.rows.length > 0;
 }
 
 async function ensureStudentColumns(client) {

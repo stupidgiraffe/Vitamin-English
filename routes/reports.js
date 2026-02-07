@@ -7,9 +7,36 @@ router.get('/', async (req, res) => {
     try {
         const { classId, teacherId, startDate, endDate } = req.query;
         
+        // Determine which table name to use
+        const client = await pool.connect();
+        let tableName = 'teacher_comment_sheets';
+        try {
+            const tableCheck = await client.query(`
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'teacher_comment_sheets'
+            `);
+            
+            if (tableCheck.rows.length === 0) {
+                // Check if old table exists
+                const oldTableCheck = await client.query(`
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name = 'lesson_reports'
+                `);
+                
+                if (oldTableCheck.rows.length > 0) {
+                    console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports (migration 005 not applied)');
+                    tableName = 'lesson_reports';
+                }
+            }
+        } finally {
+            client.release();
+        }
+        
         let query = `
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM teacher_comment_sheets r
+            FROM ${tableName} r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id
             WHERE 1=1

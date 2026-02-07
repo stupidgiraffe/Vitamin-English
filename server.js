@@ -275,6 +275,103 @@ app.get('/api/debug/database-status', requireAuth, async (req, res) => {
     }
 });
 
+// Migration status endpoint
+app.get('/api/debug/migration-status', requireAuth, async (req, res) => {
+    try {
+        const client = await pool.connect();
+        
+        try {
+            // Check which tables exist
+            const tablesQuery = await client.query(`
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name IN ('teacher_comment_sheets', 'lesson_reports', 'monthly_reports', 'monthly_report_weeks')
+                ORDER BY table_name
+            `);
+            
+            const existingTables = tablesQuery.rows.map(r => r.table_name);
+            
+            // Check columns in monthly_reports if it exists
+            let monthlyReportsColumns = [];
+            if (existingTables.includes('monthly_reports')) {
+                const columnsQuery = await client.query(`
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'monthly_reports'
+                    AND column_name IN ('start_date', 'end_date', 'year', 'month')
+                    ORDER BY column_name
+                `);
+                monthlyReportsColumns = columnsQuery.rows.map(r => r.column_name);
+            }
+            
+            // Check columns in monthly_report_weeks if it exists
+            let monthlyReportWeeksColumns = [];
+            if (existingTables.includes('monthly_report_weeks')) {
+                const columnsQuery = await client.query(`
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'monthly_report_weeks'
+                    AND column_name IN ('teacher_comment_sheet_id', 'lesson_report_id')
+                    ORDER BY column_name
+                `);
+                monthlyReportWeeksColumns = columnsQuery.rows.map(r => r.column_name);
+            }
+            
+            // Determine migration status
+            const migration004Applied = existingTables.includes('monthly_reports') && 
+                                       existingTables.includes('monthly_report_weeks');
+            
+            const migration005Applied = existingTables.includes('teacher_comment_sheets') && 
+                                       !existingTables.includes('lesson_reports') &&
+                                       monthlyReportsColumns.includes('start_date') &&
+                                       monthlyReportsColumns.includes('end_date');
+            
+            const status = {
+                migrations: {
+                    '004_create_monthly_reports': {
+                        applied: migration004Applied,
+                        details: {
+                            monthly_reports_exists: existingTables.includes('monthly_reports'),
+                            monthly_report_weeks_exists: existingTables.includes('monthly_report_weeks')
+                        }
+                    },
+                    '005_rename_lesson_reports': {
+                        applied: migration005Applied,
+                        details: {
+                            teacher_comment_sheets_exists: existingTables.includes('teacher_comment_sheets'),
+                            lesson_reports_exists: existingTables.includes('lesson_reports'),
+                            start_date_column: monthlyReportsColumns.includes('start_date'),
+                            end_date_column: monthlyReportsColumns.includes('end_date')
+                        }
+                    }
+                },
+                tables: existingTables,
+                columns: {
+                    monthly_reports: monthlyReportsColumns,
+                    monthly_report_weeks: monthlyReportWeeksColumns
+                },
+                needsMigration: !migration004Applied || !migration005Applied,
+                recommendation: !migration004Applied || !migration005Applied 
+                    ? 'Run: node scripts/apply-migrations.js' 
+                    : 'All migrations applied'
+            };
+            
+            res.json(status);
+        } finally {
+            client.release();
+        }
+    } catch (error) {
+        console.error('Migration status endpoint error:', error);
+        res.status(500).json({ 
+            error: error.message,
+            ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
+        });
+    }
+});
+
 // Note: Database reset not available for PostgreSQL
 // To reset the database, use: DROP DATABASE and CREATE DATABASE on Neon/PostgreSQL
 
