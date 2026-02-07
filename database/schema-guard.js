@@ -25,6 +25,9 @@ async function ensureSchemaColumns() {
             // Check and add missing columns in classes table
             await ensureClassColumns(client);
             
+            // Ensure monthly_reports has start_date and end_date columns (added in migration 005)
+            await ensureMonthlyReportsColumns(client);
+            
             console.log('✅ Schema guard completed successfully');
             
         } finally {
@@ -64,13 +67,36 @@ async function ensureClassColumns(client) {
     }
 }
 
+async function ensureMonthlyReportsColumns(client) {
+    // Check if monthly_reports table exists first
+    const tableCheck = await client.query(`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'monthly_reports'
+    `);
+    
+    if (tableCheck.rows.length === 0) {
+        console.log('ℹ️  monthly_reports table does not exist yet, skipping column check');
+        return;
+    }
+    
+    const requiredColumns = [
+        { name: 'start_date', type: 'DATE', default: 'NULL' },
+        { name: 'end_date', type: 'DATE', default: 'NULL' }
+    ];
+
+    for (const column of requiredColumns) {
+        await ensureColumnExists(client, 'monthly_reports', column.name, column.type, column.default);
+    }
+}
+
 async function ensureColumnExists(client, tableName, columnName, columnType, defaultValue) {
     try {
         // Validate table and column names against allowlist to prevent SQL injection
-        const allowedTables = ['students', 'classes'];
+        const allowedTables = ['students', 'classes', 'monthly_reports'];
         const allowedColumns = {
             students: ['parent_phone', 'color_code', 'email', 'phone', 'parent_name', 'parent_email', 'enrollment_date'],
-            classes: ['color']
+            classes: ['color'],
+            monthly_reports: ['start_date', 'end_date']
         };
         
         if (!allowedTables.includes(tableName)) {

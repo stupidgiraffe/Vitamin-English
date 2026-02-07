@@ -468,8 +468,7 @@ function populateClassSelects() {
 
 function populateTeacherSelects() {
     const selects = [
-        document.getElementById('report-teacher'),
-        document.getElementById('attendance-taken-by')
+        document.getElementById('report-teacher')
     ];
     
     selects.forEach(select => {
@@ -2825,13 +2824,6 @@ function renderCleanTable(data, type, options = {}) {
                 active: (val) => val ? 'Yes' : 'No'
             }
         },
-        lesson_reports: {
-            columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
-            headers: ['Date', 'Class', 'Teacher', 'Topic'],
-            formatters: {
-                date: formatDisplayDate
-            }
-        },
         teacher_comment_sheets: {
             columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
             headers: ['Date', 'Class', 'Teacher', 'Topic'],
@@ -2936,7 +2928,7 @@ function renderCleanTable(data, type, options = {}) {
         
         // Add actions column - either original edit/delete or new view/pdf buttons
         if (includeActions) {
-            // Original behavior for lesson_reports table
+            // Original behavior for teacher_comment_sheets table
             if (!isNaN(sanitizedId)) {
                 html += `<td class="actions-cell">
                     <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); editReportFromDatabase(${sanitizedId})">Edit</button>
@@ -3111,7 +3103,7 @@ async function loadDatabaseTable() {
             return;
         }
         
-        const hasActions = tableName === 'lesson_reports' || tableName === 'teacher_comment_sheets';
+        const hasActions = tableName === 'teacher_comment_sheets';
         
         // Use clean table rendering with optional actions
         let html = renderCleanTable(result.data, tableName, { includeActions: hasActions });
@@ -4111,8 +4103,16 @@ async function cancelMakeupLesson(id) {
 // Update loadDashboard to include makeup lessons
 const originalLoadDashboard = loadDashboard;
 loadDashboard = async function() {
-    await originalLoadDashboard();
-    await loadMakeupLessons();
+    try {
+        await originalLoadDashboard();
+    } catch (err) {
+        console.error('Dashboard load error:', err);
+    }
+    try {
+        await loadMakeupLessons();
+    } catch (err) {
+        console.error('Makeup lessons load error:', err);
+    }
 };
 
 // Update navigateToPage to handle new pages
@@ -4299,6 +4299,13 @@ async function initializeMonthlyReportsPage() {
     // Set up event listeners
     document.getElementById('filter-monthly-reports-btn').addEventListener('click', loadMonthlyReports);
     document.getElementById('new-monthly-report-btn').addEventListener('click', showNewMonthlyReportModal);
+
+    // Auto-load reports on page open
+    try {
+        await loadMonthlyReports();
+    } catch (err) {
+        console.error('Auto-load monthly reports failed:', err);
+    }
 }
 
 // Load monthly reports with filters
@@ -4341,9 +4348,9 @@ function renderMonthlyReportsList() {
             <thead>
                 <tr>
                     <th>Class</th>
-                    <th>Month/Year</th>
+                    <th>Period</th>
+                    <th>Date Range</th>
                     <th>Status</th>
-                    <th>Created</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -4352,17 +4359,19 @@ function renderMonthlyReportsList() {
     
     monthlyReports.forEach(report => {
         const monthYear = `${monthNames[report.month - 1]} ${report.year}`;
+        const dateRange = (report.start_date && report.end_date) 
+            ? `${String(report.start_date).split('T')[0]} — ${String(report.end_date).split('T')[0]}` 
+            : 'N/A';
         const statusBadge = report.status === 'published' 
             ? '<span class="badge badge-success">Published</span>' 
             : '<span class="badge badge-warning">Draft</span>';
-        const createdDate = new Date(report.created_at).toLocaleDateString();
         
         html += `
             <tr>
-                <td>${report.class_name || 'N/A'}</td>
+                <td>${escapeHtml(report.class_name || 'N/A')}</td>
                 <td>${monthYear}</td>
+                <td>${dateRange}</td>
                 <td>${statusBadge}</td>
-                <td>${createdDate}</td>
                 <td class="actions">
                     <button class="btn btn-sm btn-primary" onclick="viewMonthlyReport(${report.id})">View</button>
                     <button class="btn btn-sm btn-secondary" onclick="editMonthlyReport(${report.id})">Edit</button>
