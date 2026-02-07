@@ -156,6 +156,8 @@ async function applyMigration005(client) {
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
     
     // Split by semicolon and filter out empty statements and comments
+    // NOTE: This simple splitting approach assumes no semicolons in string literals or function bodies
+    // The migration files are designed to avoid such constructs for compatibility
     const statements = migrationSQL
         .split(';')
         .map(s => s.trim())
@@ -173,9 +175,13 @@ async function applyMigration005(client) {
             } catch (err) {
                 // Some statements may fail if already executed (e.g., column already exists)
                 // This is okay for idempotency
-                if (err.message.includes('already exists') || 
-                    err.message.includes('does not exist') ||
-                    err.message.includes('duplicate')) {
+                // PostgreSQL error codes:
+                // 42P07 = duplicate_table
+                // 42701 = duplicate_column
+                // 42P01 = undefined_table
+                // 42703 = undefined_column
+                if (err.code === '42P07' || err.code === '42701' || 
+                    err.code === '42P01' || err.code === '42703') {
                     console.log(`⚠️  Statement ${i + 1} skipped (already applied): ${err.message}`);
                 } else {
                     console.error(`❌ Statement ${i + 1} failed: ${err.message}`);

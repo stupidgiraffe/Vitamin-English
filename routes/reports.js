@@ -7,8 +7,33 @@ router.get('/', async (req, res) => {
     try {
         const { classId, teacherId, startDate, endDate } = req.query;
         
-        // Try teacher_comment_sheets first (new table name)
+        // Determine which table name to use
+        const client = await pool.connect();
         let tableName = 'teacher_comment_sheets';
+        try {
+            const tableCheck = await client.query(`
+                SELECT table_name 
+                FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'teacher_comment_sheets'
+            `);
+            
+            if (tableCheck.rows.length === 0) {
+                // Check if old table exists
+                const oldTableCheck = await client.query(`
+                    SELECT table_name 
+                    FROM information_schema.tables 
+                    WHERE table_schema = 'public' AND table_name = 'lesson_reports'
+                `);
+                
+                if (oldTableCheck.rows.length > 0) {
+                    console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports (migration 005 not applied)');
+                    tableName = 'lesson_reports';
+                }
+            }
+        } finally {
+            client.release();
+        }
+        
         let query = `
             SELECT r.*, c.name as class_name, u.full_name as teacher_name
             FROM ${tableName} r
@@ -45,22 +70,9 @@ router.get('/', async (req, res) => {
         
         query += ' ORDER BY r.date DESC';
         
-        try {
-            const result = await pool.query(query, params);
-            const reports = result.rows;
-            res.json(reports);
-        } catch (tableError) {
-            // If teacher_comment_sheets doesn't exist, fall back to lesson_reports
-            if (tableError.message && tableError.message.includes('does not exist')) {
-                console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports (migration 005 not applied)');
-                query = query.replace('teacher_comment_sheets', 'lesson_reports');
-                const result = await pool.query(query, params);
-                const reports = result.rows;
-                res.json(reports);
-            } else {
-                throw tableError;
-            }
-        }
+        const result = await pool.query(query, params);
+        const reports = result.rows;
+        res.json(reports);
     } catch (error) {
         console.error('Error fetching reports:', error);
         res.status(500).json({ error: 'Failed to fetch reports' });

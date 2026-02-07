@@ -1,6 +1,4 @@
 const pool = require('./connection');
-const fs = require('fs');
-const path = require('path');
 
 /**
  * Schema Guard - Ensures required columns exist in Postgres database
