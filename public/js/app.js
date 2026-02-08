@@ -851,6 +851,64 @@ document.getElementById('add-date-btn')?.addEventListener('click', showAddDateMo
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
 document.getElementById('use-schedule-btn')?.addEventListener('click', useScheduleForDates);
 
+// Daily Navigation Buttons
+document.getElementById('prev-day-btn')?.addEventListener('click', () => loadDailyAttendance(-1));
+document.getElementById('today-btn')?.addEventListener('click', () => loadDailyAttendance(0));
+document.getElementById('next-day-btn')?.addEventListener('click', () => loadDailyAttendance(1));
+
+/**
+ * Navigate to a specific day for attendance viewing
+ * @param {number} dayOffset - Day offset: 0 for today, -1 for previous day, 1 for next day
+ * Sets both startDate and endDate to a single day, switches to Table view, and loads attendance.
+ * Shows error if no class is selected.
+ */
+function loadDailyAttendance(dayOffset) {
+    const classId = document.getElementById('attendance-class-select').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    // Determine base date: use current startDate if set, otherwise today
+    const startDateInput = document.getElementById('attendance-start-date');
+    const endDateInput = document.getElementById('attendance-end-date');
+    
+    let baseDate;
+    if (dayOffset === 0) {
+        // "Today" button always uses current date
+        baseDate = new Date();
+    } else {
+        // Prev/Next: use current startDate if available, otherwise today
+        const currentStartDate = startDateInput.value;
+        if (currentStartDate) {
+            // Parse as local midnight to avoid timezone shifts
+            baseDate = new Date(currentStartDate + 'T00:00:00');
+        } else {
+            baseDate = new Date();
+        }
+        // Apply offset
+        baseDate.setDate(baseDate.getDate() + dayOffset);
+    }
+    
+    // Format the target date as YYYY-MM-DD using formatDateISO for Asia/Tokyo timezone consistency
+    const targetDate = formatDateISO(baseDate);
+    
+    // Set both start and end date to the same single day
+    startDateInput.value = targetDate;
+    endDateInput.value = targetDate;
+    
+    // Ensure we're in Table view for interactive attendance marking
+    if (currentAttendanceView !== 'list') {
+        currentAttendanceView = 'list';
+        document.getElementById('view-list-btn')?.classList.add('active');
+        document.getElementById('view-grid-btn')?.classList.remove('active');
+    }
+    
+    // Trigger the existing load attendance function
+    loadAttendance();
+}
+
 // View Toggle for Attendance
 let currentAttendanceView = 'list'; // 'list' or 'grid'
 let lastAttendanceData = null; // Store last loaded attendance data
@@ -1302,7 +1360,12 @@ function renderAttendanceGridView(data, classId) {
                             // Append 'T00:00:00' to parse date as local midnight, avoiding timezone shifts
                             const dateObj = new Date(date + 'T00:00:00');
                             const shortDate = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-                            return `<span class="date-cell ${statusClass}" title="${shortDate}: ${status || 'N/A'}">${status || ''}</span>`;
+                            return `<span class="date-cell ${statusClass} attendance-cell" 
+                                data-student="${student.id}" 
+                                data-class="${classId}" 
+                                data-date="${date}"
+                                onclick="toggleAttendance(this)" 
+                                title="${shortDate}: Click to mark attendance">${status || '·'}</span>`;
                         }).join('')}
                         ${dates.length > 10 ? `<span class="more-dates">+${dates.length - 10}</span>` : ''}
                     </div>
