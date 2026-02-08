@@ -856,7 +856,12 @@ document.getElementById('prev-day-btn')?.addEventListener('click', () => loadDai
 document.getElementById('today-btn')?.addEventListener('click', () => loadDailyAttendance(0));
 document.getElementById('next-day-btn')?.addEventListener('click', () => loadDailyAttendance(1));
 
-// Helper function for daily navigation
+/**
+ * Navigate to a specific day for attendance viewing
+ * @param {number} dayOffset - Day offset: 0 for today, -1 for previous day, 1 for next day
+ * Sets both startDate and endDate to a single day, switches to Table view, and loads attendance.
+ * Shows error if no class is selected.
+ */
 function loadDailyAttendance(dayOffset) {
     const classId = document.getElementById('attendance-class-select').value;
     
@@ -877,6 +882,7 @@ function loadDailyAttendance(dayOffset) {
         // Prev/Next: use current startDate if available, otherwise today
         const currentStartDate = startDateInput.value;
         if (currentStartDate) {
+            // Parse as local midnight to avoid timezone shifts
             baseDate = new Date(currentStartDate + 'T00:00:00');
         } else {
             baseDate = new Date();
@@ -885,7 +891,7 @@ function loadDailyAttendance(dayOffset) {
         baseDate.setDate(baseDate.getDate() + dayOffset);
     }
     
-    // Format the target date as YYYY-MM-DD
+    // Format the target date as YYYY-MM-DD using formatDateISO for Asia/Tokyo timezone consistency
     const targetDate = formatDateISO(baseDate);
     
     // Set both start and end date to the same single day
