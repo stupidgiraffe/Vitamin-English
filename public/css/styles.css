@@ -1568,9 +1568,9 @@ body {
     
     .student-name-cell {
         /* Prevent text overflow while keeping button visible */
-        width: 100px;
-        min-width: 80px;
-        max-width: 100px;
+        width: 150px;
+        min-width: 120px;
+        max-width: 150px;
     }
     
     .student-name-cell span {
@@ -1582,16 +1582,16 @@ body {
     
     /* Constrain sticky student name column on mobile */
     .attendance-table .student-name {
-        width: 100px;
-        max-width: 100px;
-        min-width: 80px;
+        width: 150px;
+        max-width: 150px;
+        min-width: 120px;
     }
     
     /* Also constrain the header cell on mobile */
     .attendance-table th:first-child {
-        width: 100px;
-        max-width: 100px;
-        min-width: 80px;
+        width: 150px;
+        max-width: 150px;
+        min-width: 120px;
     }
     
     /* Attendance controls wrap better on mobile */
