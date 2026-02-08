@@ -617,6 +617,17 @@ body {
     border: 1px solid #2B5797;
 }
 
+/* Constrain the first header cell (Student Name) to match data cells */
+.attendance-table th:first-child {
+    max-width: 120px; /* Match student-name cell width */
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    left: 0;
+    z-index: 15; /* Higher than regular headers and data cells */
+}
+
 .attendance-table tbody tr:hover {
     background: #f8f9fa;
 }
@@ -1561,6 +1572,11 @@ body {
     
     /* Constrain sticky student name column on mobile */
     .attendance-table .student-name {
+        max-width: 100px;
+    }
+    
+    /* Also constrain the header cell on mobile */
+    .attendance-table th:first-child {
         max-width: 100px;
     }
     
