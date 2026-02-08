@@ -850,6 +850,7 @@ document.getElementById('new-attendance-btn')?.addEventListener('click', showNew
 document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
 document.getElementById('use-schedule-btn')?.addEventListener('click', useScheduleForDates);
+document.getElementById('today-btn')?.addEventListener('click', loadTodayAttendance);
 
 // View Toggle for Attendance
 let currentAttendanceView = 'list'; // 'list' or 'grid'
@@ -915,6 +916,32 @@ async function useScheduleForDates() {
         console.error('Error using schedule:', error);
         Toast.error('Failed to load schedule-based dates');
     }
+}
+
+async function loadTodayAttendance() {
+    const classId = document.getElementById('attendance-class-select').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    // Get today's date in ISO format using Asia/Tokyo timezone
+    const today = formatDateISO(new Date());
+    
+    // Set both start and end dates to today
+    document.getElementById('attendance-start-date').value = today;
+    document.getElementById('attendance-end-date').value = today;
+    
+    // Switch to table view (list view)
+    if (currentAttendanceView !== 'list') {
+        currentAttendanceView = 'list';
+        document.getElementById('view-list-btn').classList.add('active');
+        document.getElementById('view-grid-btn').classList.remove('active');
+    }
+    
+    // Load attendance for today
+    await loadAttendance();
 }
 
 async function showNewAttendanceModal() {
