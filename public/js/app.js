@@ -1154,7 +1154,7 @@ async function loadAttendance() {
         const selectedClass = classes.find(c => c.id == classId);
         if (selectedClass) {
             document.getElementById('metadata-class-name').textContent = selectedClass.name;
-            document.getElementById('metadata-teacher').textContent = selectedClass.teacher_name || 'N/A';
+            document.getElementById('metadata-teacher').value = selectedClass.teacher_name || '';
         }
         
         const dateRangeText = normalizedStartDate && normalizedEndDate 

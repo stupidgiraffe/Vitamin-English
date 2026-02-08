@@ -637,7 +637,7 @@ body {
     position: sticky;
     left: 0;
     z-index: 5;
-    max-width: 200px; /* Constrain width to prevent excessive expansion */
+    max-width: 120px; /* Constrain width for better mobile usability */
 }
 
 .attendance-cell {
@@ -1055,7 +1055,7 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    max-width: 200px; /* Prevent excessive width */
+    max-width: 120px; /* Prevent excessive width for better mobile usability */
 }
 
 .student-name-cell span {
@@ -1548,8 +1548,8 @@ body {
     
     .student-name-cell {
         /* Prevent text overflow while keeping button visible */
-        min-width: 100px;
-        max-width: 150px;
+        min-width: 80px;
+        max-width: 100px;
     }
     
     .student-name-cell span {
@@ -1561,7 +1561,7 @@ body {
     
     /* Constrain sticky student name column on mobile */
     .attendance-table .student-name {
-        max-width: 150px;
+        max-width: 100px;
     }
     
     /* Attendance controls wrap better on mobile */
