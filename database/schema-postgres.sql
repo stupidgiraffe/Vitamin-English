@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     notes TEXT,
     teacher_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(student_id, date),
+    CONSTRAINT attendance_student_class_date_unique UNIQUE(student_id, class_id, date),
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
     FOREIGN KEY (teacher_id) REFERENCES users(id)

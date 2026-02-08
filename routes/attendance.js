@@ -142,6 +142,20 @@ router.post('/', async (req, res) => {
         }
     } catch (error) {
         console.error('Error saving attendance:', error);
+        
+        // Provide specific error messages for common issues
+        if (error.code === '23505') { // Unique constraint violation
+            return res.status(409).json({ 
+                error: 'Attendance record already exists for this student, class, and date' 
+            });
+        }
+        
+        if (error.code === '23503') { // Foreign key violation
+            return res.status(400).json({ 
+                error: 'Invalid student, class, or teacher ID' 
+            });
+        }
+        
         res.status(500).json({ error: 'Failed to save attendance' });
     }
 });
