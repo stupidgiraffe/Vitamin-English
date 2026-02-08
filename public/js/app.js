@@ -1302,7 +1302,7 @@ function renderAttendanceGridView(data, classId) {
                             // Append 'T00:00:00' to parse date as local midnight, avoiding timezone shifts
                             const dateObj = new Date(date + 'T00:00:00');
                             const shortDate = `${dateObj.getMonth() + 1}/${dateObj.getDate()}`;
-                            return `<span class="date-cell ${statusClass}" title="${shortDate}: ${status || 'N/A'}">${status || '·'}</span>`;
+                            return `<span class="date-cell ${statusClass}" title="${shortDate}: ${status || 'N/A'}">${status || ''}</span>`;
                         }).join('')}
                         ${dates.length > 10 ? `<span class="more-dates">+${dates.length - 10}</span>` : ''}
                     </div>
