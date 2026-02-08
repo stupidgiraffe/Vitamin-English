@@ -512,12 +512,16 @@ function populateClassSelects() {
 
 function populateTeacherSelects() {
     const selects = [
-        document.getElementById('report-teacher')
+        document.getElementById('report-teacher'),
+        document.getElementById('metadata-teacher')
     ];
     
     selects.forEach(select => {
         if (!select) return;
-        select.innerHTML = '<option value="">Select a teacher...</option>';
+        const placeholder = select.id === 'metadata-teacher'
+            ? 'Select a teacher (optional)...'
+            : 'Select a teacher...';
+        select.innerHTML = `<option value="">${placeholder}</option>`;
         teachers.forEach(teacher => {
             const option = document.createElement('option');
             option.value = teacher.id;
@@ -1039,9 +1043,12 @@ async function showNewAttendanceModal() {
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Creating...';
                 
-                // Get teacher_id from the selected class
+                // Get teacher_id from the "Taken by" dropdown if set, otherwise fallback to class teacher
                 const selectedClass = classes.find(c => c.id == classId);
-                const teacherId = selectedClass ? selectedClass.teacher_id : null;
+                const teacherSelect = document.getElementById('metadata-teacher');
+                const teacherId = teacherSelect && teacherSelect.value
+                    ? teacherSelect.value
+                    : (selectedClass ? selectedClass.teacher_id : null);
                 
                 // Get all students in the class
                 const studentsInClass = await api(`/students?classId=${classId}`);
@@ -1154,7 +1161,10 @@ async function loadAttendance() {
         const selectedClass = classes.find(c => c.id == classId);
         if (selectedClass) {
             document.getElementById('metadata-class-name').textContent = selectedClass.name;
-            document.getElementById('metadata-teacher').value = selectedClass.teacher_name || '';
+            const teacherSelect = document.getElementById('metadata-teacher');
+            if (teacherSelect) {
+                teacherSelect.value = selectedClass.teacher_id || '';
+            }
         }
         
         const dateRangeText = normalizedStartDate && normalizedEndDate 
@@ -1469,9 +1479,9 @@ async function toggleAttendance(cell) {
         }
     }
 
-    // Get teacher_id from the selected class
-    const selectedClass = classes.find(c => c.id == classId);
-    const teacherId = selectedClass ? selectedClass.teacher_id : null;
+    // Get teacher_id from the selected "Taken by" dropdown (optional)
+    const teacherSelect = document.getElementById('metadata-teacher');
+    const teacherId = teacherSelect && teacherSelect.value ? teacherSelect.value : null;
 
     // Optimistic UI update - update immediately without waiting for server
     cell.textContent = newStatus;
@@ -4680,4 +4690,3 @@ async function generateTestMonthlyReport() {
         Toast.error(error.message || 'Failed to generate test report');
     }
 }
-

@@ -179,9 +179,10 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
  * @param {Array} students - Array of students in the class
  * @param {Array} attendanceRecords - Array of attendance records
  * @param {String} date - Date for the attendance sheet
+ * @param {String} takenByLabel - Optional "Taken by" label
  * @returns {Promise<Buffer>} PDF buffer
  */
-async function generateClassAttendancePDF(classData, students, attendanceRecords, date) {
+async function generateClassAttendancePDF(classData, students, attendanceRecords, date, takenByLabel = '') {
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 50, size: 'A4', layout: 'landscape' });
@@ -214,6 +215,7 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
                .font('Helvetica')
                .text(`Class: ${classData.name}`, { indent: 50 })
                .text(`Teacher: ${classData.teacher_name || ''}`, { indent: 50 })
+               .text(`Taken by: ${sanitizeForPDF(takenByLabel) || ''}`, { indent: 50 })
                .text(`Schedule: ${classData.schedule || ''}`, { indent: 50 })
                .text(`Date: ${date || new Date().toLocaleDateString()}`, { indent: 50 });
             
@@ -328,9 +330,10 @@ async function generateClassAttendancePDF(classData, students, attendanceRecords
  * @param {Object} attendanceMap - Object mapping "studentId-date" to status ('O', 'X', '/', or '')
  * @param {String} startDate - Start date of range in ISO format (YYYY-MM-DD)
  * @param {String} endDate - End date of range in ISO format (YYYY-MM-DD)
+ * @param {String} takenByLabel - Optional "Taken by" label
  * @returns {Promise<Buffer>} PDF buffer
  */
-async function generateAttendanceGridPDF(classData, students, dates, attendanceMap, startDate, endDate) {
+async function generateAttendanceGridPDF(classData, students, dates, attendanceMap, startDate, endDate, takenByLabel = '') {
     return new Promise((resolve, reject) => {
         try {
             const doc = new PDFDocument({ margin: 30, size: 'A4', layout: 'landscape' });
@@ -379,9 +382,12 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                 
                 doc.moveDown(0.5);
                 
+                const takenByText = takenByLabel
+                    ? `  |  Taken by: ${sanitizeForPDF(takenByLabel)}`
+                    : '';
                 doc.fontSize(10)
                    .font('Helvetica')
-                   .text(`Class: ${sanitizeForPDF(classData.name)}  |  Teacher: ${sanitizeForPDF(classData.teacher_name) || ''}  |  Date Range: ${startDate} to ${endDate}`, 
+                   .text(`Class: ${sanitizeForPDF(classData.name)}  |  Teacher: ${sanitizeForPDF(classData.teacher_name) || ''}${takenByText}  |  Date Range: ${startDate} to ${endDate}`, 
                          { align: 'center' });
                 
                 doc.moveDown(0.8);

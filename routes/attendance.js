@@ -4,6 +4,24 @@ const pool = require('../database/init');
 const { normalizeToISO } = require('../utils/dateUtils');
 const { buildAttendanceMatrix } = require('../utils/attendanceDataBuilder');
 
+async function validateTeacherId(teacherId) {
+    if (teacherId === undefined || teacherId === null || teacherId === '') {
+        return null;
+    }
+    const parsedTeacherId = parseInt(teacherId, 10);
+    if (Number.isNaN(parsedTeacherId)) {
+        throw new Error('Invalid teacher ID');
+    }
+    const teacherResult = await pool.query(
+        'SELECT id FROM users WHERE id = $1 AND role = $2',
+        [parsedTeacherId, 'teacher']
+    );
+    if (teacherResult.rows.length === 0) {
+        throw new Error('Invalid teacher ID');
+    }
+    return parsedTeacherId;
+}
+
 // Get attendance records
 router.get('/', async (req, res) => {
     try {
@@ -103,6 +121,13 @@ router.post('/', async (req, res) => {
         if (!normalizedDate) {
             return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
         }
+
+        let validatedTeacherId = null;
+        try {
+            validatedTeacherId = await validateTeacherId(teacher_id);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
         
         // Try to update existing record first
         const existingResult = await pool.query(`
@@ -116,7 +141,7 @@ router.post('/', async (req, res) => {
                 UPDATE attendance 
                 SET status = $1, notes = $2, time = $3, teacher_id = $4
                 WHERE id = $5
-            `, [status || '', notes || '', time || null, teacher_id || null, existing.id]);
+            `, [status || '', notes || '', time || null, validatedTeacherId, existing.id]);
             
             const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [existing.id]);
             const record = recordResult.rows[0];
@@ -130,7 +155,7 @@ router.post('/', async (req, res) => {
                 INSERT INTO attendance (student_id, class_id, date, status, notes, time, teacher_id) 
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING id
-            `, [student_id, class_id, normalizedDate, status || '', notes || '', time || null, teacher_id || null]);
+            `, [student_id, class_id, normalizedDate, status || '', notes || '', time || null, validatedTeacherId]);
             
             const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [result.rows[0].id]);
             const record = recordResult.rows[0];
@@ -164,12 +189,19 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
     try {
         const { status, notes, teacher_id } = req.body;
+
+        let validatedTeacherId = null;
+        try {
+            validatedTeacherId = await validateTeacherId(teacher_id);
+        } catch (error) {
+            return res.status(400).json({ error: error.message });
+        }
         
         await pool.query(`
             UPDATE attendance 
             SET status = $1, notes = $2, teacher_id = $3
             WHERE id = $4
-        `, [status || '', notes || '', teacher_id || null, req.params.id]);
+        `, [status || '', notes || '', validatedTeacherId, req.params.id]);
         
         const result = await pool.query('SELECT * FROM attendance WHERE id = $1', [req.params.id]);
         const record = result.rows[0];

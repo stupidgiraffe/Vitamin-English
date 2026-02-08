@@ -644,6 +644,8 @@ body {
     text-align: left;
     font-weight: 600;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     background: inherit; /* Inherit row color */
     position: sticky;
     left: 0;
@@ -1082,6 +1084,7 @@ body {
     cursor: pointer;
     color: #4472C4;
     font-size: 1rem;
+    line-height: 1;
     padding: 0.2rem;
     opacity: 0.6;
     transition: opacity 0.2s;
@@ -1091,6 +1094,7 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .edit-student-btn:hover {
@@ -1543,13 +1547,15 @@ body {
     }
     
     .attendance-table {
-        /* Ensure table doesn't collapse on mobile */
-        min-width: 600px;
+        /* Allow the table to size to content while avoiding forced wide layouts */
+        min-width: 100%;
+        width: max-content;
     }
     
     /* Keep edit buttons visible but less intrusive on mobile */
     .edit-student-btn {
         font-size: 0.75rem;
+        line-height: 1;
         padding: 0.1rem;
         width: 1.2rem;
         height: 1.2rem;
@@ -1559,8 +1565,8 @@ body {
     
     .student-name-cell {
         /* Prevent text overflow while keeping button visible */
-        min-width: 80px;
-        max-width: 100px;
+        min-width: 90px;
+        max-width: clamp(90px, 35vw, 150px);
     }
     
     .student-name-cell span {
@@ -1572,12 +1578,16 @@ body {
     
     /* Constrain sticky student name column on mobile */
     .attendance-table .student-name {
-        max-width: 100px;
+        min-width: 90px;
+        width: clamp(90px, 35vw, 150px);
+        max-width: clamp(90px, 35vw, 150px);
     }
     
     /* Also constrain the header cell on mobile */
     .attendance-table th:first-child {
-        max-width: 100px;
+        min-width: 90px;
+        width: clamp(90px, 35vw, 150px);
+        max-width: clamp(90px, 35vw, 150px);
     }
     
     /* Attendance controls wrap better on mobile */

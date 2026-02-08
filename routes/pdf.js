@@ -6,6 +6,43 @@ const { uploadPDF, getDownloadUrl, listPDFs, isConfigured } = require('../utils/
 const { normalizeToISO } = require('../utils/dateUtils');
 const { buildAttendanceMatrix } = require('../utils/attendanceDataBuilder');
 
+const MULTIPLE_TEACHERS_LABEL = 'Multiple teachers';
+
+async function resolveTakenByLabel(classId, startDate, endDate) {
+    const params = [classId, startDate];
+    let query = `
+        SELECT DISTINCT teacher_id 
+        FROM attendance 
+        WHERE class_id = $1 
+          AND date = $2
+          AND teacher_id IS NOT NULL
+    `;
+    if (endDate) {
+        query = `
+            SELECT DISTINCT teacher_id 
+            FROM attendance 
+            WHERE class_id = $1 
+              AND date >= $2 
+              AND date <= $3
+              AND teacher_id IS NOT NULL
+        `;
+        params.push(endDate);
+    }
+    const teacherIdsResult = await pool.query(query, params);
+    const teacherIds = teacherIdsResult.rows.map(row => row.teacher_id);
+    if (teacherIds.length === 0) {
+        return '';
+    }
+    if (teacherIds.length > 1) {
+        return MULTIPLE_TEACHERS_LABEL;
+    }
+    const teacherResult = await pool.query(
+        'SELECT full_name FROM users WHERE id = $1 AND role = $2',
+        [teacherIds[0], 'teacher']
+    );
+    return teacherResult.rows[0]?.full_name || '';
+}
+
 // Middleware to check if R2 is configured
 const checkR2Config = (req, res, next) => {
     if (!isConfigured()) {
@@ -137,9 +174,11 @@ router.post('/class-attendance/:classId', checkR2Config, async (req, res) => {
         `, [classId, date]);
         
         const attendanceRecords = attendanceResult.rows;
+
+        const takenByLabel = await resolveTakenByLabel(classId, date);
         
         // Generate PDF
-        const pdfBuffer = await generateClassAttendancePDF(classData, students, attendanceRecords, date);
+        const pdfBuffer = await generateClassAttendancePDF(classData, students, attendanceRecords, date, takenByLabel);
         
         // Upload to R2 - sanitize filename
         const sanitizedClassName = classData.name.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -225,6 +264,8 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
         
         // Use shared data builder to ensure UI and PDF have identical data
         const matrixData = await buildAttendanceMatrix(pool, classId, startDate, endDate);
+
+        const takenByLabel = await resolveTakenByLabel(classId, startDate, endDate);
         
         // Generate PDF using the same data structure as the UI
         const pdfBuffer = await generateAttendanceGridPDF(
@@ -233,7 +274,8 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
             matrixData.dates, 
             matrixData.attendanceMap, 
             matrixData.startDate, 
-            matrixData.endDate
+            matrixData.endDate,
+            takenByLabel
         );
         
         // Upload to R2 - sanitize filename (only alphanumeric characters)
