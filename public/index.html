@@ -154,6 +154,11 @@
                         <label>End Date:</label>
                         <input type="date" id="attendance-end-date" class="form-control">
                     </div>
+                    <div class="daily-nav-group">
+                        <button id="prev-day-btn" class="btn btn-secondary" title="Previous day">◀ Prev</button>
+                        <button id="today-btn" class="btn btn-secondary" title="Go to today">Today</button>
+                        <button id="next-day-btn" class="btn btn-secondary" title="Next day">Next ▶</button>
+                    </div>
                     <button id="use-schedule-btn" class="btn btn-secondary" title="Auto-fill dates based on class schedule">📅 Use Schedule</button>
                     <button id="load-attendance-btn" class="btn btn-primary">Load Attendance</button>
                     <button id="export-attendance-btn" class="btn btn-secondary">Export CSV</button>
@@ -188,8 +193,8 @@
                 <div id="attendance-controls" class="attendance-controls" style="display: none;">
                     <div class="view-toggle-group">
                         <span class="view-toggle-label">View:</span>
-                        <button id="view-list-btn" class="view-toggle-btn active" title="List View">📋 List</button>
-                        <button id="view-grid-btn" class="view-toggle-btn" title="Grid View">📊 Grid</button>
+                        <button id="view-list-btn" class="view-toggle-btn active" title="Table View - Click cells to mark attendance" aria-label="Table View">📋 Table</button>
+                        <button id="view-grid-btn" class="view-toggle-btn" title="Students View - Summary cards" aria-label="Students View">📊 Students</button>
                     </div>
                     <button id="add-date-btn" class="add-date-btn">➕ Add Date</button>
                     <button id="move-attendance-btn" class="move-attendance-btn">📅 Move Attendance</button>

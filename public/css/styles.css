@@ -571,6 +571,18 @@ body {
     color: #555;
 }
 
+/* Daily Navigation Buttons */
+.daily-nav-group {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.daily-nav-group .btn {
+    min-width: auto;
+    padding: 0.5rem 1rem;
+}
+
 /* Attendance Sheet */
 .attendance-sheet {
     background: white;

@@ -851,6 +851,58 @@ document.getElementById('add-date-btn')?.addEventListener('click', showAddDateMo
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
 document.getElementById('use-schedule-btn')?.addEventListener('click', useScheduleForDates);
 
+// Daily Navigation Buttons
+document.getElementById('prev-day-btn')?.addEventListener('click', () => loadDailyAttendance(-1));
+document.getElementById('today-btn')?.addEventListener('click', () => loadDailyAttendance(0));
+document.getElementById('next-day-btn')?.addEventListener('click', () => loadDailyAttendance(1));
+
+// Helper function for daily navigation
+function loadDailyAttendance(dayOffset) {
+    const classId = document.getElementById('attendance-class-select').value;
+    
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+    
+    // Determine base date: use current startDate if set, otherwise today
+    const startDateInput = document.getElementById('attendance-start-date');
+    const endDateInput = document.getElementById('attendance-end-date');
+    
+    let baseDate;
+    if (dayOffset === 0) {
+        // "Today" button always uses current date
+        baseDate = new Date();
+    } else {
+        // Prev/Next: use current startDate if available, otherwise today
+        const currentStartDate = startDateInput.value;
+        if (currentStartDate) {
+            baseDate = new Date(currentStartDate + 'T00:00:00');
+        } else {
+            baseDate = new Date();
+        }
+        // Apply offset
+        baseDate.setDate(baseDate.getDate() + dayOffset);
+    }
+    
+    // Format the target date as YYYY-MM-DD
+    const targetDate = formatDateISO(baseDate);
+    
+    // Set both start and end date to the same single day
+    startDateInput.value = targetDate;
+    endDateInput.value = targetDate;
+    
+    // Ensure we're in Table view for interactive attendance marking
+    if (currentAttendanceView !== 'list') {
+        currentAttendanceView = 'list';
+        document.getElementById('view-list-btn')?.classList.add('active');
+        document.getElementById('view-grid-btn')?.classList.remove('active');
+    }
+    
+    // Trigger the existing load attendance function
+    loadAttendance();
+}
+
 // View Toggle for Attendance
 let currentAttendanceView = 'list'; // 'list' or 'grid'
 let lastAttendanceData = null; // Store last loaded attendance data
