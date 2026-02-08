@@ -595,6 +595,7 @@ body {
 .attendance-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: fixed;    /* Makes width/max-width on cells work */
     min-width: 800px;
     background: white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -619,7 +620,9 @@ body {
 
 /* Constrain the first header cell (Student Name) to match data cells */
 .attendance-table th:first-child {
-    max-width: 120px; /* Match student-name cell width */
+    width: 140px;
+    max-width: 140px;
+    min-width: 100px;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
@@ -644,11 +647,15 @@ body {
     text-align: left;
     font-weight: 600;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     background: inherit; /* Inherit row color */
     position: sticky;
     left: 0;
     z-index: 5;
-    max-width: 120px; /* Constrain width for better mobile usability */
+    width: 140px;
+    max-width: 140px;
+    min-width: 100px;
 }
 
 .attendance-cell {
@@ -1066,7 +1073,9 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    max-width: 120px; /* Prevent excessive width for better mobile usability */
+    width: 140px;
+    max-width: 140px;
+    min-width: 100px;
 }
 
 .student-name-cell span {
@@ -1543,8 +1552,8 @@ body {
     }
     
     .attendance-table {
-        /* Ensure table doesn't collapse on mobile */
-        min-width: 600px;
+        /* Remove min-width floor on mobile to allow natural sizing */
+        min-width: unset !important;
     }
     
     /* Keep edit buttons visible but less intrusive on mobile */
@@ -1559,8 +1568,9 @@ body {
     
     .student-name-cell {
         /* Prevent text overflow while keeping button visible */
-        min-width: 80px;
-        max-width: 100px;
+        width: 150px;
+        min-width: 120px;
+        max-width: 150px;
     }
     
     .student-name-cell span {
@@ -1572,12 +1582,16 @@ body {
     
     /* Constrain sticky student name column on mobile */
     .attendance-table .student-name {
-        max-width: 100px;
+        width: 150px;
+        max-width: 150px;
+        min-width: 120px;
     }
     
     /* Also constrain the header cell on mobile */
     .attendance-table th:first-child {
-        max-width: 100px;
+        width: 150px;
+        max-width: 150px;
+        min-width: 120px;
     }
     
     /* Attendance controls wrap better on mobile */

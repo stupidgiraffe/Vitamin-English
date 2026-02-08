@@ -512,7 +512,8 @@ function populateClassSelects() {
 
 function populateTeacherSelects() {
     const selects = [
-        document.getElementById('report-teacher')
+        document.getElementById('report-teacher'),
+        document.getElementById('metadata-teacher')
     ];
     
     selects.forEach(select => {
@@ -1154,7 +1155,11 @@ async function loadAttendance() {
         const selectedClass = classes.find(c => c.id == classId);
         if (selectedClass) {
             document.getElementById('metadata-class-name').textContent = selectedClass.name;
-            document.getElementById('metadata-teacher').value = selectedClass.teacher_name || '';
+            // Set the teacher dropdown value to the teacher_id
+            const teacherSelect = document.getElementById('metadata-teacher');
+            if (teacherSelect) {
+                teacherSelect.value = selectedClass.teacher_id || '';
+            }
         }
         
         const dateRangeText = normalizedStartDate && normalizedEndDate 
