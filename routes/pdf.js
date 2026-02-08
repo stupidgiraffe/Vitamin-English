@@ -40,7 +40,14 @@ async function resolveTakenByLabel(classId, startDate, endDate) {
         'SELECT full_name FROM users WHERE id = $1 AND role = $2',
         [teacherIds[0], 'teacher']
     );
-    return teacherResult.rows[0]?.full_name || '';
+    if (teacherResult.rows.length === 0) {
+        console.warn('Attendance teacher_id not found or not a teacher role', {
+            classId,
+            teacherId: teacherIds[0]
+        });
+        return '';
+    }
+    return teacherResult.rows[0].full_name || '';
 }
 
 // Middleware to check if R2 is configured
