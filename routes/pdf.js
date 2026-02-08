@@ -37,13 +37,6 @@ async function resolveTakenByLabel(classId, startDate, endDate) {
         return MULTIPLE_TEACHERS_LABEL;
     }
     const teacherId = teacherIds[0];
-    if (typeof teacherId !== 'number' || !Number.isInteger(teacherId)) {
-        console.warn('Attendance teacher_id is not a valid integer', {
-            classId,
-            teacherId
-        });
-        return '';
-    }
     const teacherResult = await pool.query(
         'SELECT full_name FROM users WHERE id = $1 AND role = $2',
         [teacherId, 'teacher']
