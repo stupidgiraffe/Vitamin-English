@@ -36,11 +36,11 @@ async function resolveTakenByLabel(classId, startDate, endDate) {
     if (teacherIds.length > 1) {
         return MULTIPLE_TEACHERS_LABEL;
     }
-    const teacherId = parseInt(teacherIds[0], 10);
-    if (Number.isNaN(teacherId)) {
+    const teacherId = teacherIds[0];
+    if (typeof teacherId !== 'number' || !Number.isInteger(teacherId)) {
         console.warn('Attendance teacher_id is not a valid integer', {
             classId,
-            teacherId: teacherIds[0]
+            teacherId
         });
         return '';
     }

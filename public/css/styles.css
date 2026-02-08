@@ -643,6 +643,7 @@ body {
 .attendance-table .student-name {
     text-align: left;
     font-weight: 600;
+    /* Keep long names truncated in sticky column */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
