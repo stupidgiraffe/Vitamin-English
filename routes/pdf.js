@@ -42,7 +42,7 @@ async function resolveTakenByLabel(classId, startDate, endDate) {
         [teacherId, 'teacher']
     );
     if (teacherResult.rows.length === 0) {
-        console.warn('Attendance teacher_id not found or not a teacher role', {
+        console.warn('Attendance references teacher_id that does not exist or is not a teacher', {
             classId,
             teacherId
         });

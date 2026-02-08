@@ -1549,7 +1549,6 @@ body {
     
     .attendance-table {
         /* Allow the table to size to content while avoiding forced wide layouts */
-        min-width: 100%;
         width: max-content;
     }
     
