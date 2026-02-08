@@ -36,14 +36,22 @@ async function resolveTakenByLabel(classId, startDate, endDate) {
     if (teacherIds.length > 1) {
         return MULTIPLE_TEACHERS_LABEL;
     }
+    const teacherId = parseInt(teacherIds[0], 10);
+    if (Number.isNaN(teacherId)) {
+        console.warn('Attendance teacher_id is not a valid integer', {
+            classId,
+            teacherId: teacherIds[0]
+        });
+        return '';
+    }
     const teacherResult = await pool.query(
         'SELECT full_name FROM users WHERE id = $1 AND role = $2',
-        [teacherIds[0], 'teacher']
+        [teacherId, 'teacher']
     );
     if (teacherResult.rows.length === 0) {
         console.warn('Attendance teacher_id not found or not a teacher role', {
             classId,
-            teacherId: teacherIds[0]
+            teacherId
         });
         return '';
     }
