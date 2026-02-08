@@ -637,6 +637,7 @@ body {
     position: sticky;
     left: 0;
     z-index: 5;
+    max-width: 200px; /* Constrain width to prevent excessive expansion */
 }
 
 .attendance-cell {
@@ -1054,6 +1055,14 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
+    max-width: 200px; /* Prevent excessive width */
+}
+
+.student-name-cell span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
 }
 
 .edit-student-btn {

@@ -1365,7 +1365,7 @@ function renderAttendanceGridView(data, classId) {
                                 data-class="${classId}" 
                                 data-date="${date}"
                                 onclick="toggleAttendance(this)" 
-                                title="${shortDate}: Click to mark attendance">${status || '·'}</span>`;
+                                title="${shortDate}: Click to mark attendance">${status || ''}</span>`;
                         }).join('')}
                         ${dates.length > 10 ? `<span class="more-dates">+${dates.length - 10}</span>` : ''}
                     </div>
