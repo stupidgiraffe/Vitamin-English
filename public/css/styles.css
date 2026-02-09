@@ -604,7 +604,7 @@ body {
 .attendance-table td {
     padding: 0.75rem;
     text-align: center;
-    border: 1px solid #d0d0d0;
+    border: 2px solid #d0d0d0;
 }
 
 .attendance-table th {
@@ -614,7 +614,7 @@ body {
     position: sticky;
     top: 0;
     z-index: 10;
-    border: 1px solid #2B5797;
+    border: 2px solid #2B5797;
 }
 
 /* Constrain the first header cell (Student Name) to match data cells */
@@ -630,6 +630,8 @@ body {
     left: 0;
     z-index: 15; /* Higher than regular headers and data cells */
     box-shadow: 2px 0 4px -2px rgba(0,0,0,0.15);
+    background: #39FF14; /* Neon green for Student Name header */
+    color: #1a1a1a; /* Dark text for contrast */
 }
 
 .attendance-table tbody tr:hover {
