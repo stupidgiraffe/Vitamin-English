@@ -593,10 +593,9 @@ body {
 }
 
 .attendance-table {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;    /* Makes width/max-width on cells work */
-    min-width: 800px;
     background: white;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -620,15 +619,17 @@ body {
 
 /* Constrain the first header cell (Student Name) to match data cells */
 .attendance-table th:first-child {
+    min-width: 140px;
     width: 140px;
-    max-width: 140px;
-    min-width: 100px;
+    max-width: 180px;
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: sticky;
     left: 0;
     z-index: 15; /* Higher than regular headers and data cells */
+    box-shadow: 2px 0 4px -2px rgba(0,0,0,0.15);
 }
 
 .attendance-table tbody tr:hover {
@@ -653,18 +654,20 @@ body {
     position: sticky;
     left: 0;
     z-index: 5;
+    min-width: 140px;
     width: 140px;
-    max-width: 140px;
-    min-width: 100px;
+    max-width: 180px;
+    box-shadow: 2px 0 4px -2px rgba(0,0,0,0.15);
 }
 
 .attendance-cell {
     cursor: pointer;
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: bold;
     transition: all 0.2s;
-    min-width: 60px;
-    min-height: 45px;
+    min-width: 50px;
+    width: 50px;
+    text-align: center;
     vertical-align: middle;
     background: white;
 }
@@ -1072,10 +1075,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
-    width: 140px;
-    max-width: 140px;
-    min-width: 100px;
+    gap: 0.25rem;
+    width: 100%;
 }
 
 .student-name-cell span {
@@ -1083,6 +1084,7 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
     flex: 1;
+    min-width: 0;
 }
 
 .edit-student-btn {
@@ -1090,16 +1092,18 @@ body {
     border: none;
     cursor: pointer;
     color: #4472C4;
-    font-size: 1rem;
-    padding: 0.2rem;
-    opacity: 0.6;
+    font-size: 0.85rem;
+    line-height: 1;
+    padding: 2px;
+    opacity: 0.7;
     transition: opacity 0.2s;
-    /* Prevent emoji from inheriting large font sizes */
-    width: 1.5rem;
-    height: 1.5rem;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .edit-student-btn:hover {
@@ -1552,23 +1556,24 @@ body {
     }
     
     .attendance-table {
-        min-width: unset;
-        width: 100%;
+        width: max-content;
+        min-width: 100%;
     }
     
     /* Keep edit buttons visible but less intrusive on mobile */
     .edit-student-btn {
-        font-size: 0.75rem;
-        padding: 0.1rem;
-        width: 1.2rem;
-        height: 1.2rem;
-        /* Ensure button stays within sticky column */
+        font-size: 0.8rem;
+        width: 20px;
+        height: 20px;
+        min-width: 20px;
+        padding: 1px;
+        opacity: 0.8;
         flex-shrink: 0;
     }
     
     .student-name-cell {
-        min-width: 120px;
-        max-width: 120px;
+        width: 100%;
+        gap: 0.15rem;
     }
     
     .student-name-cell span {
@@ -1576,20 +1581,28 @@ body {
         text-overflow: ellipsis;
         white-space: nowrap;
         flex: 1;
+        min-width: 0;
     }
     
     /* Constrain sticky student name column on mobile */
     .attendance-table .student-name {
-        width: 120px;
-        min-width: 120px;
-        max-width: 120px;
+        min-width: 110px;
+        width: 110px;
+        max-width: 140px;
     }
     
     /* Also constrain the header cell on mobile */
     .attendance-table th:first-child {
-        width: 120px;
-        min-width: 120px;
-        max-width: 120px;
+        min-width: 110px;
+        width: 110px;
+        max-width: 140px;
+    }
+    
+    .attendance-cell {
+        min-width: 44px;
+        width: 44px;
+        font-size: 1.1rem;
+        padding: 0.5rem 0.25rem;
     }
     
     /* Attendance controls wrap better on mobile */
