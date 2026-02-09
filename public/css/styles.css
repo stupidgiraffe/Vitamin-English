@@ -1552,8 +1552,8 @@ body {
     }
     
     .attendance-table {
-        /* Remove min-width floor on mobile to allow natural sizing */
-        min-width: unset !important;
+        min-width: unset;
+        width: 100%;
     }
     
     /* Keep edit buttons visible but less intrusive on mobile */
@@ -1567,10 +1567,8 @@ body {
     }
     
     .student-name-cell {
-        /* Prevent text overflow while keeping button visible */
-        width: 150px;
         min-width: 120px;
-        max-width: 150px;
+        max-width: 120px;
     }
     
     .student-name-cell span {
@@ -1582,16 +1580,16 @@ body {
     
     /* Constrain sticky student name column on mobile */
     .attendance-table .student-name {
-        width: 150px;
-        max-width: 150px;
+        width: 120px;
         min-width: 120px;
+        max-width: 120px;
     }
     
     /* Also constrain the header cell on mobile */
     .attendance-table th:first-child {
-        width: 150px;
-        max-width: 150px;
+        width: 120px;
         min-width: 120px;
+        max-width: 120px;
     }
     
     /* Attendance controls wrap better on mobile */
