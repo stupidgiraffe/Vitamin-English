@@ -489,7 +489,7 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                     // Draw border around name cell
                     doc.rect(startX, currentY, NAME_COLUMN_WIDTH, ROW_HEIGHT)
                        .lineWidth(2)
-                       .stroke('#CCCCCC');
+                       .stroke('#999999');
                     doc.lineWidth(1); // Reset line width
                     
                     doc.text(studentName, startX + 3, currentY + 5, { 
