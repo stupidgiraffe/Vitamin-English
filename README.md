@@ -29,10 +29,76 @@ A beautiful, modern web application for managing student attendance and teacher 
 - **Frontend**: HTML5, CSS3, Vanilla JavaScript
 - **Backend**: Node.js with Express
 - **Database**: PostgreSQL (Neon) - Production-grade, scalable database
+- **Data Layer**: **DataHub Architecture** - Centralized data access with Repository Pattern
 - **PDF Generation**: PDFKit
 - **Cloud Storage**: Cloudflare R2 (S3-compatible)
 - **Authentication**: bcrypt password hashing with session management
 - **Deployment**: Vercel (serverless functions)
+
+## Architecture
+
+### DataHub Pattern
+
+The application uses a centralized **DataHub architecture** with the Repository Pattern for data access:
+
+```
+Routes → DataHub → Repositories → Database
+```
+
+#### Key Components:
+
+- **DataHub** (`database/DataHub.js`) - Singleton service providing centralized access to all repositories
+- **Repositories** (`database/repositories/`) - Entity-specific data access layers
+  - `StudentRepository` - Student CRUD operations with attendance stats
+  - `ClassRepository` - Class management with teacher joins
+  - `AttendanceRepository` - Attendance tracking with upsert and statistics
+  - `TeacherCommentSheetRepository` - Lesson reports and teacher comments
+  - `MakeupLessonRepository` - Makeup lesson scheduling
+  - `MonthlyReportRepository` - Monthly report generation
+  - `UserRepository` - User authentication and management
+  - `PdfHistoryRepository` - PDF generation history
+- **QueryBuilder** (`database/utils/QueryBuilder.js`) - Fluent query builder for parameterized SQL
+- **BaseRepository** (`database/repositories/BaseRepository.js`) - Common CRUD operations
+
+#### Benefits:
+
+✅ **Centralized Data Access** - All database operations go through the DataHub layer  
+✅ **Code Reusability** - Common operations (CRUD, pagination, filtering) inherited from BaseRepository  
+✅ **SQL Injection Prevention** - All queries use parameterized statements via QueryBuilder  
+✅ **Testability** - Easy to mock repositories for unit testing  
+✅ **Maintainability** - Database logic separated from business logic
+
+#### Usage Example:
+
+```javascript
+const dataHub = require('./database/DataHub');
+
+// Get all students in a class
+const students = await dataHub.students.findAll({ classId: 1 });
+
+// Get student profile with attendance stats
+const profile = await dataHub.students.getProfile(studentId);
+
+// Search across all entities
+const results = await dataHub.searchAll('John', { 
+    type: 'students', 
+    page: 1, 
+    perPage: 50 
+});
+
+// Database health check
+const health = await dataHub.healthCheck();
+
+// Database statistics
+const stats = await dataHub.getStats();
+```
+
+#### New API Endpoints:
+
+- `GET /api/database/health` - Database health check with latency
+- `GET /api/database/stats` - Database statistics (table sizes, row counts, pool stats)
+- `GET /api/database/search?query=&type=&startDate=&endDate=&page=&perPage=` - Unified search
+- `GET /api/database/table/:tableName?page=&perPage=` - Get table data with pagination
 
 ## Installation & Setup
 

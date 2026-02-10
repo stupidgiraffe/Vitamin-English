@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const dataHub = require('./database/DataHub');
 const pool = require('./database/init');
 const { initializeDatabase, verifyDatabaseSchema } = require('./database/init-postgres');
 const { ensureSchemaColumns } = require('./database/schema-guard');
@@ -184,8 +185,7 @@ async function initializeTestData() {
         }
         
         // Check if database has any classes
-        const classCheck = await pool.query('SELECT COUNT(*) FROM classes WHERE active = true');
-        const classCount = parseInt(classCheck.rows[0].count);
+        const classCount = await dataHub.classes.count({ active: true });
         
         if (classCount === 0) {
             console.log('📊 Database is empty, loading test data...');
@@ -236,38 +236,50 @@ app.use('/api/admin', requireAuth, adminRoutes);
 app.use('/api/monthly-reports', requireAuth, monthlyReportsRoutes);
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'healthy', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+    try {
+        const dbHealth = await dataHub.healthCheck();
+        res.status(dbHealth.ok ? 200 : 503).json({ 
+            status: dbHealth.ok ? 'healthy' : 'unhealthy',
+            database: dbHealth,
+            timestamp: new Date().toISOString() 
+        });
+    } catch (error) {
+        res.status(503).json({ 
+            status: 'unhealthy',
+            error: error.message,
+            timestamp: new Date().toISOString() 
+        });
+    }
 });
 
 // Debug endpoint to check database status
 app.get('/api/debug/database-status', requireAuth, async (req, res) => {
     try {
-        const userCount = await pool.query('SELECT COUNT(*) as count FROM users');
-        const classCount = await pool.query('SELECT COUNT(*) as count FROM classes');
-        const studentCount = await pool.query('SELECT COUNT(*) as count FROM students');
-        const attendanceCount = await pool.query('SELECT COUNT(*) as count FROM attendance');
-        const reportCount = await pool.query('SELECT COUNT(*) as count FROM teacher_comment_sheets');
-        
-        const users = await pool.query('SELECT username, full_name, role FROM users');
-        const classes = await pool.query('SELECT id, name, teacher_id FROM classes');
+        const stats = await dataHub.getStats();
+        const users = await dataHub.users.findAll({ perPage: 0 });
+        const classes = await dataHub.classes.findAll({ perPage: 0 });
+        const studentCount = await dataHub.students.count();
+        const attendanceCount = await dataHub.attendance.count();
+        const reportCount = await dataHub.teacherCommentSheets.count();
         
         res.json({
             status: 'ok',
             counts: {
-                users: parseInt(userCount.rows[0].count),
-                classes: parseInt(classCount.rows[0].count),
-                students: parseInt(studentCount.rows[0].count),
-                attendance: parseInt(attendanceCount.rows[0].count),
-                reports: parseInt(reportCount.rows[0].count)
+                users: users.length,
+                classes: classes.length,
+                students: studentCount,
+                attendance: attendanceCount,
+                reports: reportCount
             },
             sampleData: {
-                users: users.rows,
-                classes: classes.rows
-            }
+                users: users,
+                classes: classes
+            },
+            poolStats: stats.connectionPool
         });
     } catch (error) {
-        console.error('Debug endpoint error:', error);
+        console.error('❌ Debug endpoint error:', error);
         res.status(500).json({ 
             error: error.message,
             ...(process.env.NODE_ENV !== 'production' && { stack: error.stack })
