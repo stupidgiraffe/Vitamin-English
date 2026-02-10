@@ -5,16 +5,16 @@ This PR implements three cosmetic-only changes to the attendance table (both web
 
 ## Changes Made
 
-### 1. Neon Green "Student Name" Header
+### 1. Light Blue "Student Name" Header
 **File:** `public/css/styles.css`
 
-Changed the first column header from blue to neon green with dark text for high contrast:
+Changed the first column header from blue to light blue with dark blue text for better color harmony:
 
 ```css
 .attendance-table th:first-child {
     /* ... existing styles ... */
-    background: #39FF14; /* NEW: Neon green for Student Name header */
-    color: #1a1a1a; /* NEW: Dark text for contrast */
+    background: #8FAADC; /* NEW: Light blue for Student Name header */
+    color: #1F3A5F; /* NEW: Dark blue text for contrast */
 }
 ```
 
@@ -23,14 +23,15 @@ Changed the first column header from blue to neon green with dark text for high 
 ```javascript
 doc.rect(startX, currentY, NAME_COLUMN_WIDTH, ROW_HEIGHT)
    .lineWidth(2)
-   .fillAndStroke('#39FF14', '#2B5797'); // Changed from '#4472C4' to '#39FF14'
-doc.fillColor('#1a1a1a') // Changed from 'white' to '#1a1a1a'
+   .fillAndStroke('#8FAADC', '#2B5797'); // Changed from '#4472C4' to '#8FAADC'
+doc.fillColor('#1F3A5F') // Changed from 'white' to '#1F3A5F'
 ```
 
 **Impact:**
-- ✅ Only the "Student Name" header cell is neon green
+- ✅ Only the "Student Name" header cell is light blue
 - ✅ All date column headers (Jan 5, Jan 6, etc.) remain blue (#4472C4)
 - ✅ Student name data cells in the table body still inherit row colors (white/yellow striping)
+- ✅ Uses existing design system colors for consistency
 
 ### 2. Thicker and Darker Table Borders
 **File:** `public/css/styles.css`
@@ -90,7 +91,7 @@ The PDF generator (`utils/pdfGenerator.js`) was updated to match all web changes
 - Borders: 1px solid lines with light gray color (#d0d0d0)
 
 ### After:
-- "Student Name" header: Neon green (#39FF14) background with dark text (#1a1a1a)
+- "Student Name" header: Light blue (#8FAADC) background with dark blue text (#1F3A5F)
 - Date headers: Blue (#4472C4) - unchanged
 - Borders: 2px solid lines with darker gray color (#999999) for better visibility
 
@@ -102,5 +103,5 @@ The PDF generator (`utils/pdfGenerator.js`) was updated to match all web changes
 These are cosmetic-only changes. The best way to verify is to:
 1. View the attendance table in the web interface
 2. Generate a PDF export of attendance
-3. Confirm the "Student Name" header is neon green in both
+3. Confirm the "Student Name" header is light blue (#8FAADC) in both
 4. Confirm borders are thicker (2px) and darker (#999999) for better visibility
