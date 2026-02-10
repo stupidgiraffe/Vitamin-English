@@ -32,15 +32,15 @@ doc.fillColor('#1a1a1a') // Changed from 'white' to '#1a1a1a'
 - ✅ All date column headers (Jan 5, Jan 6, etc.) remain blue (#4472C4)
 - ✅ Student name data cells in the table body still inherit row colors (white/yellow striping)
 
-### 2. Thicker Table Borders
+### 2. Thicker and Darker Table Borders
 **File:** `public/css/styles.css`
 
-Increased border thickness from 1px to 2px for better definition:
+Increased border thickness from 1px to 2px and darkened color from #d0d0d0 to #999999 for better definition:
 
 ```css
 .attendance-table th,
 .attendance-table td {
-    border: 2px solid #d0d0d0; /* Changed from 1px to 2px */
+    border: 2px solid #999999; /* Changed from 1px solid #d0d0d0 */
 }
 
 .attendance-table th {
@@ -50,14 +50,15 @@ Increased border thickness from 1px to 2px for better definition:
 
 **File:** `utils/pdfGenerator.js`
 
-Updated PDF border line widths:
+Updated PDF border line widths and colors:
 - Header borders: `.lineWidth(2)` (already set)
-- Student name cell borders: `.lineWidth(2)` (changed from default)
-- Attendance cell borders: `.lineWidth(2)` (changed from 1.5)
+- Student name cell borders: `.lineWidth(2)` and `.stroke('#999999')` (changed from #CCCCCC)
+- Attendance cell borders: `.lineWidth(2)` and `.stroke('#999999')` (changed from 1.5px)
 
 **Impact:**
 - ✅ All table borders are now more visible and defined
-- ✅ Consistent border thickness across web and PDF
+- ✅ Darker border color (#999999) provides better contrast
+- ✅ Consistent border thickness and color across web and PDF
 
 ### 3. PDF Export Consistency
 The PDF generator (`utils/pdfGenerator.js`) was updated to match all web changes:
@@ -86,12 +87,12 @@ The PDF generator (`utils/pdfGenerator.js`) was updated to match all web changes
 
 ### Before:
 - All headers: Blue (#4472C4) background with white text
-- Borders: 1px solid lines
+- Borders: 1px solid lines with light gray color (#d0d0d0)
 
 ### After:
 - "Student Name" header: Neon green (#39FF14) background with dark text (#1a1a1a)
 - Date headers: Blue (#4472C4) - unchanged
-- Borders: 2px solid lines (thicker for better definition)
+- Borders: 2px solid lines with darker gray color (#999999) for better visibility
 
 ## Files Changed
 - `public/css/styles.css` - CSS styling for web table
@@ -102,4 +103,4 @@ These are cosmetic-only changes. The best way to verify is to:
 1. View the attendance table in the web interface
 2. Generate a PDF export of attendance
 3. Confirm the "Student Name" header is neon green in both
-4. Confirm borders are thicker and more defined
+4. Confirm borders are thicker (2px) and darker (#999999) for better visibility
