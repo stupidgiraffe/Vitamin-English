@@ -630,8 +630,8 @@ body {
     left: 0;
     z-index: 15; /* Higher than regular headers and data cells */
     box-shadow: 2px 0 4px -2px rgba(0,0,0,0.15);
-    background: #39FF14; /* Neon green for Student Name header */
-    color: #1a1a1a; /* Dark text for contrast */
+    background: #8FAADC; /* Light blue for Student Name header */
+    color: #1F3A5F; /* Dark blue text for contrast */
 }
 
 .attendance-table tbody tr:hover {

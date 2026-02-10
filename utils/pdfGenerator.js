@@ -419,9 +419,9 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
                 // Student name header
                 doc.rect(startX, currentY, NAME_COLUMN_WIDTH, ROW_HEIGHT)
                    .lineWidth(2) // Thicker border for header
-                   .fillAndStroke('#39FF14', '#2B5797'); // Neon green background
+                   .fillAndStroke('#8FAADC', '#2B5797'); // Light blue background
                 doc.lineWidth(1); // Reset line width
-                doc.fillColor('#1a1a1a') // Dark text for contrast
+                doc.fillColor('#1F3A5F') // Dark blue text for contrast
                    .text('Student Name', startX + 3, currentY + 5, { 
                        width: NAME_COLUMN_WIDTH - 6,
                        height: ROW_HEIGHT 
