@@ -43,8 +43,10 @@ router.get('/:id/details', async (req, res) => {
             return res.status(404).json({ error: 'Student not found' });
         }
         
-        // Get teacher comment sheets for the student's class
-        const reports = await dataHub.teacherCommentSheets.getRecent(20, profile.class_id);
+        // Get teacher comment sheets for the student's class (if student has a class)
+        const reports = profile.class_id 
+            ? await dataHub.teacherCommentSheets.getRecent(20, profile.class_id)
+            : [];
         
         res.json({
             student: {

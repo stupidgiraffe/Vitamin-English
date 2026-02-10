@@ -170,14 +170,14 @@ async function clearAllData() {
         console.log('🗑️  Clearing all data...');
         
         // Delete in correct order to respect foreign key constraints
-        await client.query('DELETE FROM pdf_history WHERE 1=1');
-        await client.query('DELETE FROM monthly_report_weeks WHERE 1=1');
-        await client.query('DELETE FROM monthly_reports WHERE 1=1');
-        await client.query('DELETE FROM attendance WHERE 1=1');
-        await client.query('DELETE FROM makeup_lessons WHERE 1=1');
-        await client.query('DELETE FROM teacher_comment_sheets WHERE 1=1');
-        await client.query('DELETE FROM students WHERE 1=1');
-        await client.query('DELETE FROM classes WHERE 1=1');
+        await client.query('DELETE FROM pdf_history');
+        await client.query('DELETE FROM monthly_report_weeks');
+        await client.query('DELETE FROM monthly_reports');
+        await client.query('DELETE FROM attendance');
+        await client.query('DELETE FROM makeup_lessons');
+        await client.query('DELETE FROM teacher_comment_sheets');
+        await client.query('DELETE FROM students');
+        await client.query('DELETE FROM classes');
         
         await client.query('COMMIT');
         console.log('✅ All data cleared');
