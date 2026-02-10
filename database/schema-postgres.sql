@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS classes (
     color VARCHAR(50) DEFAULT '#4A90E2',
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (teacher_id) REFERENCES users(id)
 );
 
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS students (
     parent_email VARCHAR(255),
     enrollment_date VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (class_id) REFERENCES classes(id)
 );
 
@@ -50,6 +52,7 @@ CREATE TABLE IF NOT EXISTS attendance (
     notes TEXT,
     teacher_id INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT attendance_student_class_date_unique UNIQUE(student_id, class_id, date),
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (class_id) REFERENCES classes(id),
@@ -68,6 +71,7 @@ CREATE TABLE IF NOT EXISTS teacher_comment_sheets (
     strengths TEXT,
     comments TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(class_id, date),
     FOREIGN KEY (class_id) REFERENCES classes(id),
     FOREIGN KEY (teacher_id) REFERENCES users(id)
@@ -93,6 +97,7 @@ CREATE TABLE IF NOT EXISTS makeup_lessons (
     status VARCHAR(50) DEFAULT 'scheduled',
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (class_id) REFERENCES classes(id)
 );
@@ -157,3 +162,32 @@ CREATE INDEX IF NOT EXISTS idx_pdf_history_type ON pdf_history(type);
 CREATE INDEX IF NOT EXISTS idx_pdf_history_student ON pdf_history(student_id);
 CREATE INDEX IF NOT EXISTS idx_pdf_history_class ON pdf_history(class_id);
 CREATE INDEX IF NOT EXISTS idx_pdf_history_created_at ON pdf_history(created_at);
+
+-- Auto-update trigger function for updated_at columns
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Apply triggers to tables with updated_at columns
+CREATE TRIGGER update_students_updated_at BEFORE UPDATE ON students FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_classes_updated_at BEFORE UPDATE ON classes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_attendance_updated_at BEFORE UPDATE ON attendance FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_teacher_comment_sheets_updated_at BEFORE UPDATE ON teacher_comment_sheets FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_makeup_lessons_updated_at BEFORE UPDATE ON makeup_lessons FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Database statistics view for monitoring
+CREATE OR REPLACE VIEW database_stats AS
+SELECT 
+    schemaname,
+    relname as table_name,
+    n_live_tup as row_count,
+    pg_size_pretty(pg_total_relation_size(relid)) as total_size,
+    pg_size_pretty(pg_relation_size(relid)) as table_size,
+    pg_size_pretty(pg_total_relation_size(relid) - pg_relation_size(relid)) as indexes_size
+FROM pg_stat_user_tables
+WHERE schemaname = 'public'
+ORDER BY n_live_tup DESC;

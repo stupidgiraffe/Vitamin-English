@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../database/init');
+const dataHub = require('../database/DataHub');
 const { normalizeToISO } = require('../utils/dateUtils');
 const { buildAttendanceMatrix } = require('../utils/attendanceDataBuilder');
 
@@ -9,6 +9,7 @@ router.get('/', async (req, res) => {
     try {
         const { classId, studentId, startDate, endDate } = req.query;
         
+        // Build query using direct SQL for complex filtering
         let query = `
             SELECT a.*, s.name as student_name, s.student_type, s.color_code, c.name as class_name, u.full_name as teacher_name
             FROM attendance a
@@ -53,7 +54,7 @@ router.get('/', async (req, res) => {
         
         query += ' ORDER BY a.date, s.student_type, s.name';
         
-        const result = await pool.query(query, params);
+        const result = await dataHub.query(query, params);
         const records = result.rows.map(record => ({
             ...record,
             // Ensure date is in ISO format
@@ -61,7 +62,7 @@ router.get('/', async (req, res) => {
         }));
         res.json(records);
     } catch (error) {
-        console.error('Error fetching attendance:', error);
+        console.error('❌ Error fetching attendance:', error);
         res.status(500).json({ error: 'Failed to fetch attendance' });
     }
 });
@@ -76,7 +77,7 @@ router.get('/matrix', async (req, res) => {
         }
         
         // Use shared data builder for consistency between UI and PDF
-        const matrixData = await buildAttendanceMatrix(pool, parseInt(classId), startDate, endDate);
+        const matrixData = await buildAttendanceMatrix(dataHub.pool, parseInt(classId), startDate, endDate);
         
         res.json({
             students: matrixData.students,
@@ -84,7 +85,7 @@ router.get('/matrix', async (req, res) => {
             attendance: matrixData.attendanceMap
         });
     } catch (error) {
-        console.error('Error fetching attendance matrix:', error);
+        console.error('❌ Error fetching attendance matrix:', error);
         res.status(500).json({ error: 'Failed to fetch attendance matrix' });
     }
 });
@@ -104,44 +105,24 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
         }
         
-        // Try to update existing record first
-        const existingResult = await pool.query(`
-            SELECT id FROM attendance 
-            WHERE student_id = $1 AND class_id = $2 AND date = $3
-        `, [student_id, class_id, normalizedDate]);
-        const existing = existingResult.rows[0];
+        // Use upsert method from repository
+        const record = await dataHub.attendance.upsert({
+            student_id,
+            class_id,
+            date: normalizedDate,
+            status: status || '',
+            notes: notes || '',
+            time: time || null,
+            teacher_id: teacher_id || null
+        });
         
-        if (existing) {
-            await pool.query(`
-                UPDATE attendance 
-                SET status = $1, notes = $2, time = $3, teacher_id = $4
-                WHERE id = $5
-            `, [status || '', notes || '', time || null, teacher_id || null, existing.id]);
-            
-            const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [existing.id]);
-            const record = recordResult.rows[0];
-            // Ensure returned date is in ISO format
-            res.json({
-                ...record,
-                date: normalizeToISO(record.date) || record.date
-            });
-        } else {
-            const result = await pool.query(`
-                INSERT INTO attendance (student_id, class_id, date, status, notes, time, teacher_id) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id
-            `, [student_id, class_id, normalizedDate, status || '', notes || '', time || null, teacher_id || null]);
-            
-            const recordResult = await pool.query('SELECT * FROM attendance WHERE id = $1', [result.rows[0].id]);
-            const record = recordResult.rows[0];
-            // Ensure returned date is in ISO format
-            res.status(201).json({
-                ...record,
-                date: normalizeToISO(record.date) || record.date
-            });
-        }
+        // Ensure returned date is in ISO format
+        res.status(201).json({
+            ...record,
+            date: normalizeToISO(record.date) || record.date
+        });
     } catch (error) {
-        console.error('Error saving attendance:', error);
+        console.error('❌ Error saving attendance:', error);
         
         // Provide specific error messages for common issues
         if (error.code === '23505') { // Unique constraint violation
@@ -165,21 +146,23 @@ router.put('/:id', async (req, res) => {
     try {
         const { status, notes, teacher_id } = req.body;
         
-        await pool.query(`
-            UPDATE attendance 
-            SET status = $1, notes = $2, teacher_id = $3
-            WHERE id = $4
-        `, [status || '', notes || '', teacher_id || null, req.params.id]);
+        const record = await dataHub.attendance.update(req.params.id, {
+            status: status || '',
+            notes: notes || '',
+            teacher_id: teacher_id || null
+        });
         
-        const result = await pool.query('SELECT * FROM attendance WHERE id = $1', [req.params.id]);
-        const record = result.rows[0];
+        if (!record) {
+            return res.status(404).json({ error: 'Attendance record not found' });
+        }
+        
         // Ensure returned date is in ISO format
         res.json({
             ...record,
             date: normalizeToISO(record.date) || record.date
         });
     } catch (error) {
-        console.error('Error updating attendance:', error);
+        console.error('❌ Error updating attendance:', error);
         res.status(500).json({ error: 'Failed to update attendance' });
     }
 });
@@ -187,10 +170,10 @@ router.put('/:id', async (req, res) => {
 // Delete attendance record
 router.delete('/:id', async (req, res) => {
     try {
-        await pool.query('DELETE FROM attendance WHERE id = $1', [req.params.id]);
+        await dataHub.attendance.delete(req.params.id);
         res.json({ message: 'Attendance record deleted successfully' });
     } catch (error) {
-        console.error('Error deleting attendance:', error);
+        console.error('❌ Error deleting attendance:', error);
         res.status(500).json({ error: 'Failed to delete attendance' });
     }
 });
@@ -211,24 +194,27 @@ router.post('/bulk', async (req, res) => {
         }
         
         // Get all students in the class
-        const studentsResult = await pool.query(`
-            SELECT id FROM students 
-            WHERE class_id = $1 AND active = true
-        `, [class_id]);
-        const students = studentsResult.rows;
+        const students = await dataHub.students.findAll({
+            classId: parseInt(class_id),
+            perPage: 0 // No pagination, get all
+        });
         
-        for (const student of students) {
-            await pool.query(`
-                INSERT INTO attendance (student_id, class_id, date, status) 
-                VALUES ($1, $2, $3, $4)
-                ON CONFLICT (student_id, class_id, date) 
-                DO UPDATE SET status = $4
-            `, [student.id, class_id, normalizedDate, status]);
-        }
+        // Bulk upsert attendance records
+        const records = students.map(student => ({
+            student_id: student.id,
+            class_id: parseInt(class_id),
+            date: normalizedDate,
+            status,
+            notes: '',
+            time: null,
+            teacher_id: null
+        }));
+        
+        await dataHub.attendance.bulkUpsert(records);
         
         res.json({ message: 'Bulk attendance marked successfully' });
     } catch (error) {
-        console.error('Error marking bulk attendance:', error);
+        console.error('❌ Error marking bulk attendance:', error);
         res.status(500).json({ error: 'Failed to mark bulk attendance' });
     }
 });
@@ -260,7 +246,7 @@ router.post('/move', async (req, res) => {
         }
         
         // Check if there are records to move
-        const checkResult = await pool.query(`
+        const checkResult = await dataHub.query(`
             SELECT COUNT(*) as count FROM attendance 
             WHERE class_id = $1 AND date = $2
         `, [class_id, normalizedFromDate]);
@@ -272,13 +258,13 @@ router.post('/move', async (req, res) => {
         }
         
         // Delete any existing records at the target date first
-        await pool.query(`
+        await dataHub.query(`
             DELETE FROM attendance 
             WHERE class_id = $1 AND date = $2
         `, [class_id, normalizedToDate]);
         
         // Move records by updating the date
-        const result = await pool.query(`
+        const result = await dataHub.query(`
             UPDATE attendance 
             SET date = $1
             WHERE class_id = $2 AND date = $3
@@ -290,7 +276,7 @@ router.post('/move', async (req, res) => {
             movedCount: result.rowCount
         });
     } catch (error) {
-        console.error('Error moving attendance:', error);
+        console.error('❌ Error moving attendance:', error);
         res.status(500).json({ error: 'Failed to move attendance records' });
     }
 });
@@ -349,13 +335,11 @@ router.get('/schedule-dates', async (req, res) => {
         }
         
         // Get class information including schedule
-        const classResult = await pool.query('SELECT schedule FROM classes WHERE id = $1', [classId]);
+        const classData = await dataHub.classes.findById(classId);
         
-        if (classResult.rows.length === 0) {
+        if (!classData) {
             return res.status(404).json({ error: 'Class not found' });
         }
-        
-        const classData = classResult.rows[0];
         
         // Helper to get default date range (last 6 months)
         const getDefaultDateRange = () => {
@@ -383,7 +367,7 @@ router.get('/schedule-dates', async (req, res) => {
             dates
         });
     } catch (error) {
-        console.error('Error generating schedule dates:', error);
+        console.error('❌ Error generating schedule dates:', error);
         res.status(500).json({ error: 'Failed to generate schedule dates' });
     }
 });

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../database/init');
+const dataHub = require('../database/DataHub');
 
 // Get lesson reports
 router.get('/', async (req, res) => {
@@ -8,7 +8,7 @@ router.get('/', async (req, res) => {
         const { classId, teacherId, startDate, endDate } = req.query;
         
         // Determine which table name to use
-        const client = await pool.connect();
+        const client = await dataHub.pool.connect();
         let tableName = 'teacher_comment_sheets';
         try {
             const tableCheck = await client.query(`
@@ -70,11 +70,11 @@ router.get('/', async (req, res) => {
         
         query += ' ORDER BY r.date DESC';
         
-        const result = await pool.query(query, params);
+        const result = await dataHub.query(query, params);
         const reports = result.rows;
         res.json(reports);
     } catch (error) {
-        console.error('Error fetching reports:', error);
+        console.error('❌ Error fetching reports:', error);
         res.status(500).json({ error: 'Failed to fetch reports' });
     }
 });
@@ -83,18 +83,14 @@ router.get('/', async (req, res) => {
 // NOTE: Must be defined before /:id to avoid Express matching 'by-date' as :id
 router.get('/by-date/:classId/:date', async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM teacher_comment_sheets r
-            JOIN classes c ON r.class_id = c.id
-            JOIN users u ON r.teacher_id = u.id
-            WHERE r.class_id = $1 AND r.date = $2
-        `, [req.params.classId, req.params.date]);
-        const report = result.rows[0];
+        const report = await dataHub.teacherCommentSheets.getByClassAndDate(
+            req.params.classId, 
+            req.params.date
+        );
         
         res.json(report || null);
     } catch (error) {
-        console.error('Error fetching report by date:', error);
+        console.error('❌ Error fetching report by date:', error);
         res.status(500).json({ error: 'Failed to fetch report' });
     }
 });
@@ -102,14 +98,7 @@ router.get('/by-date/:classId/:date', async (req, res) => {
 // Get a single report
 router.get('/:id', async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT r.*, c.name as class_name, u.full_name as teacher_name
-            FROM teacher_comment_sheets r
-            JOIN classes c ON r.class_id = c.id
-            JOIN users u ON r.teacher_id = u.id
-            WHERE r.id = $1
-        `, [req.params.id]);
-        const report = result.rows[0];
+        const report = await dataHub.teacherCommentSheets.findById(req.params.id);
         
         if (!report) {
             return res.status(404).json({ error: 'Report not found' });
@@ -117,7 +106,7 @@ router.get('/:id', async (req, res) => {
         
         res.json(report);
     } catch (error) {
-        console.error('Error fetching report:', error);
+        console.error('❌ Error fetching report:', error);
         res.status(500).json({ error: 'Failed to fetch report' });
     }
 });
@@ -141,11 +130,7 @@ router.post('/', async (req, res) => {
         }
         
         // Check if report already exists
-        const existingResult = await pool.query(`
-            SELECT id FROM teacher_comment_sheets 
-            WHERE class_id = $1 AND date = $2
-        `, [class_id, date]);
-        const existing = existingResult.rows[0];
+        const existing = await dataHub.teacherCommentSheets.getByClassAndDate(class_id, date);
         
         if (existing) {
             return res.status(400).json({ 
@@ -154,19 +139,21 @@ router.post('/', async (req, res) => {
             });
         }
         
-        const result = await pool.query(`
-            INSERT INTO teacher_comment_sheets (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
-        `, [class_id, teacher_id, date, target_topic || '', vocabulary || '', mistakes || '', strengths || '', comments || '']);
-        
-        const reportResult = await pool.query('SELECT * FROM teacher_comment_sheets WHERE id = $1', [result.rows[0].id]);
-        const report = reportResult.rows[0];
+        const report = await dataHub.teacherCommentSheets.create({
+            class_id,
+            teacher_id,
+            date,
+            target_topic: target_topic || '',
+            vocabulary: vocabulary || '',
+            mistakes: mistakes || '',
+            strengths: strengths || '',
+            comments: comments || ''
+        });
         
         console.log('Report created successfully:', report.id); // Debug logging
         res.status(201).json(report);
     } catch (error) {
-        console.error('Error creating report:', error);
+        console.error('❌ Error creating report:', error);
         res.status(500).json({ 
             error: 'Failed to create report',
             message: error.message 
@@ -187,22 +174,14 @@ router.put('/:id', async (req, res) => {
             });
         }
         
-        await pool.query(`
-            UPDATE teacher_comment_sheets 
-            SET teacher_id = $1, target_topic = $2, vocabulary = $3, mistakes = $4, strengths = $5, comments = $6
-            WHERE id = $7
-        `, [
+        const report = await dataHub.teacherCommentSheets.update(req.params.id, {
             teacher_id,
-            target_topic || '',
-            vocabulary || '',
-            mistakes || '',
-            strengths || '',
-            comments || '',
-            req.params.id
-        ]);
-        
-        const result = await pool.query('SELECT * FROM teacher_comment_sheets WHERE id = $1', [req.params.id]);
-        const report = result.rows[0];
+            target_topic: target_topic || '',
+            vocabulary: vocabulary || '',
+            mistakes: mistakes || '',
+            strengths: strengths || '',
+            comments: comments || ''
+        });
         
         if (!report) {
             return res.status(404).json({ error: 'Report not found' });
@@ -211,7 +190,7 @@ router.put('/:id', async (req, res) => {
         console.log('Report updated successfully:', report.id); // Debug logging
         res.json(report);
     } catch (error) {
-        console.error('Error updating report:', error);
+        console.error('❌ Error updating report:', error);
         res.status(500).json({ 
             error: 'Failed to update report',
             message: error.message 
@@ -222,10 +201,10 @@ router.put('/:id', async (req, res) => {
 // Delete a report
 router.delete('/:id', async (req, res) => {
     try {
-        await pool.query('DELETE FROM teacher_comment_sheets WHERE id = $1', [req.params.id]);
+        await dataHub.teacherCommentSheets.delete(req.params.id);
         res.json({ message: 'Report deleted successfully' });
     } catch (error) {
-        console.error('Error deleting report:', error);
+        console.error('❌ Error deleting report:', error);
         res.status(500).json({ error: 'Failed to delete report' });
     }
 });
