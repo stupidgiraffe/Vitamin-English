@@ -145,10 +145,23 @@ const stats = await dataHub.getStats();
 
 4. **Initialize the database**
    
-   The application will automatically create tables and seed with test data on first run.
-   - Includes 4 classes: Adult beginner, Intermediate, Advanced, Young elementary
-   - Includes 12 sample students with realistic contact information
-   - See [SEED_DATA.md](SEED_DATA.md) for details on seed data and customization
+   **✨ NEW: Automatic Schema Creation**
+   
+   The application now automatically:
+   - ✅ Creates all database tables on first run (no manual SQL needed!)
+   - ✅ Creates default admin and teacher users
+   - ✅ Seeds test data if the database is empty
+   
+   **What you get:**
+   - 4 classes: Adult beginner, Intermediate, Advanced, Young elementary
+   - 12 sample students with realistic contact information
+   - Sample attendance records
+   
+   See [DATABASE_SETUP_GUIDE.md](DATABASE_SETUP_GUIDE.md) for troubleshooting.
+   
+   **Having issues?** If you see "nothing saved in database":
+   - Make sure DATABASE_URL is set in your .env file
+   - Check [DATABASE_SETUP_GUIDE.md](DATABASE_SETUP_GUIDE.md) for solutions
 
 5. **Start the server**
    ```bash
@@ -556,6 +569,36 @@ After deploying:
 - [ ] Update `CORS_ORIGIN` to match your domain
 
 ## Troubleshooting
+
+### Database Issues
+
+**Problem: "Nothing is saved in the database" or "Data disappears"**
+
+This usually means the database is not properly configured. See [DATABASE_SETUP_GUIDE.md](DATABASE_SETUP_GUIDE.md) for detailed solutions.
+
+**Quick fixes:**
+1. **Check DATABASE_URL is set:**
+   ```bash
+   # Make sure .env file exists
+   cat .env | grep DATABASE_URL
+   ```
+
+2. **Verify database connection:**
+   ```bash
+   # Visit after starting server
+   http://localhost:3000/health
+   # Should show: {"status":"healthy","database":{"ok":true}}
+   ```
+
+3. **Common causes:**
+   - Missing .env file (copy from .env.example)
+   - Incorrect DATABASE_URL format
+   - Database service is down (Neon/Railway)
+   - Using ephemeral/temporary database storage
+
+**See [DATABASE_SETUP_GUIDE.md](DATABASE_SETUP_GUIDE.md) for complete troubleshooting guide.**
+
+### Other Common Issues
 
 **Database connection issues:**
 - Verify `DATABASE_URL` is correct in environment variables
