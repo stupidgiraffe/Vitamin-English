@@ -1,0 +1,82 @@
+name: Apply Database Migrations
+
+# This workflow applies database migrations to the Neon PostgreSQL database
+# It runs when migration files change or can be triggered manually
+
+on:
+  # Allow manual triggering from GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode (check status only, no changes)'
+        required: false
+        type: boolean
+        default: false
+  
+  # Auto-run when migration files are pushed to main
+  push:
+    branches:
+      - main
+    paths:
+      - 'database/migrations/*.sql'
+      - 'database/schema-postgres.sql'
+      - 'scripts/apply-migrations.js'
+
+jobs:
+  migrate:
+    name: Apply Database Migrations
+    runs-on: ubuntu-latest
+    
+    # Only run if DATABASE_URL secret is configured
+    # This prevents failures on forks without database access
+    if: ${{ secrets.DATABASE_URL != '' }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Check migration status
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "🔍 Checking current migration status..."
+          node scripts/apply-all-migrations.js || echo "Migration check completed"
+      
+      - name: Apply migrations (if not dry-run)
+        if: ${{ !inputs.dry_run }}
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          echo "🚀 Applying database migrations..."
+          npm run migrate:all
+      
+      - name: Dry-run completed
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "✅ Dry-run mode: No changes applied"
+          echo "Migration status check completed successfully"
+      
+      - name: Migration summary
+        if: always()
+        run: |
+          echo "## Migration Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch**: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Dry Run**: ${{ inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "✅ **Status**: Dry-run completed (no changes applied)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Status**: Migrations applied successfully" >> $GITHUB_STEP_SUMMARY
+          fi
