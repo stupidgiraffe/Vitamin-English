@@ -1,13 +1,51 @@
 const bcrypt = require('bcrypt');
 const pool = require('./connection');
+const fs = require('fs');
+const path = require('path');
 
 // Default user credentials
 const DEFAULT_ADMIN_PASSWORD = 'admin123';
 const DEFAULT_TEACHER_PASSWORD = 'teacher123';
 
+/**
+ * Create database schema from schema-postgres.sql
+ * This ensures tables exist before trying to use them
+ */
+async function createSchemaIfNeeded() {
+    try {
+        // Check if users table exists
+        const tablesCheck = await pool.query(`
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'users'
+        `);
+        
+        if (tablesCheck.rows.length > 0) {
+            console.log('✅ Database schema already exists');
+            return;
+        }
+        
+        console.log('📋 Creating database schema from schema-postgres.sql...');
+        
+        // Read and execute schema file
+        const schemaPath = path.join(__dirname, 'schema-postgres.sql');
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        
+        await pool.query(schemaSql);
+        console.log('✅ Database schema created successfully');
+        
+    } catch (error) {
+        console.error('❌ Error creating schema:', error.message);
+        throw error;
+    }
+}
+
 async function initializeDatabase() {
     try {
         console.log('🔍 Checking database initialization status...');
+        
+        // First, ensure schema exists
+        await createSchemaIfNeeded();
         
         // Check if users exist
         const result = await pool.query('SELECT COUNT(*) as count FROM users');
@@ -150,4 +188,4 @@ async function verifyDatabaseSchema() {
     }
 }
 
-module.exports = { initializeDatabase, verifyDatabaseSchema };
+module.exports = { initializeDatabase, verifyDatabaseSchema, createSchemaIfNeeded };

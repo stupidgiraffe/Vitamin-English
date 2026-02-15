@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../database/init');
+const dataHub = require('../database/DataHub');
 const { generateStudentAttendancePDF, generateClassAttendancePDF, generateAttendanceGridPDF, generateLessonReportPDF, generateMultiClassReportPDF } = require('../utils/pdfGenerator');
 const { uploadPDF, getDownloadUrl, listPDFs, isConfigured } = require('../utils/r2Storage');
 const { normalizeToISO } = require('../utils/dateUtils');
@@ -22,30 +22,15 @@ router.post('/student-attendance/:studentId', checkR2Config, async (req, res) =>
     try {
         const studentId = parseInt(req.params.studentId);
         
-        // Fetch student data
-        const studentResult = await pool.query(`
-            SELECT s.*, c.name as class_name
-            FROM students s
-            LEFT JOIN classes c ON s.class_id = c.id
-            WHERE s.id = $1
-        `, [studentId]);
+        // Fetch student data using DataHub
+        const student = await dataHub.students.getProfile(studentId);
         
-        if (studentResult.rows.length === 0) {
+        if (!student) {
             return res.status(404).json({ error: 'Student not found' });
         }
         
-        const student = studentResult.rows[0];
-        
         // Fetch attendance records
-        const attendanceResult = await pool.query(`
-            SELECT a.*, c.name as class_name
-            FROM attendance a
-            LEFT JOIN classes c ON a.class_id = c.id
-            WHERE a.student_id = $1
-            ORDER BY a.date DESC
-        `, [studentId]);
-        
-        const attendanceRecords = attendanceResult.rows;
+        const attendanceRecords = await dataHub.attendance.getStudentHistory(studentId, 1000);
         
         // Generate PDF
         const pdfBuffer = await generateStudentAttendancePDF(student, attendanceRecords);
@@ -60,28 +45,22 @@ router.post('/student-attendance/:studentId', checkR2Config, async (req, res) =>
         });
         
         // Save to pdf_history table
-        const historyResult = await pool.query(`
-            INSERT INTO pdf_history (filename, type, student_id, r2_key, r2_url, file_size, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id
-        `, [
-            fileName,
-            'student_attendance',
-            studentId,
-            uploadResult.key,
-            uploadResult.url,
-            uploadResult.size,
-            req.session.userId
-        ]);
-        
-        const pdfId = historyResult.rows[0].id;
+        const pdfId = await dataHub.pdfHistory.create({
+            filename: fileName,
+            type: 'student_attendance',
+            student_id: studentId,
+            r2_key: uploadResult.key,
+            r2_url: uploadResult.url,
+            file_size: uploadResult.size,
+            created_by: req.session.userId
+        });
         
         // Generate signed download URL
         const downloadUrl = await getDownloadUrl(uploadResult.key);
         
         res.json({
             success: true,
-            pdfId,
+            pdfId: pdfId.id,
             fileName,
             downloadUrl,
             size: uploadResult.size,
@@ -89,7 +68,7 @@ router.post('/student-attendance/:studentId', checkR2Config, async (req, res) =>
         });
         
     } catch (error) {
-        console.error('Error generating student attendance PDF:', error);
+        console.error('❌ Error generating student attendance PDF:', error);
         res.status(500).json({ 
             error: 'Failed to generate PDF',
             message: error.message
@@ -108,35 +87,21 @@ router.post('/class-attendance/:classId', checkR2Config, async (req, res) => {
         }
         
         // Fetch class data
-        const classResult = await pool.query(`
-            SELECT c.*, u.full_name as teacher_name
-            FROM classes c
-            LEFT JOIN users u ON c.teacher_id = u.id
-            WHERE c.id = $1
-        `, [classId]);
+        const classData = await dataHub.classes.findById(classId);
         
-        if (classResult.rows.length === 0) {
+        if (!classData) {
             return res.status(404).json({ error: 'Class not found' });
         }
         
-        const classData = classResult.rows[0];
-        
         // Fetch students in class
-        const studentsResult = await pool.query(`
-            SELECT * FROM students
-            WHERE class_id = $1 AND active = true
-            ORDER BY student_type, name
-        `, [classId]);
-        
-        const students = studentsResult.rows;
+        const students = await dataHub.students.findAll({
+            classId,
+            orderBy: 'student_type',
+            perPage: 0 // No pagination, get all
+        });
         
         // Fetch attendance records for the date
-        const attendanceResult = await pool.query(`
-            SELECT * FROM attendance
-            WHERE class_id = $1 AND date = $2
-        `, [classId, date]);
-        
-        const attendanceRecords = attendanceResult.rows;
+        const attendanceRecords = await dataHub.attendance.getByClassAndDate(classId, date);
         
         // Generate PDF
         const pdfBuffer = await generateClassAttendancePDF(classData, students, attendanceRecords, date);
@@ -152,28 +117,22 @@ router.post('/class-attendance/:classId', checkR2Config, async (req, res) => {
         });
         
         // Save to pdf_history table
-        const historyResult = await pool.query(`
-            INSERT INTO pdf_history (filename, type, class_id, r2_key, r2_url, file_size, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id
-        `, [
-            fileName,
-            'class_attendance',
-            classId,
-            uploadResult.key,
-            uploadResult.url,
-            uploadResult.size,
-            req.session.userId
-        ]);
-        
-        const pdfId = historyResult.rows[0].id;
+        const pdf = await dataHub.pdfHistory.create({
+            filename: fileName,
+            type: 'class_attendance',
+            class_id: classId,
+            r2_key: uploadResult.key,
+            r2_url: uploadResult.url,
+            file_size: uploadResult.size,
+            created_by: req.session.userId
+        });
         
         // Generate signed download URL
         const downloadUrl = await getDownloadUrl(uploadResult.key);
         
         res.json({
             success: true,
-            pdfId,
+            pdfId: pdf.id,
             fileName,
             downloadUrl,
             size: uploadResult.size,
@@ -181,7 +140,7 @@ router.post('/class-attendance/:classId', checkR2Config, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error generating class attendance PDF:', error);
+        console.error('❌ Error generating class attendance PDF:', error);
         res.status(500).json({ 
             error: 'Failed to generate PDF',
             message: error.message
@@ -224,7 +183,7 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
         }
         
         // Use shared data builder to ensure UI and PDF have identical data
-        const matrixData = await buildAttendanceMatrix(pool, classId, startDate, endDate);
+        const matrixData = await buildAttendanceMatrix(dataHub.pool, classId, startDate, endDate);
         
         // Generate PDF using the same data structure as the UI
         const pdfBuffer = await generateAttendanceGridPDF(
@@ -248,28 +207,22 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
         });
         
         // Save to pdf_history table
-        const historyResult = await pool.query(`
-            INSERT INTO pdf_history (filename, type, class_id, r2_key, r2_url, file_size, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            RETURNING id
-        `, [
-            fileName,
-            'attendance_grid',
-            classId,
-            uploadResult.key,
-            uploadResult.url,
-            uploadResult.size,
-            req.session.userId
-        ]);
-        
-        const pdfId = historyResult.rows[0].id;
+        const pdf = await dataHub.pdfHistory.create({
+            filename: fileName,
+            type: 'attendance_grid',
+            class_id: classId,
+            r2_key: uploadResult.key,
+            r2_url: uploadResult.url,
+            file_size: uploadResult.size,
+            created_by: req.session.userId
+        });
         
         // Generate signed download URL
         const downloadUrl = await getDownloadUrl(uploadResult.key);
         
         res.json({
             success: true,
-            pdfId,
+            pdfId: pdf.id,
             fileName,
             downloadUrl,
             size: uploadResult.size,
@@ -277,7 +230,7 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error generating attendance grid PDF:', error);
+        console.error('❌ Error generating attendance grid PDF:', error);
         res.status(500).json({ 
             error: 'Failed to generate PDF',
             message: error.message
@@ -291,35 +244,21 @@ router.post('/lesson-report/:reportId', checkR2Config, async (req, res) => {
         const reportId = parseInt(req.params.reportId);
         
         // Fetch report data
-        const reportResult = await pool.query(`
-            SELECT lr.*, c.name as class_name, u.full_name as teacher_name
-            FROM teacher_comment_sheets lr
-            LEFT JOIN classes c ON lr.class_id = c.id
-            LEFT JOIN users u ON lr.teacher_id = u.id
-            WHERE lr.id = $1
-        `, [reportId]);
+        const report = await dataHub.teacherCommentSheets.findById(reportId);
         
-        if (reportResult.rows.length === 0) {
+        if (!report) {
             return res.status(404).json({ error: 'Lesson report not found' });
         }
         
-        const report = reportResult.rows[0];
-        
         // Get class data
-        const classResult = await pool.query(`
-            SELECT * FROM classes WHERE id = $1
-        `, [report.class_id]);
-        
-        const classData = classResult.rows[0];
+        const classData = await dataHub.classes.findById(report.class_id);
         
         // Fetch students in the class
-        const studentsResult = await pool.query(`
-            SELECT id, name, student_type FROM students
-            WHERE class_id = $1 AND active = true
-            ORDER BY student_type, name
-        `, [report.class_id]);
-        
-        const students = studentsResult.rows;
+        const students = await dataHub.students.findAll({
+            classId: report.class_id,
+            orderBy: 'student_type',
+            perPage: 0 // No pagination, get all
+        });
         
         // Generate PDF with students
         const pdfBuffer = await generateLessonReportPDF(report, classData, students);
@@ -335,29 +274,23 @@ router.post('/lesson-report/:reportId', checkR2Config, async (req, res) => {
         });
         
         // Save to pdf_history table
-        const historyResult = await pool.query(`
-            INSERT INTO pdf_history (filename, type, report_id, class_id, r2_key, r2_url, file_size, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id
-        `, [
-            fileName,
-            'lesson_report',
-            reportId,
-            report.class_id,
-            uploadResult.key,
-            uploadResult.url,
-            uploadResult.size,
-            req.session.userId
-        ]);
-        
-        const pdfId = historyResult.rows[0].id;
+        const pdf = await dataHub.pdfHistory.create({
+            filename: fileName,
+            type: 'lesson_report',
+            report_id: reportId,
+            class_id: report.class_id,
+            r2_key: uploadResult.key,
+            r2_url: uploadResult.url,
+            file_size: uploadResult.size,
+            created_by: req.session.userId
+        });
         
         // Generate signed download URL
         const downloadUrl = await getDownloadUrl(uploadResult.key);
         
         res.json({
             success: true,
-            pdfId,
+            pdfId: pdf.id,
             fileName,
             downloadUrl,
             size: uploadResult.size,
@@ -365,7 +298,7 @@ router.post('/lesson-report/:reportId', checkR2Config, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error generating lesson report PDF:', error);
+        console.error('❌ Error generating lesson report PDF:', error);
         res.status(500).json({ 
             error: 'Failed to generate PDF',
             message: error.message
@@ -378,38 +311,25 @@ router.get('/history', async (req, res) => {
     try {
         const { type, limit = 50 } = req.query;
         
-        let query = `
-            SELECT ph.*, 
-                   s.name as student_name,
-                   c.name as class_name,
-                   u.full_name as created_by_name
-            FROM pdf_history ph
-            LEFT JOIN students s ON ph.student_id = s.id
-            LEFT JOIN classes c ON ph.class_id = c.id
-            LEFT JOIN users u ON ph.created_by = u.id
-            WHERE 1=1
-        `;
-        const params = [];
-        let paramIndex = 1;
+        const options = {
+            perPage: parseInt(limit),
+            orderBy: 'created_at',
+            orderDirection: 'DESC'
+        };
         
         if (type) {
-            query += ` AND ph.type = $${paramIndex}`;
-            params.push(type);
-            paramIndex++;
+            options.type = type;
         }
         
-        query += ` ORDER BY ph.created_at DESC LIMIT $${paramIndex}`;
-        params.push(parseInt(limit));
-        
-        const result = await pool.query(query, params);
+        const pdfs = await dataHub.pdfHistory.findAll(options);
         
         res.json({
             success: true,
-            pdfs: result.rows
+            pdfs
         });
         
     } catch (error) {
-        console.error('Error fetching PDF history:', error);
+        console.error('❌ Error fetching PDF history:', error);
         res.status(500).json({ 
             error: 'Failed to fetch PDF history',
             message: error.message
@@ -423,15 +343,11 @@ router.get('/download/:pdfId', async (req, res) => {
         const pdfId = parseInt(req.params.pdfId);
         
         // Fetch PDF record
-        const result = await pool.query(`
-            SELECT * FROM pdf_history WHERE id = $1
-        `, [pdfId]);
+        const pdf = await dataHub.pdfHistory.findById(pdfId);
         
-        if (result.rows.length === 0) {
+        if (!pdf) {
             return res.status(404).json({ error: 'PDF not found' });
         }
-        
-        const pdf = result.rows[0];
         
         // Generate signed download URL (valid for 1 hour)
         const downloadUrl = await getDownloadUrl(pdf.r2_key, 3600);
@@ -445,7 +361,7 @@ router.get('/download/:pdfId', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error getting download URL:', error);
+        console.error('❌ Error getting download URL:', error);
         res.status(500).json({ 
             error: 'Failed to get download URL',
             message: error.message
@@ -477,38 +393,21 @@ router.post('/multi-class-reports', checkR2Config, async (req, res) => {
         
         for (const classId of classes) {
             // Get class data
-            const classResult = await pool.query(`
-                SELECT c.*, u.full_name as teacher_name
-                FROM classes c
-                LEFT JOIN users u ON c.teacher_id = u.id
-                WHERE c.id = $1
-            `, [classId]);
+            const classData = await dataHub.classes.findById(classId);
             
-            if (classResult.rows.length === 0) {
+            if (!classData) {
                 continue; // Skip if class not found
             }
             
-            const classData = classResult.rows[0];
-            
             // Get students for this class
-            const studentsResult = await pool.query(`
-                SELECT id, name, student_type FROM students
-                WHERE class_id = $1 AND active = true
-                ORDER BY student_type, name
-            `, [classId]);
-            
-            const students = studentsResult.rows;
+            const students = await dataHub.students.findAll({
+                classId,
+                orderBy: 'student_type',
+                perPage: 0 // No pagination, get all
+            });
             
             // Get reports for this class within date range
-            const reportsResult = await pool.query(`
-                SELECT lr.*, u.full_name as teacher_name
-                FROM teacher_comment_sheets lr
-                LEFT JOIN users u ON lr.teacher_id = u.id
-                WHERE lr.class_id = $1 AND lr.date >= $2 AND lr.date <= $3
-                ORDER BY lr.date ASC
-            `, [classId, startDate, endDate]);
-            
-            const reports = reportsResult.rows;
+            const reports = await dataHub.teacherCommentSheets.getByDateRange(classId, startDate, endDate);
             
             classReportsData.push({
                 classData,
@@ -537,27 +436,21 @@ router.post('/multi-class-reports', checkR2Config, async (req, res) => {
         });
         
         // Save to pdf_history table
-        const historyResult = await pool.query(`
-            INSERT INTO pdf_history (filename, type, r2_key, r2_url, file_size, created_by)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id
-        `, [
-            fileName,
-            'multi_class_reports',
-            uploadResult.key,
-            uploadResult.url,
-            uploadResult.size,
-            req.session.userId
-        ]);
-        
-        const pdfId = historyResult.rows[0].id;
+        const pdf = await dataHub.pdfHistory.create({
+            filename: fileName,
+            type: 'multi_class_reports',
+            r2_key: uploadResult.key,
+            r2_url: uploadResult.url,
+            file_size: uploadResult.size,
+            created_by: req.session.userId
+        });
         
         // Generate signed download URL
         const downloadUrl = await getDownloadUrl(uploadResult.key);
         
         res.json({
             success: true,
-            pdfId,
+            pdfId: pdf.id,
             fileName,
             downloadUrl,
             size: uploadResult.size,
@@ -567,7 +460,7 @@ router.post('/multi-class-reports', checkR2Config, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error generating multi-class reports PDF:', error);
+        console.error('❌ Error generating multi-class reports PDF:', error);
         res.status(500).json({ 
             error: 'Failed to generate PDF',
             message: error.message

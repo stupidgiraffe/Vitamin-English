@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const pool = require('../database/init');
+const dataHub = require('../database/DataHub');
 const { generateMonthlyReportPDF } = require('../utils/monthlyReportPdf');
 const { uploadPDF, getDownloadUrl } = require('../utils/r2Storage');
 
@@ -13,7 +13,7 @@ router.get('/', async (req, res) => {
         const { classId, year, month, start_date, end_date, status } = req.query;
         
         // Check if monthly_reports table exists
-        const client = await pool.connect();
+        const client = await dataHub.pool.connect();
         try {
             const tableCheck = await client.query(`
                 SELECT table_name 
@@ -82,10 +82,10 @@ router.get('/', async (req, res) => {
         
         query += ' ORDER BY mr.year DESC, mr.month DESC, mr.created_at DESC';
         
-        const result = await pool.query(query, params);
+        const result = await dataHub.query(query, params);
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching monthly reports:', error);
+        console.error('❌ Error fetching monthly reports:', error);
         
         // Check if error is because table doesn't exist
         if (error.message && error.message.includes('does not exist') && error.message.includes('monthly_reports')) {
@@ -135,7 +135,7 @@ router.post('/preview-generate', async (req, res) => {
         // Query lesson reports - try teacher_comment_sheets first, fallback to lesson_reports
         let lessonsResult;
         try {
-            lessonsResult = await pool.query(`
+            lessonsResult = await dataHub.query(`
                 SELECT * FROM teacher_comment_sheets
                 WHERE class_id = $1 AND date >= $2 AND date <= $3
                 ORDER BY date
@@ -143,7 +143,7 @@ router.post('/preview-generate', async (req, res) => {
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
-                lessonsResult = await pool.query(`
+                lessonsResult = await dataHub.query(`
                     SELECT * FROM lesson_reports
                     WHERE class_id = $1 AND date >= $2 AND date <= $3
                     ORDER BY date
@@ -172,7 +172,7 @@ router.post('/preview-generate', async (req, res) => {
             lessonCount: weeks.length 
         });
     } catch (error) {
-        console.error('Error previewing monthly report:', error);
+        console.error('❌ Error previewing monthly report:', error);
         res.status(500).json({ 
             error: 'Failed to preview monthly report',
             message: error.message 
@@ -186,7 +186,7 @@ router.post('/preview-generate', async (req, res) => {
  * NOTE: Must be defined before /:id routes to avoid Express matching 'auto-generate' as :id
  */
 router.post('/auto-generate', async (req, res) => {
-    const client = await pool.connect();
+    const client = await dataHub.pool.connect();
     
     try {
         const { class_id, start_date, end_date, year, month, monthly_theme, status } = req.body;
