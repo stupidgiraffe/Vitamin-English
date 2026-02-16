@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS monthly_report_weeks (
     vocabulary TEXT,
     phrase TEXT,
     others TEXT,
-    lesson_report_id INTEGER REFERENCES lesson_reports(id),
+    teacher_comment_sheet_id INTEGER REFERENCES teacher_comment_sheets(id),
     UNIQUE(monthly_report_id, week_number)
 );
 
@@ -36,7 +36,7 @@ CREATE INDEX IF NOT EXISTS idx_monthly_reports_class ON monthly_reports(class_id
 CREATE INDEX IF NOT EXISTS idx_monthly_reports_date ON monthly_reports(year, month);
 CREATE INDEX IF NOT EXISTS idx_monthly_reports_status ON monthly_reports(status);
 CREATE INDEX IF NOT EXISTS idx_monthly_report_weeks_report ON monthly_report_weeks(monthly_report_id);
-CREATE INDEX IF NOT EXISTS idx_monthly_report_weeks_lesson ON monthly_report_weeks(lesson_report_id);
+CREATE INDEX IF NOT EXISTS idx_monthly_report_weeks_lesson ON monthly_report_weeks(teacher_comment_sheet_id);
 
 -- Create trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_monthly_reports_updated_at()

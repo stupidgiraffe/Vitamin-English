@@ -2,11 +2,31 @@
 -- Date: 2026-02-05
 -- Purpose: Rename lesson_reports table to teacher_comment_sheets for clarity
 
--- Rename the main table
-ALTER TABLE lesson_reports RENAME TO teacher_comment_sheets;
+-- Rename the main table (if it exists as lesson_reports)
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'lesson_reports') THEN
+        ALTER TABLE lesson_reports RENAME TO teacher_comment_sheets;
+        RAISE NOTICE 'Renamed lesson_reports table to teacher_comment_sheets';
+    ELSE
+        RAISE NOTICE 'Table lesson_reports does not exist, skipping rename';
+    END IF;
+END $$;
 
--- Update foreign key column name in monthly_report_weeks
-ALTER TABLE monthly_report_weeks RENAME COLUMN lesson_report_id TO teacher_comment_sheet_id;
+-- Update foreign key column name in monthly_report_weeks (if it exists as lesson_report_id)
+DO $$ 
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'monthly_report_weeks' 
+        AND column_name = 'lesson_report_id'
+    ) THEN
+        ALTER TABLE monthly_report_weeks RENAME COLUMN lesson_report_id TO teacher_comment_sheet_id;
+        RAISE NOTICE 'Renamed column lesson_report_id to teacher_comment_sheet_id';
+    ELSE
+        RAISE NOTICE 'Column lesson_report_id does not exist, skipping rename';
+    END IF;
+END $$;
 
 -- Rename indexes
 ALTER INDEX IF EXISTS idx_reports_date RENAME TO idx_teacher_comment_sheets_date;

@@ -172,7 +172,7 @@ async function clearAllData() {
         await client.query('DELETE FROM attendance WHERE 1=1');
         await client.query('DELETE FROM students WHERE 1=1');
         await client.query('DELETE FROM classes WHERE 1=1');
-        await client.query('DELETE FROM lesson_reports WHERE 1=1');
+        await client.query('DELETE FROM teacher_comment_sheets WHERE 1=1');
         await client.query('DELETE FROM makeup_lessons WHERE 1=1');
         
         await client.query('COMMIT');

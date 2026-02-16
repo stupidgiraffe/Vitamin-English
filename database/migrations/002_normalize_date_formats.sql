@@ -22,21 +22,45 @@ SET date =
     END
 WHERE date !~ '^\d{4}-\d{2}-\d{2}$';
 
--- Update lesson_reports table dates
-UPDATE lesson_reports
-SET date = 
-    CASE 
-        WHEN date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN
-            split_part(date, '/', 3) || '-' || 
-            lpad(split_part(date, '/', 1), 2, '0') || '-' || 
-            lpad(split_part(date, '/', 2), 2, '0')
-        WHEN date ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
-            split_part(date, '-', 3) || '-' || 
-            lpad(split_part(date, '-', 2), 2, '0') || '-' || 
-            lpad(split_part(date, '-', 1), 2, '0')
-        ELSE date
-    END
-WHERE date !~ '^\d{4}-\d{2}-\d{2}$';
+-- Update teacher_comment_sheets table dates (try new name first)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'teacher_comment_sheets') THEN
+        UPDATE teacher_comment_sheets
+        SET date = 
+            CASE 
+                WHEN date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN
+                    split_part(date, '/', 3) || '-' || 
+                    lpad(split_part(date, '/', 1), 2, '0') || '-' || 
+                    lpad(split_part(date, '/', 2), 2, '0')
+                WHEN date ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+                    split_part(date, '-', 3) || '-' || 
+                    lpad(split_part(date, '-', 2), 2, '0') || '-' || 
+                    lpad(split_part(date, '-', 1), 2, '0')
+                ELSE date
+            END
+        WHERE date !~ '^\d{4}-\d{2}-\d{2}$';
+        RAISE NOTICE 'Updated dates in teacher_comment_sheets table';
+    ELSIF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'lesson_reports') THEN
+        UPDATE lesson_reports
+        SET date = 
+            CASE 
+                WHEN date ~ '^\d{1,2}/\d{1,2}/\d{4}$' THEN
+                    split_part(date, '/', 3) || '-' || 
+                    lpad(split_part(date, '/', 1), 2, '0') || '-' || 
+                    lpad(split_part(date, '/', 2), 2, '0')
+                WHEN date ~ '^\d{1,2}-\d{1,2}-\d{4}$' THEN
+                    split_part(date, '-', 3) || '-' || 
+                    lpad(split_part(date, '-', 2), 2, '0') || '-' || 
+                    lpad(split_part(date, '-', 1), 2, '0')
+                ELSE date
+            END
+        WHERE date !~ '^\d{4}-\d{2}-\d{2}$';
+        RAISE NOTICE 'Updated dates in lesson_reports table (legacy name)';
+    ELSE
+        RAISE NOTICE 'Neither teacher_comment_sheets nor lesson_reports table exists, skipping';
+    END IF;
+END $$;
 
 -- Update makeup_lessons table dates
 UPDATE makeup_lessons
