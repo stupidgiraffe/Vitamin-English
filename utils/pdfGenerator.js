@@ -12,6 +12,10 @@ const THEME = {
         textDark: '#333333',
         textSecondary: '#6c757d',
         white: '#FFFFFF'
+    },
+    opacity: {
+        cardBackground: 0.3,
+        full: 1
     }
 };
 
@@ -141,9 +145,9 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
             const summaryTop = doc.y;
             doc.rect(50, summaryTop, doc.page.width - 100, 90)
                .fill(THEME.colors.lightBlue)
-               .fillOpacity(0.3);
+               .fillOpacity(THEME.opacity.cardBackground);
             
-            doc.fillOpacity(1);
+            doc.fillOpacity(THEME.opacity.full);
             doc.fillColor(THEME.colors.textDark);
             doc.fontSize(16)
                .font('Helvetica-Bold')

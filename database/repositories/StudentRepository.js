@@ -133,7 +133,7 @@ class StudentRepository extends BaseRepository {
           .join('classes c', 's.class_id = c.id', 'LEFT');
         
         // Only add search filter if searchTerm is not empty
-        if (searchTerm && searchTerm.trim()) {
+        if (searchTerm && searchTerm.trim().length > 0) {
             qb.whereLike('s.name', searchTerm);
         }
         

@@ -87,6 +87,15 @@ class DataHub {
     }
 
     /**
+     * Helper to check if a query string is valid (non-empty after trimming)
+     * @param {string} query - Query string to validate
+     * @returns {boolean} True if query is valid
+     */
+    static hasValidQuery(query) {
+        return query && query.trim().length > 0;
+    }
+
+    /**
      * Unified cross-entity search
      * @param {string} query - Search query
      * @param {Object} options - Search options (type, startDate, endDate, page, perPage)
@@ -128,7 +137,7 @@ class DataHub {
                   .join('users u', 'c.teacher_id = u.id', 'LEFT');
                 
                 // Only add search filter if query is not empty
-                if (query && query.trim()) {
+                if (DataHub.hasValidQuery(query)) {
                     qb.whereLike('c.name', query);
                 }
                 
@@ -151,7 +160,7 @@ class DataHub {
 
                 if (startDate && endDate) {
                     qb.whereBetween('tcs.date', startDate, endDate);
-                } else if (query && query.trim()) {
+                } else if (DataHub.hasValidQuery(query)) {
                     qb.whereLike('tcs.target_topic', query);
                 }
 
@@ -173,7 +182,7 @@ class DataHub {
 
                 if (startDate && endDate) {
                     qb.whereBetween('ml.scheduled_date', startDate, endDate);
-                } else if (query && query.trim()) {
+                } else if (DataHub.hasValidQuery(query)) {
                     // Search by student or class name when there's a query
                     qb.whereLike('s.name', query);
                 }
@@ -196,7 +205,7 @@ class DataHub {
 
                 if (startDate && endDate) {
                     qb.whereBetween('a.date', startDate, endDate);
-                } else if (query && query.trim()) {
+                } else if (DataHub.hasValidQuery(query)) {
                     // Search by student or class name when there's a query
                     qb.whereLike('s.name', query);
                 }
