@@ -29,7 +29,7 @@ jobs:
     
     # Only run if DATABASE_URL secret is configured
     # This prevents failures on forks without database access
-    if: ${{ secrets.DATABASE_URL != '' }}
+    if: secrets.DATABASE_URL != ''
     
     steps:
       - name: Checkout repository
