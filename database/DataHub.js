@@ -126,7 +126,12 @@ class DataHub {
                 const qb = new QueryBuilder('classes c');
                 qb.select('c.*', 'u.full_name as teacher_name')
                   .join('users u', 'c.teacher_id = u.id', 'LEFT');
-                qb.whereLike('c.name', query);
+                
+                // Only add search filter if query is not empty
+                if (query && query.trim()) {
+                    qb.whereLike('c.name', query);
+                }
+                
                 qb.where('c.active', '=', true);
                 qb.orderBy('c.name', 'ASC');
                 qb.paginate(page, 50);
@@ -137,8 +142,8 @@ class DataHub {
                 results.total += classResult.rows.length;
             }
 
-            // Search teacher comment sheets (if type is 'all' or 'teacher_comment_sheets')
-            if (type === 'all' || type === 'teacher_comment_sheets') {
+            // Search teacher comment sheets (if type is 'all' or 'teacher_comments' or 'teacher_comment_sheets')
+            if (type === 'all' || type === 'teacher_comments' || type === 'teacher_comment_sheets') {
                 const qb = new QueryBuilder('teacher_comment_sheets tcs');
                 qb.select('tcs.*', 'c.name as class_name', 'u.full_name as teacher_name')
                   .join('classes c', 'tcs.class_id = c.id', 'LEFT')
@@ -146,7 +151,7 @@ class DataHub {
 
                 if (startDate && endDate) {
                     qb.whereBetween('tcs.date', startDate, endDate);
-                } else {
+                } else if (query && query.trim()) {
                     qb.whereLike('tcs.target_topic', query);
                 }
 
@@ -168,6 +173,9 @@ class DataHub {
 
                 if (startDate && endDate) {
                     qb.whereBetween('ml.scheduled_date', startDate, endDate);
+                } else if (query && query.trim()) {
+                    // Search by student or class name when there's a query
+                    qb.whereLike('s.name', query);
                 }
 
                 qb.orderBy('ml.scheduled_date', 'DESC');
@@ -177,6 +185,29 @@ class DataHub {
                 const mlResult = await this.pool.query(mlQuery.text, mlQuery.values);
                 results.makeupLessons = mlResult.rows;
                 results.total += mlResult.rows.length;
+            }
+            
+            // Search attendance (if type is 'all' or 'attendance')
+            if (type === 'all' || type === 'attendance') {
+                const qb = new QueryBuilder('attendance a');
+                qb.select('a.*', 's.name as student_name', 'c.name as class_name')
+                  .join('students s', 'a.student_id = s.id', 'LEFT')
+                  .join('classes c', 'a.class_id = c.id', 'LEFT');
+
+                if (startDate && endDate) {
+                    qb.whereBetween('a.date', startDate, endDate);
+                } else if (query && query.trim()) {
+                    // Search by student or class name when there's a query
+                    qb.whereLike('s.name', query);
+                }
+
+                qb.orderBy('a.date', 'DESC');
+                qb.paginate(page, 50);
+
+                const attendanceQuery = qb.build();
+                const attendanceResult = await this.pool.query(attendanceQuery.text, attendanceQuery.values);
+                results.attendance = attendanceResult.rows;
+                results.total += attendanceResult.rows.length;
             }
 
             return results;

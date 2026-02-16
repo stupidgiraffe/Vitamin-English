@@ -590,20 +590,11 @@ async function initializeDatabasePage() {
         return;
     }
     
-    const DEFAULT_DATABASE_DAYS_BACK = 30;
-    
-    // Set default date range (last 30 days)
-    const today = new Date();
-    const daysAgo = new Date();
-    daysAgo.setDate(daysAgo.getDate() - DEFAULT_DATABASE_DAYS_BACK);
-    
-    document.getElementById('db-search-start-date').value = daysAgo.toISOString().split('T')[0];
-    document.getElementById('db-search-end-date').value = today.toISOString().split('T')[0];
-    
-    // Load recent attendance records by default
+    // Load all data types by default to show an overview
     try {
-        container.innerHTML = '<p class="info-text">Loading recent records...</p>';
-        document.getElementById('db-search-type').value = 'attendance';
+        container.innerHTML = '<p class="info-text">Loading database overview...</p>';
+        // Set type to empty string which will trigger "all" type search
+        document.getElementById('db-search-type').value = '';
         await searchDatabase();
     } catch (error) {
         console.error('Error loading initial database view:', error);
@@ -3162,15 +3153,17 @@ async function searchDatabase() {
         container.innerHTML = '<p class="info-text">Searching...</p>';
         
         const params = new URLSearchParams();
-        if (query) params.append('query', query);
         
-        // Smart default: if query exists but no type filter, default to students first
-        let searchType = type;
-        if (query && !type) {
-            searchType = 'students';
+        // Add query only if it exists
+        if (query) {
+            params.append('query', query);
         }
         
-        if (searchType) params.append('type', searchType);
+        // Add type - can be empty string for "All" filter
+        if (type) {
+            params.append('type', type);
+        }
+        
         if (startDate) params.append('startDate', startDate);
         if (endDate) params.append('endDate', endDate);
         
@@ -3179,9 +3172,9 @@ async function searchDatabase() {
         });
         
         // Store results for PDF export
-        currentSearchResults = results?.results || null;
+        currentSearchResults = results || null;
         
-        if (!results || !results.results || Object.keys(results.results).length === 0) {
+        if (!results || results.total === 0) {
             container.innerHTML = '<p class="info-text">No results found</p>';
             return;
         }
@@ -3190,52 +3183,52 @@ async function searchDatabase() {
         let totalResults = 0;
         
         // Display results grouped by type using clean table rendering
-        if (results.results.students && results.results.students.length > 0) {
-            totalResults += results.results.students.length;
-            html += `<h3>Students (${results.results.students.length})</h3>`;
-            html += renderCleanTable(results.results.students, 'students', { includeSelection: true });
+        if (results.students && results.students.length > 0) {
+            totalResults += results.students.length;
+            html += `<h3>Students (${results.students.length})</h3>`;
+            html += renderCleanTable(results.students, 'students', { includeSelection: true });
             html += '<br>';
         }
         
-        if (results.results.teachers && results.results.teachers.length > 0) {
-            totalResults += results.results.teachers.length;
-            html += `<h3>Teachers (${results.results.teachers.length})</h3>`;
-            html += renderCleanTable(results.results.teachers, 'teachers');
+        if (results.teachers && results.teachers.length > 0) {
+            totalResults += results.teachers.length;
+            html += `<h3>Teachers (${results.teachers.length})</h3>`;
+            html += renderCleanTable(results.teachers, 'teachers');
             html += '<br>';
         }
         
-        if (results.results.classes && results.results.classes.length > 0) {
-            totalResults += results.results.classes.length;
-            html += `<h3>Classes (${results.results.classes.length})</h3>`;
-            html += renderCleanTable(results.results.classes, 'classes');
+        if (results.classes && results.classes.length > 0) {
+            totalResults += results.classes.length;
+            html += `<h3>Classes (${results.classes.length})</h3>`;
+            html += renderCleanTable(results.classes, 'classes');
             html += '<br>';
         }
         
-        if (results.results.attendance && results.results.attendance.length > 0) {
-            totalResults += results.results.attendance.length;
-            html += `<h3>Attendance (${results.results.attendance.length})</h3>`;
-            html += renderCleanTable(results.results.attendance, 'attendance');
+        if (results.attendance && results.attendance.length > 0) {
+            totalResults += results.attendance.length;
+            html += `<h3>Attendance (${results.attendance.length})</h3>`;
+            html += renderCleanTable(results.attendance, 'attendance');
             html += '<br>';
         }
         
-        if (results.results.teacher_comments && results.results.teacher_comments.length > 0) {
-            totalResults += results.results.teacher_comments.length;
-            html += `<h3>Teacher Comment Sheets (${results.results.teacher_comments.length})</h3>`;
-            html += renderCleanTable(results.results.teacher_comments, 'teacher_comment_sheets', { includeSelection: true });
+        if (results.teacherCommentSheets && results.teacherCommentSheets.length > 0) {
+            totalResults += results.teacherCommentSheets.length;
+            html += `<h3>Teacher Comment Sheets (${results.teacherCommentSheets.length})</h3>`;
+            html += renderCleanTable(results.teacherCommentSheets, 'teacher_comment_sheets', { includeSelection: true });
             html += '<br>';
         }
         
-        if (results.results.monthly_reports && results.results.monthly_reports.length > 0) {
-            totalResults += results.results.monthly_reports.length;
-            html += `<h3>Monthly Reports (${results.results.monthly_reports.length})</h3>`;
-            html += renderCleanTable(results.results.monthly_reports, 'monthly_reports', { includeSelection: true });
+        if (results.monthly_reports && results.monthly_reports.length > 0) {
+            totalResults += results.monthly_reports.length;
+            html += `<h3>Monthly Reports (${results.monthly_reports.length})</h3>`;
+            html += renderCleanTable(results.monthly_reports, 'monthly_reports', { includeSelection: true });
             html += '<br>';
         }
         
-        if (results.results.makeup_lessons && results.results.makeup_lessons.length > 0) {
-            totalResults += results.results.makeup_lessons.length;
-            html += `<h3>Make-up Lessons (${results.results.makeup_lessons.length})</h3>`;
-            html += renderCleanTable(results.results.makeup_lessons, 'makeup_lessons');
+        if (results.makeupLessons && results.makeupLessons.length > 0) {
+            totalResults += results.makeupLessons.length;
+            html += `<h3>Make-up Lessons (${results.makeupLessons.length})</h3>`;
+            html += renderCleanTable(results.makeupLessons, 'makeup_lessons');
             html += '<br>';
         }
         
