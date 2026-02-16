@@ -32,26 +32,24 @@ async function seedSchoolData() {
         
         const classIds = {};
         for (const cls of classes) {
-            const result = await client.query(
-                `INSERT INTO classes (name, teacher_id, schedule, color, active) 
-                 VALUES ($1, $2, $3, $4, $5) 
-                 ON CONFLICT DO NOTHING
-                 RETURNING id, name`,
-                [cls.name, teacherId, cls.schedule, cls.color, true]
+            // Check if class already exists
+            const existing = await client.query(
+                'SELECT id FROM classes WHERE name = $1 AND active = true',
+                [cls.name]
             );
-            if (result.rows.length > 0) {
+            
+            if (existing.rows.length > 0) {
+                classIds[cls.name] = existing.rows[0].id;
+                console.log(`⚠️  Class ${cls.name} already exists (ID: ${existing.rows[0].id})`);
+            } else {
+                const result = await client.query(
+                    `INSERT INTO classes (name, teacher_id, schedule, color, active) 
+                     VALUES ($1, $2, $3, $4, $5) 
+                     RETURNING id, name`,
+                    [cls.name, teacherId, cls.schedule, cls.color, true]
+                );
                 classIds[cls.name] = result.rows[0].id;
                 console.log(`✅ Created class: ${result.rows[0].name} (ID: ${result.rows[0].id})`);
-            } else {
-                // If ON CONFLICT occurred, try to fetch existing
-                const existing = await client.query(
-                    'SELECT id FROM classes WHERE name = $1 AND active = true',
-                    [cls.name]
-                );
-                if (existing.rows.length > 0) {
-                    classIds[cls.name] = existing.rows[0].id;
-                    console.log(`⚠️  Class ${cls.name} already exists (ID: ${existing.rows[0].id})`);
-                }
             }
         }
         
@@ -183,7 +181,6 @@ async function seedSchoolData() {
             const result = await client.query(
                 `INSERT INTO students (name, class_id, email, phone, parent_name, parent_phone, parent_email, notes, active) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-                 ON CONFLICT DO NOTHING
                  RETURNING id, name`,
                 [
                     student.name, 
@@ -197,10 +194,8 @@ async function seedSchoolData() {
                     true
                 ]
             );
-            if (result.rows.length > 0) {
-                studentIds[student.name] = { id: result.rows[0].id, classId: classId, className: student.class };
-                console.log(`✅ Created student: ${result.rows[0].name} (ID: ${result.rows[0].id})`);
-            }
+            studentIds[student.name] = { id: result.rows[0].id, classId: classId, className: student.class };
+            console.log(`✅ Created student: ${result.rows[0].name} (ID: ${result.rows[0].id})`);
         }
         
         // Create sample attendance records for the past 2 weeks (10 weekdays)
@@ -327,8 +322,7 @@ async function seedSchoolData() {
             
             await client.query(
                 `INSERT INTO makeup_lessons (student_id, class_id, scheduled_date, scheduled_time, reason, status, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT DO NOTHING`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [
                     student1.id,
                     student1.classId,
@@ -342,8 +336,7 @@ async function seedSchoolData() {
             
             await client.query(
                 `INSERT INTO makeup_lessons (student_id, class_id, scheduled_date, scheduled_time, reason, status, notes)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                 ON CONFLICT DO NOTHING`,
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
                 [
                     student2.id,
                     student2.classId,
