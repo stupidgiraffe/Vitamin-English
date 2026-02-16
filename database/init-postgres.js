@@ -2,6 +2,7 @@ const bcrypt = require('bcrypt');
 const pool = require('./connection');
 const fs = require('fs');
 const path = require('path');
+const { seedSchoolData } = require('./seed-school-data');
 
 // Default user credentials
 const DEFAULT_ADMIN_PASSWORD = 'admin123';
@@ -106,6 +107,9 @@ async function initializeDatabase() {
                 console.log('✅ Teacher user created');
             }
             
+            // Check if school data needs to be seeded (check if core tables are empty)
+            await seedSchoolDataIfNeeded();
+            
             return;
         }
         
@@ -131,10 +135,46 @@ async function initializeDatabase() {
         
         console.log('✅ Database initialization complete!');
         
+        // After creating users, check if school data needs to be seeded
+        await seedSchoolDataIfNeeded();
+        
     } catch (error) {
         console.error('❌ Database initialization error:', error);
         console.error('   Stack trace:', error.stack);
         // Don't throw - let app continue even if init fails
+    }
+}
+
+/**
+ * Check if core school data tables are empty and seed them if needed
+ * This runs automatically unless SEED_ON_STARTUP is set to 'false'
+ */
+async function seedSchoolDataIfNeeded() {
+    try {
+        // Skip auto-seeding if SEED_ON_STARTUP is explicitly set to 'false'
+        if (process.env.SEED_ON_STARTUP === 'false') {
+            console.log('📊 Auto-seeding disabled by SEED_ON_STARTUP=false');
+            return;
+        }
+        
+        // Check if core tables (students, classes) are empty
+        const studentsResult = await pool.query('SELECT COUNT(*) as count FROM students WHERE active = true');
+        const classesResult = await pool.query('SELECT COUNT(*) as count FROM classes WHERE active = true');
+        
+        const studentCount = parseInt(studentsResult.rows[0].count);
+        const classCount = parseInt(classesResult.rows[0].count);
+        
+        if (studentCount === 0 && classCount === 0) {
+            console.log('📊 Core tables are empty, seeding school data...');
+            await seedSchoolData();
+            console.log('✅ School data seeded successfully');
+        } else {
+            console.log(`📊 Database has ${classCount} classes and ${studentCount} students, skipping school data seed`);
+        }
+    } catch (error) {
+        console.error('❌ Failed to seed school data:', error);
+        console.error('Stack trace:', error.stack);
+        // Don't throw - let app continue even if seeding fails
     }
 }
 
@@ -188,4 +228,4 @@ async function verifyDatabaseSchema() {
     }
 }
 
-module.exports = { initializeDatabase, verifyDatabaseSchema, createSchemaIfNeeded };
+module.exports = { initializeDatabase, verifyDatabaseSchema, createSchemaIfNeeded, seedSchoolDataIfNeeded };

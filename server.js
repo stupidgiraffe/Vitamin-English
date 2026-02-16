@@ -10,7 +10,6 @@ const dataHub = require('./database/DataHub');
 const pool = require('./database/init');
 const { initializeDatabase, verifyDatabaseSchema } = require('./database/init-postgres');
 const { ensureSchemaColumns } = require('./database/schema-guard');
-const { seedTestData } = require('./database/seed-test-data');
 const { sanitizeInput } = require('./middleware/sanitize');
 
 const app = express();
@@ -175,43 +174,16 @@ const pdfRoutes = require('./routes/pdf');
 const adminRoutes = require('./routes/admin');
 const monthlyReportsRoutes = require('./routes/monthlyReports');
 
-// Auto-load test data on startup if database is empty (controlled by SEED_ON_STARTUP env var)
-async function initializeTestData() {
-    try {
-        // Skip auto-seeding if SEED_ON_STARTUP is explicitly set to 'false'
-        if (process.env.SEED_ON_STARTUP === 'false') {
-            console.log('📊 Auto-seeding disabled by SEED_ON_STARTUP=false');
-            return;
-        }
-        
-        // Check if database has any classes
-        const classCount = await dataHub.classes.count({ active: true });
-        
-        if (classCount === 0) {
-            console.log('📊 Database is empty, loading test data...');
-            await seedTestData();
-            console.log('✅ Test data loaded successfully');
-        } else {
-            console.log(`📊 Database has ${classCount} classes, skipping test data load`);
-        }
-    } catch (error) {
-        console.error('❌ Failed to initialize test data:', error);
-        console.error('Stack trace:', error.stack);
-    }
-}
-
 // Initialize database with default users and ensure schema columns exist
 // Note: Errors are caught and logged but don't stop the server
 // This allows the app to start even if initialization fails (e.g., DB already has users)
+// The initializeDatabase() function now handles both user creation AND auto-seeding of school data
 initializeDatabase().then(() => {
     if (pool) {
         // Run schema guard to ensure required columns exist (Postgres only)
         ensureSchemaColumns().then(() => {
-            // Verify database schema and auto-load test data
+            // Verify database schema
             verifyDatabaseSchema();
-            initializeTestData().catch(err => {
-                console.error('Test data initialization failed:', err);
-            });
         }).catch(err => {
             console.error('Schema guard failed:', err);
         });

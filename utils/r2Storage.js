@@ -1,10 +1,21 @@
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
+// Construct R2 endpoint from account ID if not explicitly provided
+function getR2Endpoint() {
+    if (process.env.R2_ENDPOINT) {
+        return process.env.R2_ENDPOINT;
+    }
+    if (process.env.R2_ACCOUNT_ID) {
+        return `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
+    }
+    return null;
+}
+
 // Initialize S3 client for Cloudflare R2
 const r2Client = new S3Client({
     region: 'auto',
-    endpoint: process.env.R2_ENDPOINT,
+    endpoint: getR2Endpoint(),
     credentials: {
         accessKeyId: process.env.R2_ACCESS_KEY_ID,
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
@@ -134,12 +145,15 @@ async function listPDFs(prefix = 'pdfs/', maxKeys = 100) {
  * @returns {Boolean} True if configured, false otherwise
  */
 function isConfigured() {
-    return !!(
-        process.env.R2_ENDPOINT &&
+    // Need either R2_ENDPOINT or R2_ACCOUNT_ID to construct endpoint
+    const hasEndpoint = !!(process.env.R2_ENDPOINT || process.env.R2_ACCOUNT_ID);
+    const hasCredentials = !!(
         process.env.R2_ACCESS_KEY_ID &&
         process.env.R2_SECRET_ACCESS_KEY &&
         process.env.R2_BUCKET_NAME
     );
+    
+    return hasEndpoint && hasCredentials;
 }
 
 module.exports = {
