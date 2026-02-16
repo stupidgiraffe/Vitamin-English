@@ -2,7 +2,18 @@ const express = require('express');
 const router = express.Router();
 const dataHub = require('../database/DataHub');
 const { generateMonthlyReportPDF } = require('../utils/monthlyReportPdf');
-const { uploadPDF, getDownloadUrl } = require('../utils/r2Storage');
+const { uploadPDF, getDownloadUrl, isConfigured } = require('../utils/r2Storage');
+
+// Middleware to check if R2 is configured
+const checkR2Config = (req, res, next) => {
+    if (!isConfigured()) {
+        return res.status(503).json({ 
+            error: 'PDF storage not configured',
+            message: 'Cloudflare R2 credentials are not set. Please configure R2_* environment variables.'
+        });
+    }
+    next();
+};
 
 /**
  * GET /api/monthly-reports
@@ -665,7 +676,7 @@ router.delete('/:id', async (req, res) => {
  * POST /api/monthly-reports/:id/generate-pdf
  * Generate PDF for monthly report
  */
-router.post('/:id/generate-pdf', async (req, res) => {
+router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
     try {
         // Get report data
         const reportResult = await pool.query(`
