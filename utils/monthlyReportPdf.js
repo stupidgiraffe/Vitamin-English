@@ -191,7 +191,30 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const tableTop = currentY + 10;
             const numColumns = sortedWeeks.length + 1; // +1 for category column
             const colWidth = contentWidth / numColumns;
-            const rowHeight = 65;
+            
+            // Responsive sizing based on number of date columns
+            const numDates = sortedWeeks.length;
+            let headerFontSize, contentFontSize, rowHeight, categoryFontSize;
+            
+            if (numDates <= 4) {
+                // Few columns: larger, more spacious
+                headerFontSize = 11;
+                contentFontSize = 9;
+                categoryFontSize = 9;
+                rowHeight = 70;
+            } else if (numDates <= 6) {
+                // Medium number of columns: balanced
+                headerFontSize = 10;
+                contentFontSize = 8;
+                categoryFontSize = 8;
+                rowHeight = 65;
+            } else {
+                // Many columns: compact but still readable
+                headerFontSize = 9;
+                contentFontSize = 7;
+                categoryFontSize = 7;
+                rowHeight = 60;
+            }
             
             // Category labels (bilingual) - REMOVED Date row as dates are in header
             const categories = [
@@ -207,21 +230,48 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             doc.rect(margin, currentY, contentWidth, rowHeight)
                .fillAndStroke('#4A90E2', '#2C5AA0');
             
-            doc.fontSize(9)
+            doc.fontSize(headerFontSize)
                .fillColor('#FFFFFF')
                .font('Helvetica-Bold');
             
             // Empty top-left cell (for category labels column)
-            let xPos = margin + 5;
+            let xPos = margin;
+            
+            // Category column header - centered
+            doc.text('', xPos + 5, currentY + rowHeight / 2 - headerFontSize / 2, { 
+                width: colWidth - 10, 
+                align: 'center' 
+            });
             xPos += colWidth;
             
-            // Date headers - vertically centered
+            // Date headers - use two-line format if many dates to save space
             sortedWeeks.forEach((week) => {
                 const dateText = formatDate(week.lesson_date);
-                doc.text(dateText, xPos, currentY + rowHeight / 2 - 6, { 
-                    width: colWidth - 10, 
-                    align: 'center' 
-                });
+                
+                // For many columns (>8), split date into two lines for better fit
+                if (numDates > 8) {
+                    const parts = dateText.split(' ');
+                    if (parts.length === 2) {
+                        // E.g., "Feb. 3" becomes "Feb.\n3"
+                        const twoLineDate = parts[0] + '\n' + parts[1];
+                        doc.text(twoLineDate, xPos + 5, currentY + rowHeight / 2 - headerFontSize, { 
+                            width: colWidth - 10, 
+                            align: 'center',
+                            lineGap: 2
+                        });
+                    } else {
+                        doc.text(dateText, xPos + 5, currentY + rowHeight / 2 - headerFontSize / 2, { 
+                            width: colWidth - 10, 
+                            align: 'center' 
+                        });
+                    }
+                } else {
+                    // Single line for fewer columns
+                    doc.text(dateText, xPos + 5, currentY + rowHeight / 2 - headerFontSize / 2, { 
+                        width: colWidth - 10, 
+                        align: 'center' 
+                    });
+                }
                 xPos += colWidth;
             });
             
@@ -236,19 +286,19 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                    .fillAndStroke(category.color, '#2C5AA0');
                 
                 // Category label (bilingual) - use Japanese font for Japanese text
-                xPos = margin + 5;
-                doc.fontSize(8)
+                xPos = margin;
+                doc.fontSize(categoryFontSize)
                    .fillColor('#000000')
                    .font('Helvetica-Bold')
-                   .text(category.en, xPos, rowY + 10, { 
+                   .text(category.en, xPos + 5, rowY + 10, { 
                        width: colWidth - 10, 
                        align: 'center' 
                    });
                 // Use Japanese font for Japanese labels
                 doc.font('NotoJP')
-                   .fontSize(7)
+                   .fontSize(categoryFontSize - 1)
                    .fillColor('#000000')
-                   .text(`(${category.jp})`, xPos, rowY + 25, { 
+                   .text(`(${category.jp})`, xPos + 5, rowY + 10 + categoryFontSize + 3, { 
                        width: colWidth - 10, 
                        align: 'center' 
                    });
@@ -273,19 +323,24 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                         cellText = sanitizeForPDF(week.others);
                     }
                     
-                    // Wrap and truncate text
-                    const wrappedText = wrapText(cellText, 20);
-                    const lines = wrappedText.split('\n').slice(0, 4); // Max 4 lines
+                    // Calculate appropriate character wrap length based on column width
+                    // Approximate character width at current font size (conservative estimate)
+                    const APPROX_CHAR_WIDTH_PT = 5; // Works for 7-9pt fonts
+                    const maxCharsPerLine = Math.floor((colWidth - 10) / (contentFontSize * APPROX_CHAR_WIDTH_PT / 10));
+                    const wrappedText = wrapText(cellText, Math.max(maxCharsPerLine, 10));
+                    const maxLines = Math.floor((rowHeight - 16) / (contentFontSize + 2));
+                    const lines = wrappedText.split('\n').slice(0, maxLines);
                     
                     // Use dark text (#000000) for maximum readability
-                    // Increased font size from 7 to 8 for better readability
-                    doc.fontSize(8)
+                    // Left-aligned for consistency and better readability
+                    doc.fontSize(contentFontSize)
                        .fillColor('#000000')
                        .font('NotoJP') // Use Japanese font for all content
                        .text(lines.join('\n'), xPos + 5, rowY + 8, { 
                            width: colWidth - 10,
                            height: rowHeight - 16,
-                           align: 'left'
+                           align: 'left',
+                           lineGap: 2
                        });
                     
                     xPos += colWidth;
