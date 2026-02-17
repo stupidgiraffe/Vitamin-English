@@ -132,7 +132,11 @@ class StudentRepository extends BaseRepository {
         qb.select('s.*', 'c.name as class_name')
           .join('classes c', 's.class_id = c.id', 'LEFT');
         
-        qb.whereLike('s.name', searchTerm);
+        // Only add search filter if searchTerm is not empty
+        if (searchTerm && searchTerm.trim().length > 0) {
+            qb.whereLike('s.name', searchTerm);
+        }
+        
         qb.where('s.active', '=', true);
         qb.orderBy('s.name', 'ASC');
         qb.paginate(page, perPage);

@@ -12,6 +12,10 @@ const THEME = {
         textDark: '#333333',
         textSecondary: '#6c757d',
         white: '#FFFFFF'
+    },
+    opacity: {
+        cardBackground: 0.3,
+        full: 1
     }
 };
 
@@ -37,7 +41,10 @@ function sanitizeForPDF(text) {
 async function generateStudentAttendancePDF(studentData, attendanceRecords) {
     return new Promise((resolve, reject) => {
         try {
-            const doc = new PDFDocument({ margin: 50 });
+            const doc = new PDFDocument({ 
+                margin: 50,
+                size: 'A4'
+            });
             const buffers = [];
             
             doc.on('data', (chunk) => buffers.push(chunk));
@@ -47,124 +54,261 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
             });
             doc.on('error', reject);
             
-            // Header
-            doc.fontSize(24)
+            // Helper function to format dates nicely
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '';
+                try {
+                    const date = new Date(dateStr);
+                    if (isNaN(date.getTime())) return dateStr;
+                    return date.toLocaleDateString('en-US', { 
+                        weekday: 'short',
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                    });
+                } catch (e) {
+                    return dateStr;
+                }
+            };
+            
+            // Calculate attendance statistics
+            let presentCount = 0;
+            let absentCount = 0;
+            let lateCount = 0;
+            
+            if (attendanceRecords && attendanceRecords.length > 0) {
+                attendanceRecords.forEach(record => {
+                    if (record.status === 'O') presentCount++;
+                    else if (record.status === 'X') absentCount++;
+                    else if (record.status === '/') lateCount++;
+                });
+            }
+            
+            const totalRecords = attendanceRecords?.length || 0;
+            const attendanceRate = totalRecords > 0 
+                ? ((presentCount / totalRecords) * 100).toFixed(1)
+                : 0;
+            
+            // Page header with branding
+            doc.rect(0, 0, doc.page.width, 80)
+               .fill(THEME.colors.primaryBlue);
+            
+            doc.fontSize(28)
                .font('Helvetica-Bold')
-               .text('Vitamin English School', { align: 'center' });
+               .fillColor(THEME.colors.white)
+               .text('Vitamin English School', 50, 25, { align: 'center' });
             
-            doc.moveDown(0.5);
-            doc.fontSize(18)
-               .text('Student Attendance Report', { align: 'center' });
+            doc.fontSize(14)
+               .font('Helvetica')
+               .text('Student Profile Report', 50, 55, { align: 'center' });
             
-            doc.moveDown(1);
+            // Report date in top right
+            doc.fontSize(9)
+               .text(`Generated: ${formatDate(new Date().toISOString())}`, doc.page.width - 200, 30, { 
+                   width: 150,
+                   align: 'right'
+               });
             
-            // Student Information
-            doc.fontSize(12)
+            // Reset to main content
+            doc.fillColor(THEME.colors.textDark);
+            doc.y = 110;
+            
+            // Student Information Card - with background
+            const studentInfoTop = doc.y;
+            doc.rect(50, studentInfoTop, doc.page.width - 100, 110)
+               .fill(THEME.colors.accentYellow);
+            
+            doc.fillColor(THEME.colors.textDark);
+            doc.fontSize(16)
                .font('Helvetica-Bold')
-               .text('Student Information:', { underline: true });
+               .text('Student Information', 70, studentInfoTop + 15);
             
-            doc.moveDown(0.5);
-            doc.font('Helvetica')
-               .text(`Name: ${studentData.name}`, { indent: 20 })
-               .text(`Class: ${studentData.class_name || ''}`, { indent: 20 })
-               .text(`Student Type: ${studentData.student_type || 'regular'}`, { indent: 20 });
+            doc.fontSize(11)
+               .font('Helvetica')
+               .text(`Name: ${sanitizeForPDF(studentData.name)}`, 70, studentInfoTop + 40)
+               .text(`Class: ${sanitizeForPDF(studentData.class_name || 'N/A')}`, 70, studentInfoTop + 55)
+               .text(`Student Type: ${sanitizeForPDF(studentData.student_type || 'Regular')}`, 70, studentInfoTop + 70);
             
             if (studentData.email) {
-                doc.text(`Email: ${studentData.email}`, { indent: 20 });
+                doc.text(`Email: ${sanitizeForPDF(studentData.email)}`, 300, studentInfoTop + 40);
             }
             if (studentData.phone) {
-                doc.text(`Phone: ${studentData.phone}`, { indent: 20 });
+                doc.text(`Phone: ${sanitizeForPDF(studentData.phone)}`, 300, studentInfoTop + 55);
+            }
+            if (studentData.enrollment_date) {
+                doc.text(`Enrolled: ${formatDate(studentData.enrollment_date)}`, 300, studentInfoTop + 70);
             }
             
-            doc.moveDown(1);
+            doc.y = studentInfoTop + 130;
             
-            // Attendance Records
-            doc.fontSize(12)
+            // Attendance Summary Card
+            const summaryTop = doc.y;
+            doc.rect(50, summaryTop, doc.page.width - 100, 90)
+               .fill(THEME.colors.lightBlue)
+               .fillOpacity(THEME.opacity.cardBackground);
+            
+            doc.fillOpacity(THEME.opacity.full);
+            doc.fillColor(THEME.colors.textDark);
+            doc.fontSize(16)
                .font('Helvetica-Bold')
-               .text('Attendance Records:', { underline: true });
+               .text('Attendance Summary', 70, summaryTop + 15);
+            
+            doc.fontSize(11)
+               .font('Helvetica');
+            
+            // Summary stats in two columns
+            const col1X = 70;
+            const col2X = 300;
+            const statY = summaryTop + 45;
+            
+            doc.text(`Total Classes: ${totalRecords}`, col1X, statY)
+               .fillColor('#28a745')
+               .text(`✓ Present: ${presentCount}`, col1X, statY + 15)
+               .fillColor('#dc3545')
+               .text(`✗ Absent: ${absentCount}`, col1X, statY + 30);
+            
+            doc.fillColor('#ffc107')
+               .text(`⚠ Late: ${lateCount}`, col2X, statY + 15);
+            
+            doc.fillColor(THEME.colors.textDark)
+               .font('Helvetica-Bold')
+               .fontSize(13)
+               .text(`Attendance Rate: ${attendanceRate}%`, col2X, statY, {
+                   width: 200
+               });
+            
+            doc.y = summaryTop + 110;
+            
+            // Attendance History Table
+            doc.fillColor(THEME.colors.textDark);
+            doc.fontSize(16)
+               .font('Helvetica-Bold')
+               .text('Attendance History', 50, doc.y);
             
             doc.moveDown(0.5);
             
             if (attendanceRecords && attendanceRecords.length > 0) {
-                // Table headers
                 const tableTop = doc.y;
-                const dateX = 70;
-                const statusX = 200;
-                const notesX = 280;
+                const rowHeight = 25;
+                const dateX = 60;
+                const dayX = 160;
+                const statusX = 260;
+                const notesX = 360;
+                const tableWidth = doc.page.width - 100;
                 
-                doc.font('Helvetica-Bold')
-                   .text('Date', dateX, tableTop)
-                   .text('Status', statusX, tableTop)
-                   .text('Notes', notesX, tableTop);
+                // Table header with blue background
+                doc.rect(50, tableTop, tableWidth, rowHeight)
+                   .fill(THEME.colors.primaryBlue);
                 
-                doc.moveDown(0.5);
+                doc.fillColor(THEME.colors.white)
+                   .font('Helvetica-Bold')
+                   .fontSize(10)
+                   .text('Date', dateX, tableTop + 8)
+                   .text('Day', dayX, tableTop + 8)
+                   .text('Status', statusX, tableTop + 8)
+                   .text('Notes', notesX, tableTop + 8);
                 
-                // Draw line under headers
-                doc.moveTo(50, doc.y)
-                   .lineTo(550, doc.y)
-                   .stroke();
+                doc.y = tableTop + rowHeight;
                 
-                doc.moveDown(0.3);
-                
-                // Table rows
-                doc.font('Helvetica');
-                let presentCount = 0;
-                let absentCount = 0;
-                let lateCount = 0;
-                
+                // Table rows with alternating colors
                 attendanceRecords.forEach((record, index) => {
-                    if (doc.y > 700) {
+                    // Check if we need a new page
+                    if (doc.y > doc.page.height - 100) {
                         doc.addPage();
                         doc.y = 50;
                     }
                     
                     const rowY = doc.y;
-                    const statusText = record.status === 'O' ? 'Present' : 
-                                     record.status === 'X' ? 'Absent' : 
-                                     record.status === '/' ? 'Late/Partial' : 'Not marked';
                     
-                    if (record.status === 'O') presentCount++;
-                    else if (record.status === 'X') absentCount++;
-                    else if (record.status === '/') lateCount++;
+                    // Alternating row background
+                    if (index % 2 === 0) {
+                        doc.rect(50, rowY, tableWidth, rowHeight)
+                           .fill('#f8f9fa');
+                    }
                     
-                    doc.text(record.date || '', dateX, rowY)
-                       .text(statusText, statusX, rowY)
-                       .text(record.notes || '', notesX, rowY, { width: 250 });
+                    // Format date nicely
+                    const dateStr = formatDate(record.date);
                     
-                    doc.moveDown(0.5);
+                    // Get day of week
+                    let dayOfWeek = '';
+                    try {
+                        const date = new Date(record.date);
+                        if (!isNaN(date.getTime())) {
+                            dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
+                        }
+                    } catch (e) {
+                        dayOfWeek = '';
+                    }
+                    
+                    // Status with color coding
+                    let statusText = 'Not marked';
+                    let statusColor = THEME.colors.textSecondary;
+                    
+                    if (record.status === 'O') {
+                        statusText = '✓ Present';
+                        statusColor = '#28a745'; // Green
+                    } else if (record.status === 'X') {
+                        statusText = '✗ Absent';
+                        statusColor = '#dc3545'; // Red
+                    } else if (record.status === '/') {
+                        statusText = '⚠ Late';
+                        statusColor = '#ffc107'; // Yellow
+                    }
+                    
+                    // Draw row content
+                    doc.fillColor(THEME.colors.textDark)
+                       .font('Helvetica')
+                       .fontSize(9)
+                       .text(dateStr, dateX, rowY + 8, { width: 90 })
+                       .text(dayOfWeek, dayX, rowY + 8, { width: 90 });
+                    
+                    doc.fillColor(statusColor)
+                       .font('Helvetica-Bold')
+                       .text(statusText, statusX, rowY + 8, { width: 90 });
+                    
+                    doc.fillColor(THEME.colors.textDark)
+                       .font('Helvetica')
+                       .text(sanitizeForPDF(record.notes || ''), notesX, rowY + 8, { 
+                           width: doc.page.width - notesX - 50,
+                           height: rowHeight - 4
+                       });
+                    
+                    // Draw row border
+                    doc.strokeColor('#dee2e6')
+                       .lineWidth(0.5)
+                       .moveTo(50, rowY + rowHeight)
+                       .lineTo(doc.page.width - 50, rowY + rowHeight)
+                       .stroke();
+                    
+                    doc.y = rowY + rowHeight;
                 });
-                
-                doc.moveDown(1);
-                
-                // Summary statistics
-                doc.font('Helvetica-Bold')
-                   .text('Summary:', { underline: true });
-                
-                doc.moveDown(0.3);
-                doc.font('Helvetica')
-                   .text(`Total Records: ${attendanceRecords.length}`, { indent: 20 })
-                   .text(`Present: ${presentCount}`, { indent: 20 })
-                   .text(`Absent: ${absentCount}`, { indent: 20 })
-                   .text(`Late/Partial: ${lateCount}`, { indent: 20 });
-                
-                const attendanceRate = attendanceRecords.length > 0 
-                    ? ((presentCount / attendanceRecords.length) * 100).toFixed(1)
-                    : 0;
-                
-                doc.moveDown(0.3);
-                doc.font('Helvetica-Bold')
-                   .text(`Attendance Rate: ${attendanceRate}%`, { indent: 20 });
             } else {
-                doc.font('Helvetica')
-                   .text('No attendance records found.', { indent: 20 });
+                doc.fillColor(THEME.colors.textSecondary)
+                   .font('Helvetica')
+                   .fontSize(11)
+                   .text('No attendance records found.', 70, doc.y);
             }
             
-            // Footer
-            doc.fontSize(10)
-               .font('Helvetica')
-               .text(`Generated on: ${new Date().toLocaleDateString()}`, 50, doc.page.height - 50, { 
-                   align: 'center' 
-               });
+            // Footer on every page
+            const pageCount = doc.bufferedPageRange().count;
+            for (let i = 0; i < pageCount; i++) {
+                doc.switchToPage(i);
+                
+                // Footer line
+                doc.strokeColor(THEME.colors.primaryBlue)
+                   .lineWidth(2)
+                   .moveTo(50, doc.page.height - 40)
+                   .lineTo(doc.page.width - 50, doc.page.height - 40)
+                   .stroke();
+                
+                doc.fontSize(8)
+                   .fillColor(THEME.colors.textSecondary)
+                   .font('Helvetica')
+                   .text(`Page ${i + 1} of ${pageCount}`, 50, doc.page.height - 30, {
+                       width: doc.page.width - 100,
+                       align: 'center'
+                   });
+            }
             
             doc.end();
         } catch (error) {
