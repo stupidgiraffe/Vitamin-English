@@ -3617,30 +3617,23 @@ async function exportSelectedItems(type, selectedIds) {
     let successCount = 0;
     for (const id of selectedIds) {
         try {
+            let endpoint;
             if (type === 'students') {
-                const response = await api(`/pdf/student-attendance/${id}`, { method: 'POST' });
-                if (response.downloadUrl) {
-                    window.open(response.downloadUrl, '_blank');
-                    successCount++;
-                    // Small delay to avoid popup blockers
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                endpoint = `/pdf/student-attendance/${id}`;
             } else if (type === 'reports' || type === 'teacher_comment_sheets') {
-                const response = await api(`/pdf/lesson-report/${id}`, { method: 'POST' });
-                if (response.downloadUrl) {
-                    window.open(response.downloadUrl, '_blank');
-                    successCount++;
-                    // Small delay to avoid popup blockers
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                endpoint = `/pdf/lesson-report/${id}`;
             } else if (type === 'monthly_reports') {
-                const response = await api(`/monthly-reports/${id}/generate-pdf`, { method: 'POST' });
-                if (response.downloadUrl) {
-                    window.open(response.downloadUrl, '_blank');
-                    successCount++;
-                    // Small delay to avoid popup blockers
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                endpoint = `/monthly-reports/${id}/generate-pdf`;
+            } else {
+                continue; // Skip unsupported types
+            }
+            
+            const response = await api(endpoint, { method: 'POST' });
+            if (response.downloadUrl) {
+                window.open(response.downloadUrl, '_blank');
+                successCount++;
+                // Small delay to avoid popup blockers
+                await new Promise(resolve => setTimeout(resolve, 100));
             }
         } catch (error) {
             console.error(`Failed to export ${type} ${id}:`, error);
