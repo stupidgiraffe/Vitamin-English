@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const dataHub = require('../database/DataHub');
+const pool = dataHub.pool; // Reference to the connection pool
 const { generateMonthlyReportPDF } = require('../utils/monthlyReportPdf');
 const { uploadPDF, getDownloadUrl, isConfigured } = require('../utils/r2Storage');
 
