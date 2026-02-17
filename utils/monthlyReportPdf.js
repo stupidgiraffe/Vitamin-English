@@ -301,9 +301,10 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                     }
                     
                     // Calculate max characters per line based on column width
-                    // Approximate character width in points (assumes ~5 points per character)
-                    const APPROX_CHAR_WIDTH_PX = 5;
-                    const charsPerLine = Math.floor(colWidth / APPROX_CHAR_WIDTH_PX);
+                    // Approximate character width in points for the fonts used (NotoJP/Helvetica)
+                    // This is a conservative estimate that works across both fonts at size 7-8pt
+                    const APPROX_CHAR_WIDTH_PT = 5;
+                    const charsPerLine = Math.floor(colWidth / APPROX_CHAR_WIDTH_PT);
                     const wrappedText = wrapText(cellText, charsPerLine);
                     const lines = wrappedText.split('\n').slice(0, 4); // Max 4 lines
                     
