@@ -499,19 +499,22 @@ async function handleUpdateMonthlyReport(e) {
 // Generate PDF for monthly report
 async function generateMonthlyReportPDF(reportId) {
     try {
-        Toast.info('Generating PDF...');
+        Toast.info('Generating new PDF... This will create a fresh copy.');
         
         const response = await api(`/monthly-reports/${reportId}/generate-pdf`, {
             method: 'POST'
         });
         
-        Toast.success('PDF generated successfully!');
+        Toast.success('PDF generated successfully! Opening in new tab...');
         
-        // Open PDF in new tab
-        if (response.pdfUrl) {
-            window.open(response.pdfUrl, '_blank');
-        }
+        // Brief delay so user can see the success message
+        setTimeout(() => {
+            if (response.pdfUrl) {
+                window.open(response.pdfUrl, '_blank');
+            }
+        }, 500);
         
+        // Reload to show updated PDF status
         loadMonthlyReports();
     } catch (error) {
         console.error('Error generating PDF:', error);
@@ -522,6 +525,8 @@ async function generateMonthlyReportPDF(reportId) {
 // Download PDF for monthly report
 async function downloadMonthlyReportPDF(reportId) {
     try {
+        Toast.info('Opening existing PDF...');
+        
         const response = await api(`/monthly-reports/${reportId}/pdf`);
         
         if (response.pdfUrl) {
@@ -531,7 +536,11 @@ async function downloadMonthlyReportPDF(reportId) {
         }
     } catch (error) {
         console.error('Error downloading PDF:', error);
-        Toast.error('Failed to download PDF');
+        if (error.message && error.message.includes('not generated')) {
+            Toast.error('PDF not yet generated. Please use "Generate PDF" first.');
+        } else {
+            Toast.error('Failed to open PDF');
+        }
     }
 }
 
