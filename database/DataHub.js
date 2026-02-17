@@ -118,6 +118,7 @@ class DataHub {
             attendance: [],
             teacherCommentSheets: [],
             makeupLessons: [],
+            monthly_reports: [],
             total: 0,
             pagination: { page: parseInt(page), perPage: parseInt(perPage) }
         };
@@ -217,6 +218,32 @@ class DataHub {
                 const attendanceResult = await this.pool.query(attendanceQuery.text, attendanceQuery.values);
                 results.attendance = attendanceResult.rows;
                 results.total += attendanceResult.rows.length;
+            }
+
+            // Search monthly reports (if type is 'all' or 'monthly_reports')
+            if (type === 'all' || type === 'monthly_reports') {
+                const qb = new QueryBuilder('monthly_reports mr');
+                qb.select('mr.*', 'c.name as class_name', 'c.schedule', 'u.full_name as created_by_name')
+                  .join('classes c', 'mr.class_id = c.id', 'LEFT')
+                  .join('users u', 'mr.created_by = u.id', 'LEFT');
+
+                if (startDate && endDate) {
+                    // Filter by date range using start_date/end_date or created_at
+                    qb.where('mr.start_date', '>=', startDate);
+                    qb.where('mr.end_date', '<=', endDate);
+                } else if (DataHub.hasValidQuery(query)) {
+                    // Search by class name or monthly theme
+                    qb.whereLike('c.name', query);
+                }
+
+                qb.orderBy('mr.year', 'DESC');
+                qb.orderBy('mr.month', 'DESC');
+                qb.paginate(page, 50);
+
+                const mrQuery = qb.build();
+                const mrResult = await this.pool.query(mrQuery.text, mrQuery.values);
+                results.monthly_reports = mrResult.rows;
+                results.total += mrResult.rows.length;
             }
 
             return results;
