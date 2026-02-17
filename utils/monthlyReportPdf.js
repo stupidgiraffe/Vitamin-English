@@ -249,14 +249,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                .font('Helvetica-Bold');
             
             // Empty top-left cell (for category labels column)
-            let xPos = margin;
-            
-            // Category column header - centered
-            doc.text('', xPos + 5, currentY + rowHeight / 2 - headerFontSize / 2, { 
-                width: colWidth - 10, 
-                align: 'center' 
-            });
-            xPos += colWidth;
+            // Don't render any text, just skip to first data column
+            let xPos = margin + colWidth;
             
             // Date headers - use two-line format if many dates to save space
             sortedWeeks.forEach((week) => {

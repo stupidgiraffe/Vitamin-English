@@ -3104,7 +3104,7 @@ function renderCleanTable(data, type, options = {}) {
                     <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewSearchResult('${type}', ${sanitizedId})" title="View Details">
                         👁️
                     </button>`;
-                if (type === 'students' || type === 'teacher_comment_sheets') {
+                if (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports') {
                     html += `
                     <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); exportSinglePDF('${type}', ${sanitizedId})" title="Export PDF">
                         📄
@@ -3577,6 +3577,8 @@ async function exportSinglePDF(type, id) {
             endpoint = `/pdf/student-attendance/${id}`;
         } else if (type === 'reports' || type === 'teacher_comment_sheets') {
             endpoint = `/pdf/lesson-report/${id}`;
+        } else if (type === 'monthly_reports') {
+            endpoint = `/monthly-reports/${id}/generate-pdf`;
         } else {
             Toast.error('PDF export not available for this type');
             return;
@@ -3625,6 +3627,14 @@ async function exportSelectedItems(type, selectedIds) {
                 }
             } else if (type === 'reports' || type === 'teacher_comment_sheets') {
                 const response = await api(`/pdf/lesson-report/${id}`, { method: 'POST' });
+                if (response.downloadUrl) {
+                    window.open(response.downloadUrl, '_blank');
+                    successCount++;
+                    // Small delay to avoid popup blockers
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+            } else if (type === 'monthly_reports') {
+                const response = await api(`/monthly-reports/${id}/generate-pdf`, { method: 'POST' });
                 if (response.downloadUrl) {
                     window.open(response.downloadUrl, '_blank');
                     successCount++;
