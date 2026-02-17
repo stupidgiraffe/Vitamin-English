@@ -3,6 +3,20 @@ const path = require('path');
 const fs = require('fs');
 const { formatShortDate, formatJapanTime } = require('./dateUtils');
 
+// PDF Layout Constants
+/**
+ * Approximate character width in points for text wrapping calculations.
+ * This conservative estimate works across NotoJP and Helvetica fonts at 7-9pt sizes.
+ * Derived empirically: average character width is roughly 0.5-0.6em for these fonts.
+ */
+const APPROX_CHAR_WIDTH_PT = 5;
+
+/**
+ * Minimum characters per line for text wrapping.
+ * Ensures readability even in very narrow columns.
+ */
+const MIN_CHARS_PER_LINE = 10;
+
 /**
  * Sanitize text for PDF output to prevent PDF injection attacks
  * @param {String} text - Text to sanitize
@@ -324,10 +338,16 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                     }
                     
                     // Calculate appropriate character wrap length based on column width
-                    // Approximate character width at current font size (conservative estimate)
-                    const APPROX_CHAR_WIDTH_PT = 5; // Works for 7-9pt fonts
+                    // Formula: available_width / (font_size * char_width_ratio)
+                    // - colWidth - 10: Account for cell padding (5px on each side)
+                    // - contentFontSize * APPROX_CHAR_WIDTH_PT / 10: Empirical font-to-pixel ratio
+                    //   (character width ≈ 0.5 * font_size for proportional fonts)
                     const maxCharsPerLine = Math.floor((colWidth - 10) / (contentFontSize * APPROX_CHAR_WIDTH_PT / 10));
-                    const wrappedText = wrapText(cellText, Math.max(maxCharsPerLine, 10));
+                    const wrappedText = wrapText(cellText, Math.max(maxCharsPerLine, MIN_CHARS_PER_LINE));
+                    
+                    // Calculate max lines that fit in row height
+                    // rowHeight - 16: Account for top/bottom padding (8px each)
+                    // contentFontSize + 2: Line height (font size + 2px line gap)
                     const maxLines = Math.floor((rowHeight - 16) / (contentFontSize + 2));
                     const lines = wrappedText.split('\n').slice(0, maxLines);
                     
