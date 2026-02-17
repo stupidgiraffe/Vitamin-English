@@ -104,7 +104,7 @@ async function generateStudentAttendancePDF(studentData, attendanceRecords) {
             
             // Report date in top right
             doc.fontSize(9)
-               .text(`Generated: ${formatDate(new Date().toISOString())}`, doc.page.width - 200, 30, { 
+               .text(`Generated: ${formatDate(new Date().toISOString())}`, doc.page.width - 200, 60, { 
                    width: 150,
                    align: 'right'
                });
