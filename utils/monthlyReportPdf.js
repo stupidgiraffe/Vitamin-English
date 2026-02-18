@@ -285,6 +285,10 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 
                 // Adaptive font size and wrapping for cell content
                 const cellFontSize = numDates <= 4 ? 9 : 8;
+                // Character limits based on approximate column widths:
+                // ≤3 dates: ~132-397px cols, ~35 chars at 9pt
+                // 4-5 dates: ~83-104px cols, ~25 chars at 8-9pt
+                // >5 dates: ~48-77px cols, ~20 chars at 8pt
                 const maxCharsPerLine = numDates <= 3 ? 35 : (numDates <= 5 ? 25 : 20);
                 
                 // Data cells for this category - use Japanese font for content
@@ -307,7 +311,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                     
                     // Wrap and truncate text
                     const wrappedText = wrapText(cellText, maxCharsPerLine);
-                    const lines = wrappedText.split('\n').slice(0, 5); // Max 5 lines with more space
+                    // Limit to 4 lines to fit within row height with proper padding
+                    // Row height (65-75px) - padding (16px) = 49-59px available
+                    // At 8-9pt font (~11-12px line height), 4 lines = ~44-48px
+                    const maxLines = 4;
+                    const lines = wrappedText.split('\n').slice(0, maxLines);
                     
                     // Use true black (#000000) for maximum readability
                     doc.fontSize(cellFontSize)
