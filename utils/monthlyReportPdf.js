@@ -190,8 +190,28 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             // Table Section - Rows as categories, Columns as dates
             const tableTop = currentY + 10;
             const numColumns = sortedWeeks.length + 1; // +1 for category column
-            const colWidth = contentWidth / numColumns;
-            const rowHeight = 65;
+            
+            // Adaptive column widths - provide more space with fewer dates
+            const numDates = sortedWeeks.length;
+            let categoryColWidth, dateColWidth;
+            
+            if (numDates <= 3) {
+                // Sparse data: wider columns for better readability
+                categoryColWidth = 140; // Fixed width for category labels
+                dateColWidth = (contentWidth - categoryColWidth) / numDates;
+            } else if (numDates <= 5) {
+                // Medium data: balanced layout
+                categoryColWidth = 120;
+                dateColWidth = (contentWidth - categoryColWidth) / numDates;
+            } else {
+                // Dense data: equal distribution
+                const colWidth = contentWidth / numColumns;
+                categoryColWidth = colWidth;
+                dateColWidth = colWidth;
+            }
+            
+            // Adaptive row height based on number of dates
+            const rowHeight = numDates <= 4 ? 75 : 65;
             
             // Category labels (bilingual) - REMOVED Date row as dates are in header
             const categories = [
@@ -207,22 +227,25 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             doc.rect(margin, currentY, contentWidth, rowHeight)
                .fillAndStroke('#4A90E2', '#2C5AA0');
             
-            doc.fontSize(9)
+            // Adaptive font size for date headers
+            const dateHeaderFontSize = numDates <= 4 ? 11 : (numDates <= 6 ? 10 : 9);
+            
+            doc.fontSize(dateHeaderFontSize)
                .fillColor('#FFFFFF')
                .font('Helvetica-Bold');
             
             // Empty top-left cell (for category labels column)
             let xPos = margin + 5;
-            xPos += colWidth;
+            xPos += categoryColWidth;
             
             // Date headers - vertically centered
             sortedWeeks.forEach((week) => {
                 const dateText = formatDate(week.lesson_date);
                 doc.text(dateText, xPos, currentY + rowHeight / 2 - 6, { 
-                    width: colWidth - 10, 
+                    width: dateColWidth - 10, 
                     align: 'center' 
                 });
-                xPos += colWidth;
+                xPos += dateColWidth;
             });
             
             currentY += rowHeight;
@@ -237,23 +260,32 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 
                 // Category label (bilingual) - use Japanese font for Japanese text
                 xPos = margin + 5;
-                doc.fontSize(8)
+                
+                // Adaptive font size for category labels
+                const catLabelFontSize = numDates <= 4 ? 10 : 8;
+                const catLabelJPFontSize = numDates <= 4 ? 8 : 7;
+                
+                doc.fontSize(catLabelFontSize)
                    .fillColor('#000000')
                    .font('Helvetica-Bold')
                    .text(category.en, xPos, rowY + 10, { 
-                       width: colWidth - 10, 
+                       width: categoryColWidth - 10, 
                        align: 'center' 
                    });
                 // Use Japanese font for Japanese labels
                 doc.font('NotoJP')
-                   .fontSize(7)
+                   .fontSize(catLabelJPFontSize)
                    .fillColor('#000000')
                    .text(`(${category.jp})`, xPos, rowY + 25, { 
-                       width: colWidth - 10, 
+                       width: categoryColWidth - 10, 
                        align: 'center' 
                    });
                 
-                xPos += colWidth;
+                xPos += categoryColWidth;
+                
+                // Adaptive font size and wrapping for cell content
+                const cellFontSize = numDates <= 4 ? 9 : 8;
+                const maxCharsPerLine = numDates <= 3 ? 35 : (numDates <= 5 ? 25 : 20);
                 
                 // Data cells for this category - use Japanese font for content
                 sortedWeeks.forEach((week) => {
@@ -274,21 +306,20 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                     }
                     
                     // Wrap and truncate text
-                    const wrappedText = wrapText(cellText, 20);
-                    const lines = wrappedText.split('\n').slice(0, 4); // Max 4 lines
+                    const wrappedText = wrapText(cellText, maxCharsPerLine);
+                    const lines = wrappedText.split('\n').slice(0, 5); // Max 5 lines with more space
                     
-                    // Use dark text (#000000) for maximum readability
-                    // Increased font size from 7 to 8 for better readability
-                    doc.fontSize(8)
+                    // Use true black (#000000) for maximum readability
+                    doc.fontSize(cellFontSize)
                        .fillColor('#000000')
                        .font('NotoJP') // Use Japanese font for all content
                        .text(lines.join('\n'), xPos + 5, rowY + 8, { 
-                           width: colWidth - 10,
+                           width: dateColWidth - 10,
                            height: rowHeight - 16,
                            align: 'left'
                        });
                     
-                    xPos += colWidth;
+                    xPos += dateColWidth;
                 });
                 
                 currentY += rowHeight;
