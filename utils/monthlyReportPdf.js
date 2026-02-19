@@ -189,11 +189,49 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             
             // Table Section - Rows as categories, Columns as dates
             const tableTop = currentY + 10;
-            const numColumns = sortedWeeks.length + 1; // +1 for category column
-            const colWidth = contentWidth / numColumns;
-            const rowHeight = 65;
-            
-            // Category labels (bilingual) - REMOVED Date row as dates are in header
+            const numDates = sortedWeeks.length;
+
+            // Adaptive column widths based on number of dates
+            let categoryColWidth, dateColWidth;
+            if (numDates <= 3) {
+                categoryColWidth = 140;
+                dateColWidth = numDates > 0 ? (contentWidth - 140) / numDates : contentWidth - 140;
+            } else if (numDates <= 5) {
+                categoryColWidth = 120;
+                dateColWidth = (contentWidth - 120) / numDates;
+            } else {
+                // Equal distribution for many dates
+                categoryColWidth = contentWidth / (numDates + 1);
+                dateColWidth = categoryColWidth;
+            }
+
+            // Adaptive font sizes and row height based on number of dates
+            let dateHeaderFontSize, cellFontSize, rowHeight, maxLines;
+            if (numDates <= 4) {
+                dateHeaderFontSize = 11;
+                cellFontSize = 9;
+                rowHeight = 70;
+                maxLines = 4;
+            } else if (numDates <= 6) {
+                dateHeaderFontSize = 10;
+                cellFontSize = 8;
+                rowHeight = 65;
+                maxLines = 4;
+            } else {
+                dateHeaderFontSize = 9;
+                cellFontSize = 8;
+                rowHeight = 60;
+                maxLines = 3;
+            }
+
+            // Calculate text wrap limit from actual column width
+            // 4.5pt is a conservative approximation of character width at typical cell font sizes (8-9pt)
+            const APPROX_CHAR_WIDTH_PT = 4.5;
+            // Minimum 12 chars per line ensures text remains readable even in very narrow columns
+            const MIN_CHARS_PER_LINE = 12;
+            const charsPerLine = Math.max(MIN_CHARS_PER_LINE, Math.floor((dateColWidth - 10) / APPROX_CHAR_WIDTH_PT));
+
+            // Category labels (bilingual)
             const categories = [
                 { en: 'Target', jp: '目標', color: '#E3F2FD' },
                 { en: 'Vocabulary', jp: '単語', color: '#F3E5F5' },
@@ -207,22 +245,19 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             doc.rect(margin, currentY, contentWidth, rowHeight)
                .fillAndStroke('#4A90E2', '#2C5AA0');
             
-            doc.fontSize(9)
+            doc.fontSize(dateHeaderFontSize)
                .fillColor('#FFFFFF')
                .font('Helvetica-Bold');
             
-            // Empty top-left cell (for category labels column)
-            let xPos = margin + 5;
-            xPos += colWidth;
-            
-            // Date headers - vertically centered
-            sortedWeeks.forEach((week) => {
+            // Date headers - use absolute X positions to ensure alignment with data cells below
+            sortedWeeks.forEach((week, i) => {
                 const dateText = formatDate(week.lesson_date);
-                doc.text(dateText, xPos, currentY + rowHeight / 2 - 6, { 
-                    width: colWidth - 10, 
-                    align: 'center' 
+                const cellX = margin + categoryColWidth + i * dateColWidth;
+                doc.text(dateText, cellX, currentY + rowHeight / 2 - dateHeaderFontSize / 2, { 
+                    width: dateColWidth - 10, 
+                    align: 'center',
+                    lineBreak: false
                 });
-                xPos += colWidth;
             });
             
             currentY += rowHeight;
@@ -236,59 +271,51 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                    .fillAndStroke(category.color, '#2C5AA0');
                 
                 // Category label (bilingual) - use Japanese font for Japanese text
-                xPos = margin + 5;
-                doc.fontSize(8)
+                doc.fontSize(cellFontSize)
                    .fillColor('#000000')
                    .font('Helvetica-Bold')
-                   .text(category.en, xPos, rowY + 10, { 
-                       width: colWidth - 10, 
-                       align: 'center' 
+                   .text(category.en, margin + 5, rowY + 10, { 
+                       width: categoryColWidth - 10, 
+                       align: 'center',
+                       lineBreak: false
                    });
-                // Use Japanese font for Japanese labels
                 doc.font('NotoJP')
-                   .fontSize(7)
+                   .fontSize(cellFontSize - 1)
                    .fillColor('#000000')
-                   .text(`(${category.jp})`, xPos, rowY + 25, { 
-                       width: colWidth - 10, 
-                       align: 'center' 
+                   .text(`(${category.jp})`, margin + 5, rowY + 10 + cellFontSize + 4, { 
+                       width: categoryColWidth - 10, 
+                       align: 'center',
+                       lineBreak: false
                    });
                 
-                xPos += colWidth;
-                
-                // Data cells for this category - use Japanese font for content
-                sortedWeeks.forEach((week) => {
+                // Data cells for this category - use absolute X positions
+                sortedWeeks.forEach((week, i) => {
                     let cellText = '';
                     
                     if (catIndex === 0) {
-                        // Target
                         cellText = sanitizeForPDF(week.target);
                     } else if (catIndex === 1) {
-                        // Vocabulary
                         cellText = sanitizeForPDF(week.vocabulary);
                     } else if (catIndex === 2) {
-                        // Phrase
                         cellText = sanitizeForPDF(week.phrase);
                     } else if (catIndex === 3) {
-                        // Others
                         cellText = sanitizeForPDF(week.others);
                     }
                     
-                    // Wrap and truncate text
-                    const wrappedText = wrapText(cellText, 20);
-                    const lines = wrappedText.split('\n').slice(0, 4); // Max 4 lines
+                    // Wrap and truncate text based on actual column width
+                    const wrappedText = wrapText(cellText, charsPerLine);
+                    const lines = wrappedText.split('\n').slice(0, maxLines);
                     
-                    // Use dark text (#000000) for maximum readability
-                    // Increased font size from 7 to 8 for better readability
-                    doc.fontSize(8)
+                    const cellX = margin + categoryColWidth + i * dateColWidth;
+                    doc.fontSize(cellFontSize)
                        .fillColor('#000000')
-                       .font('NotoJP') // Use Japanese font for all content
-                       .text(lines.join('\n'), xPos + 5, rowY + 8, { 
-                           width: colWidth - 10,
+                       .font('NotoJP')
+                       .text(lines.join('\n'), cellX + 5, rowY + 8, { 
+                           width: dateColWidth - 10,
                            height: rowHeight - 16,
-                           align: 'left'
+                           align: 'left',
+                           lineBreak: false
                        });
-                    
-                    xPos += colWidth;
                 });
                 
                 currentY += rowHeight;
