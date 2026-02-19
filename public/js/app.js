@@ -4614,8 +4614,8 @@ function renderMonthlyReportsList() {
                 <td class="actions">
                     <button class="btn btn-sm btn-primary" onclick="viewMonthlyReport(${report.id})">View</button>
                     <button class="btn btn-sm btn-secondary" onclick="editMonthlyReport(${report.id})">Edit</button>
-                    <button class="btn btn-sm btn-success" onclick="generateMonthlyReportPDF(${report.id})">Generate PDF</button>
-                    ${report.pdf_url ? `<button class="btn btn-sm btn-info" onclick="downloadMonthlyReportPDF(${report.id})">Download PDF</button>` : ''}
+                    <button class="btn btn-sm btn-success" onclick="generateMonthlyReportPDF(${report.id})">${report.pdf_url ? 'Regenerate PDF' : 'Generate PDF'}</button>
+                    ${report.pdf_url ? `<button class="btn btn-sm btn-info" onclick="downloadMonthlyReportPDF(${report.id})">View PDF</button>` : ''}
                     <button class="btn btn-sm btn-danger" onclick="deleteMonthlyReport(${report.id})">Delete</button>
                 </td>
             </tr>
