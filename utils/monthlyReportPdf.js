@@ -253,9 +253,9 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             sortedWeeks.forEach((week, i) => {
                 const dateText = formatDate(week.lesson_date);
                 const cellX = margin + categoryColWidth + i * dateColWidth;
-                doc.text(dateText, cellX, currentY + rowHeight / 2 - dateHeaderFontSize / 2, { 
+                doc.text(dateText, cellX + 5, currentY + rowHeight / 2 - dateHeaderFontSize / 2, { 
                     width: dateColWidth - 10, 
-                    align: 'center',
+                    align: 'left',
                     lineBreak: false
                 });
             });

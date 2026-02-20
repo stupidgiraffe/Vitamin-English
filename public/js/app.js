@@ -3110,6 +3110,18 @@ function renderCleanTable(data, type, options = {}) {
                         📄
                     </button>`;
                 }
+                if (type === 'monthly_reports') {
+                    html += `
+                    <button class="btn btn-small btn-success" onclick="event.stopPropagation(); generateMonthlyReportPDF(${sanitizedId})" title="Generate PDF">
+                        📄 ${row.pdf_url ? 'Regenerate' : 'Generate'} PDF
+                    </button>`;
+                    if (row.pdf_url) {
+                        html += `
+                    <button class="btn btn-small btn-info" onclick="event.stopPropagation(); downloadMonthlyReportPDF(${sanitizedId})" title="View PDF">
+                        📥 View PDF
+                    </button>`;
+                    }
+                }
                 html += `</td>`;
             } else {
                 html += '<td class="actions-cell"></td>';
