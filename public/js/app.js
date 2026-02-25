@@ -4691,3 +4691,23 @@ async function generateTestMonthlyReport() {
     }
 }
 
+// On page load, check for an existing valid session so that browser refresh
+// and back-button navigation don't log the user out.
+(async function initSession() {
+    try {
+        const user = await fetch('/api/auth/me', { credentials: 'include' });
+        if (user.ok) {
+            const userData = await user.json();
+            currentUser = userData;
+            document.getElementById('user-name').textContent = userData.fullName;
+            await loadInitialData();
+            document.getElementById('login-screen').classList.remove('active');
+            document.getElementById('app-screen').classList.add('active');
+            loadDashboard();
+        }
+    } catch (error) {
+        // No valid session – stay on login screen (default state)
+        console.log('No active session found, showing login screen.');
+    }
+})();
+
