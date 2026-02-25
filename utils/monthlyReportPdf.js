@@ -209,17 +209,17 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             let dateHeaderFontSize, cellFontSize, rowHeight, maxLines;
             if (numDates <= 4) {
                 dateHeaderFontSize = 11;
-                cellFontSize = 9;
+                cellFontSize = 10;
                 rowHeight = 70;
                 maxLines = 4;
             } else if (numDates <= 6) {
                 dateHeaderFontSize = 10;
-                cellFontSize = 8;
+                cellFontSize = 9;
                 rowHeight = 65;
                 maxLines = 4;
             } else {
                 dateHeaderFontSize = 9;
-                cellFontSize = 8;
+                cellFontSize = 9;
                 rowHeight = 60;
                 maxLines = 3;
             }
@@ -321,9 +321,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 currentY += rowHeight;
             });
             
+            // Footer position is fixed at bottom of page
+            const footerY = pageHeight - 50;
+
             // Monthly Theme Section
-            doc.moveDown(2);
-            const themeY = currentY + 20;
+            const themeY = currentY + 12;
             
             // Monthly theme header with green background - use Japanese font
             doc.rect(margin, themeY, contentWidth, 28)
@@ -343,25 +345,25 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 width: contentWidth - 20,
                 lineGap: 5
             }) : 20;
-            const boxHeight = Math.max(textHeight + 20, 50);
+            const maxThemeHeight = Math.max(50, (footerY - 12) - themeBoxTop);
+            const boxHeight = Math.min(Math.max(textHeight + 20, 50), maxThemeHeight);
             
             doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
                .fillAndStroke('#F1F8E9', '#4CAF50');
             
             if (themeText) {
-                doc.fontSize(10)
-                   .fillColor('#000000')
+                doc.fontSize(11)
+                   .fillColor('#111111')
                    .font('NotoJP') // Use Japanese font for theme text
-                   .text(themeText, margin + 10, themeBoxTop + 10, {
-                      width: contentWidth - 20,
-                      align: 'left',
-                      lineGap: 5
-                   });
+                    .text(themeText, margin + 10, themeBoxTop + 10, {
+                       width: contentWidth - 20,
+                       height: boxHeight - 20,
+                       align: 'left',
+                       lineGap: 5
+                    });
             }
             
             // Footer with colored background and subtle border
-            const footerY = pageHeight - 50;
-            
             // Colored footer background with border matching header
             doc.rect(margin, footerY - 5, contentWidth, 35)
                .fillAndStroke('#4A90E2', '#2C5AA0');

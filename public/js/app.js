@@ -4691,3 +4691,41 @@ async function generateTestMonthlyReport() {
     }
 }
 
+// On page load and BFCache restores, check for an existing valid session so that
+// refresh/back-button navigation don't log the user out.
+let sessionRestoreInProgress = false;
+async function restoreSessionIfAvailable() {
+    if (sessionRestoreInProgress || currentUser) return;
+    sessionRestoreInProgress = true;
+    try {
+        const user = await fetch('/api/auth/me', { credentials: 'include', cache: 'no-store' });
+        if (user.ok) {
+            const userData = await user.json();
+            currentUser = userData;
+            document.getElementById('user-name').textContent = userData.fullName;
+            document.getElementById('login-screen').classList.remove('active');
+            document.getElementById('app-screen').classList.add('active');
+            try {
+                await loadInitialData();
+                loadDashboard();
+            } catch (dataError) {
+                console.error('Error loading initial data during session restore:', dataError);
+                if (typeof Toast !== 'undefined') {
+                    Toast.error('Failed to load some data. Please try refreshing again.');
+                }
+            }
+        }
+    } catch (error) {
+        // No valid session – stay on login screen (default state)
+        console.log('No active session found, showing login screen.');
+    } finally {
+        sessionRestoreInProgress = false;
+    }
+}
+
+restoreSessionIfAvailable();
+window.addEventListener('pageshow', (event) => {
+    if (event.persisted) {
+        restoreSessionIfAvailable();
+    }
+});
