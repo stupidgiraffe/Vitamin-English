@@ -135,9 +135,11 @@ router.post('/preview-generate', async (req, res) => {
             endDate = end_date;
         } else if (year && month) {
             // Monthly
-            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-            const lastDay = new Date(year, month, 0).getDate();
-            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+            const yr = parseInt(year, 10);
+            const mo = parseInt(month, 10);
+            startDate = `${yr}-${String(mo).padStart(2, '0')}-01`;
+            const lastDay = new Date(Date.UTC(yr, mo, 0)).getUTCDate();
+            endDate = `${yr}-${String(mo).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         } else {
             return res.status(400).json({ 
                 error: 'Either (year and month) or (start_date and end_date) must be provided' 
@@ -145,20 +147,21 @@ router.post('/preview-generate', async (req, res) => {
         }
         
         // Query lesson reports - try teacher_comment_sheets first, fallback to lesson_reports
+        // Use CAST(date AS DATE) for reliable comparison regardless of stored string format
         let lessonsResult;
         try {
             lessonsResult = await dataHub.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND date >= $2 AND date <= $3
-                ORDER BY date
+                WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
+                ORDER BY CAST(date AS DATE)
             `, [class_id, startDate, endDate]);
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 lessonsResult = await dataHub.query(`
                     SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND date >= $2 AND date <= $3
-                    ORDER BY date
+                    WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
+                    ORDER BY CAST(date AS DATE)
                 `, [class_id, startDate, endDate]);
             } else {
                 throw tableError;
@@ -216,17 +219,17 @@ router.post('/auto-generate', async (req, res) => {
             // Custom range
             startDate = start_date;
             endDate = end_date;
-            // Extract year and month from start_date for the report
-            const startDateObj = new Date(start_date);
-            reportYear = startDateObj.getFullYear();
-            reportMonth = startDateObj.getMonth() + 1;
+            // Extract year and month from start_date by parsing the string directly (avoid timezone issues)
+            const dateParts = start_date.split('-');
+            reportYear = parseInt(dateParts[0], 10);
+            reportMonth = parseInt(dateParts[1], 10);
         } else if (year && month) {
             // Monthly (backwards compatibility)
-            reportYear = year;
-            reportMonth = month;
-            startDate = `${year}-${String(month).padStart(2, '0')}-01`;
-            const lastDay = new Date(year, month, 0).getDate();
-            endDate = `${year}-${String(month).padStart(2, '0')}-${lastDay}`;
+            reportYear = parseInt(year, 10);
+            reportMonth = parseInt(month, 10);
+            startDate = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
+            const lastDay = new Date(Date.UTC(reportYear, reportMonth, 0)).getUTCDate();
+            endDate = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         } else {
             return res.status(400).json({ 
                 error: 'Either (year and month) or (start_date and end_date) must be provided' 
@@ -236,10 +239,29 @@ router.post('/auto-generate', async (req, res) => {
         await client.query('BEGIN');
         
         // Check for existing report by exact date range (matches new UNIQUE constraint)
-        const existingResult = await client.query(`
-            SELECT id FROM monthly_reports 
-            WHERE class_id = $1 AND start_date = $2 AND end_date = $3
-        `, [class_id, startDate, endDate]);
+        // Also check by year/month for backward compatibility (old reports may have NULL start_date/end_date)
+        let existingResult;
+        try {
+            existingResult = await client.query(`
+                SELECT id FROM monthly_reports 
+                WHERE class_id = $1 AND (
+                    (start_date = $2 AND end_date = $3)
+                    OR (start_date IS NULL AND end_date IS NULL AND year = $4 AND month = $5)
+                )
+            `, [class_id, startDate, endDate, reportYear, reportMonth]);
+        } catch (colErr) {
+            // Fallback if start_date/end_date columns don't exist yet
+            if (colErr.code === '42703' || (colErr.message && (colErr.message.includes('start_date') || colErr.message.includes('end_date')))) {
+                await client.query('ROLLBACK');
+                await client.query('BEGIN');
+                existingResult = await client.query(`
+                    SELECT id FROM monthly_reports 
+                    WHERE class_id = $1 AND year = $2 AND month = $3
+                `, [class_id, reportYear, reportMonth]);
+            } else {
+                throw colErr;
+            }
+        }
         
         if (existingResult.rows.length > 0) {
             await client.query('ROLLBACK');
@@ -273,20 +295,21 @@ router.post('/auto-generate', async (req, res) => {
         }
         
         // Get teacher comment sheets for this date range - try teacher_comment_sheets first
+        // Use CAST(date AS DATE) for reliable comparison regardless of stored string format
         let lessonsResult;
         try {
             lessonsResult = await client.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND date >= $2 AND date <= $3
-                ORDER BY date
+                WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
+                ORDER BY CAST(date AS DATE)
             `, [class_id, startDate, endDate]);
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 lessonsResult = await client.query(`
                     SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND date >= $2 AND date <= $3
-                    ORDER BY date
+                    WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
+                    ORDER BY CAST(date AS DATE)
                 `, [class_id, startDate, endDate]);
             } else {
                 throw tableError;
@@ -311,14 +334,35 @@ router.post('/auto-generate', async (req, res) => {
                 RETURNING id
             `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
         } catch (insertErr) {
-            // If start_date/end_date columns don't exist yet, fall back to basic insert
-            if (insertErr.code === '42703' || insertErr.message.includes('start_date') || insertErr.message.includes('end_date')) {
+            if (insertErr.code === '42703' || (insertErr.message && (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')))) {
+                // start_date/end_date columns don't exist yet, fall back to basic insert
                 console.warn('monthly_reports missing start_date/end_date columns, using fallback INSERT');
                 reportResult = await client.query(`
                     INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
                     VALUES ($1, $2, $3, $4, $5, $6)
                     RETURNING id
                 `, [class_id, reportYear, reportMonth, monthly_theme || '', status || 'draft', req.session.userId]);
+            } else if (insertErr.code === '23505') {
+                // Unique constraint violation - a report already exists (possibly with different date range format)
+                // Find the existing report and return it
+                await client.query('ROLLBACK');
+                const dupeResult = await pool.query(`
+                    SELECT mr.*, c.name as class_name, c.schedule
+                    FROM monthly_reports mr
+                    JOIN classes c ON mr.class_id = c.id
+                    WHERE mr.class_id = $1 AND mr.year = $2 AND mr.month = $3
+                    LIMIT 1
+                `, [class_id, reportYear, reportMonth]);
+                if (dupeResult.rows.length > 0) {
+                    const existingReport = dupeResult.rows[0];
+                    const weeksResult = await pool.query(
+                        'SELECT * FROM monthly_report_weeks WHERE monthly_report_id = $1 ORDER BY week_number',
+                        [existingReport.id]
+                    );
+                    existingReport.weeks = weeksResult.rows;
+                    return res.status(200).json({ ...existingReport, alreadyExists: true, message: 'A monthly report for this period already exists' });
+                }
+                throw insertErr;
             } else {
                 throw insertErr;
             }

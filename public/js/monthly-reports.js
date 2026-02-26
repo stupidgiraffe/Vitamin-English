@@ -1,11 +1,19 @@
 // Monthly Reports Functionality
 
+// Helper: format a local Date as YYYY-MM-DD without UTC conversion
+function toLocalDateString(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
 // Show new monthly report modal
 async function showNewMonthlyReportModal() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const defaultStart = monthStart.toISOString().split('T')[0];
-    const defaultEnd = now.toISOString().split('T')[0];
+    const defaultStart = toLocalDateString(monthStart);
+    const defaultEnd = toLocalDateString(now);
 
     // Get currently selected class from filter to pre-select it
     const selectedClassId = document.getElementById('monthly-report-class-filter')?.value || '';
