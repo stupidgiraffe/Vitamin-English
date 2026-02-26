@@ -4529,8 +4529,10 @@ async function initializeMonthlyReportsPage() {
     // Set default date range: first day of current month to today
     const today = new Date();
     const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    document.getElementById('monthly-report-start-date').value = firstDayOfMonth.toISOString().split('T')[0];
-    document.getElementById('monthly-report-end-date').value = today.toISOString().split('T')[0];
+    const pad = (n) => String(n).padStart(2, '0');
+    const toLocalDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    document.getElementById('monthly-report-start-date').value = toLocalDate(firstDayOfMonth);
+    document.getElementById('monthly-report-end-date').value = toLocalDate(today);
     
     // Set up event listeners (remove existing ones first to prevent duplicates)
     const filterBtn = document.getElementById('filter-monthly-reports-btn');
