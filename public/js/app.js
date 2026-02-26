@@ -4667,11 +4667,7 @@ async function generateTestMonthlyReport() {
             })
         });
         
-        if (response.alreadyExists) {
-            Toast.info(`Test report already exists! Report ID: ${response.reportId} - Opening existing report...`);
-        } else {
-            Toast.success(`Test report created! Report ID: ${response.reportId}`);
-        }
+        Toast.success(`Test report created! Report ID: ${response.reportId}`);
         
         // Clear filters to show all reports (so test report for Jan 2024 is visible)
         document.getElementById('monthly-report-class-filter').value = '';

@@ -344,24 +344,46 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             }) : 20;
             const boxHeight = Math.max(textHeight + 20, 50);
 
-            // Only draw the light-green background box when the text fits on the current
-            // page; if it would overflow PDFKit will flow the text to a new page but
-            // the rect() call cannot follow, so we skip the box in that case.
             const remainingPageSpace = pageHeight - themeBoxTop - margin;
             if (boxHeight <= remainingPageSpace) {
+                // Text fits on the current page — draw box and text normally
                 doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
                    .fillAndStroke('#F1F8E9', '#4CAF50');
-            }
-            
-            if (themeText) {
-                doc.fontSize(11)
-                   .fillColor('#111111')
-                   .font('NotoJP') // Use Japanese font for theme text
-                    .text(themeText, margin + 10, themeBoxTop + 10, {
-                       width: contentWidth - 20,
-                       align: 'left',
-                       lineGap: 5
-                    });
+                if (themeText) {
+                    doc.fontSize(11)
+                       .fillColor('#111111')
+                       .font('NotoJP')
+                       .text(themeText, margin + 10, themeBoxTop + 10, {
+                           width: contentWidth - 20,
+                           align: 'left',
+                           lineGap: 5
+                       });
+                }
+            } else {
+                // Text overflows the current page — split across pages.
+                // Draw a partial box on the current page, then continue on a new page.
+                const partialBoxHeight = Math.max(remainingPageSpace, 0);
+                if (partialBoxHeight > 0) {
+                    doc.rect(margin, themeBoxTop, contentWidth, partialBoxHeight)
+                       .fillAndStroke('#F1F8E9', '#4CAF50');
+                }
+
+                doc.addPage();
+                const continuationY = margin;
+                const continuationBoxHeight = Math.max(boxHeight - partialBoxHeight, 50);
+                doc.rect(margin, continuationY, contentWidth, continuationBoxHeight)
+                   .fillAndStroke('#F1F8E9', '#4CAF50');
+
+                if (themeText) {
+                    doc.fontSize(11)
+                       .fillColor('#111111')
+                       .font('NotoJP')
+                       .text(themeText, margin + 10, continuationY + 10, {
+                           width: contentWidth - 20,
+                           align: 'left',
+                           lineGap: 5
+                       });
+                }
             }
             
             // Footer rendered after all content, at the bottom of the last page.
