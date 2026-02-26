@@ -321,52 +321,50 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 currentY += rowHeight;
             });
             
-            // Monthly Theme Section
-            const themeY = currentY + 12;
-            
-            // Monthly theme header with green background - use Japanese font
-            doc.rect(margin, themeY, contentWidth, 28)
-               .fillAndStroke('#4CAF50', '#4CAF50');
-            
-            doc.fontSize(13)
-               .fillColor('#FFFFFF')
-               .font('NotoJP') // Use Japanese font for Japanese header
-               .text('Monthly Theme (今月のテーマ)', margin + 10, themeY + 8);
-            
-            // Monthly theme content box with light background
-            const themeBoxTop = themeY + 28;
+            // Monthly Theme Section — keep header + content box together as one unit
             const themeText = sanitizeForPDF(reportData.monthly_theme) || '';
-            
-            // Calculate height needed for text (no upper cap so content is never clipped)
             const textHeight = themeText ? doc.heightOfString(themeText, {
                 width: contentWidth - 20,
                 lineGap: 5
             }) : 20;
             const boxHeight = Math.max(textHeight + 20, 50);
+            const totalThemeHeight = 28 + boxHeight; // header (28pt) + content box
 
-            // Only draw the light-green background box when the text fits on the current
-            // page; if it would overflow PDFKit will flow the text to a new page but
-            // the rect() call cannot follow, so we skip the box in that case.
-            const remainingPageSpace = pageHeight - themeBoxTop - margin;
-            if (boxHeight <= remainingPageSpace) {
-                doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
-                   .fillAndStroke('#F1F8E9', '#4CAF50');
+            // Check if the entire section fits in the remaining space on this page
+            const remainingSpace = pageHeight - (currentY + 12) - margin;
+            let themeY;
+            if (totalThemeHeight <= remainingSpace) {
+                themeY = currentY + 12;
+            } else {
+                doc.addPage();
+                themeY = margin;
             }
-            
+
+            // Draw green header
+            doc.rect(margin, themeY, contentWidth, 28)
+               .fillAndStroke('#4CAF50', '#4CAF50');
+            doc.fontSize(13)
+               .fillColor('#FFFFFF')
+               .font('NotoJP')
+               .text('Monthly Theme (今月のテーマ)', margin + 10, themeY + 8);
+
+            // Draw light-green content box
+            const themeBoxTop = themeY + 28;
+            doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
+               .fillAndStroke('#F1F8E9', '#4CAF50');
+
             if (themeText) {
                 doc.fontSize(11)
                    .fillColor('#111111')
-                   .font('NotoJP') // Use Japanese font for theme text
-                    .text(themeText, margin + 10, themeBoxTop + 10, {
+                   .font('NotoJP')
+                   .text(themeText, margin + 10, themeBoxTop + 10, {
                        width: contentWidth - 20,
                        align: 'left',
                        lineGap: 5
-                    });
+                   });
             }
-            
-            // Footer rendered after all content, at the bottom of the last page.
-            // doc.page.height is the height of whatever page PDFKit is currently on
-            // (which may be a new page if the theme text overflowed).
+
+            // Footer at the bottom of the last page
             const footerY = doc.page.height - 50;
 
             // Colored footer background with border matching header
