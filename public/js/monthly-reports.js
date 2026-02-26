@@ -297,18 +297,9 @@ async function handleCreateMonthlyReport(e) {
             })
         });
 
-        if (response.alreadyExists) {
-            // Report already exists - show friendly message and open it
-            Toast.info('This report already exists. Opening existing report...');
-            closeModal();
-            loadMonthlyReports();
-            // Open the existing report after a brief delay to allow list to reload
-            setTimeout(() => viewMonthlyReport(response.id), 500);
-        } else {
-            Toast.success('Monthly report created successfully!');
-            closeModal();
-            loadMonthlyReports();
-        }
+        Toast.success('Monthly report created successfully!');
+        closeModal();
+        loadMonthlyReports();
     } catch (error) {
         console.error('Error creating monthly report:', error);
         Toast.error(error.message || 'Failed to create monthly report');

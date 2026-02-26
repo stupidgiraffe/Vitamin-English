@@ -238,62 +238,6 @@ router.post('/auto-generate', async (req, res) => {
         
         await client.query('BEGIN');
         
-        // Check for existing report by exact date range (matches new UNIQUE constraint)
-        // Also check by year/month for backward compatibility (old reports may have NULL start_date/end_date)
-        let existingResult;
-        try {
-            existingResult = await client.query(`
-                SELECT id FROM monthly_reports 
-                WHERE class_id = $1 AND (
-                    (start_date = $2 AND end_date = $3)
-                    OR (start_date IS NULL AND end_date IS NULL AND year = $4 AND month = $5)
-                )
-            `, [class_id, startDate, endDate, reportYear, reportMonth]);
-        } catch (colErr) {
-            // Fallback if start_date/end_date columns don't exist yet
-            if (colErr.code === '42703' || (colErr.message && (colErr.message.includes('start_date') || colErr.message.includes('end_date')))) {
-                await client.query('ROLLBACK');
-                await client.query('BEGIN');
-                existingResult = await client.query(`
-                    SELECT id FROM monthly_reports 
-                    WHERE class_id = $1 AND year = $2 AND month = $3
-                `, [class_id, reportYear, reportMonth]);
-            } else {
-                throw colErr;
-            }
-        }
-        
-        if (existingResult.rows.length > 0) {
-            await client.query('ROLLBACK');
-            const existingId = existingResult.rows[0].id;
-            
-            // Fetch the complete existing report
-            const completeResult = await pool.query(`
-                SELECT mr.*, c.name as class_name, c.schedule
-                FROM monthly_reports mr
-                JOIN classes c ON mr.class_id = c.id
-                WHERE mr.id = $1
-            `, [existingId]);
-            
-            const report = completeResult.rows[0];
-            
-            // Get weeks
-            const weeksResult = await pool.query(`
-                SELECT * FROM monthly_report_weeks
-                WHERE monthly_report_id = $1
-                ORDER BY week_number
-            `, [existingId]);
-            
-            report.weeks = weeksResult.rows;
-            
-            // Return existing report with a flag indicating it already existed
-            return res.status(200).json({ 
-                ...report,
-                alreadyExists: true,
-                message: 'A monthly report with this exact date range already exists'
-            });
-        }
-        
         // Get teacher comment sheets for this date range - try teacher_comment_sheets first
         // Use CAST(date AS DATE) for reliable comparison regardless of stored string format
         let lessonsResult;
@@ -332,7 +276,7 @@ router.post('/auto-generate', async (req, res) => {
                 INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
-            `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session.userId]);
+            `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session?.userId || null]);
         } catch (insertErr) {
             if (insertErr.code === '42703' || (insertErr.message && (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')))) {
                 // start_date/end_date columns don't exist yet, fall back to basic insert
@@ -341,28 +285,7 @@ router.post('/auto-generate', async (req, res) => {
                     INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
                     VALUES ($1, $2, $3, $4, $5, $6)
                     RETURNING id
-                `, [class_id, reportYear, reportMonth, monthly_theme || '', status || 'draft', req.session.userId]);
-            } else if (insertErr.code === '23505') {
-                // Unique constraint violation - a report already exists (possibly with different date range format)
-                // Find the existing report and return it
-                await client.query('ROLLBACK');
-                const dupeResult = await pool.query(`
-                    SELECT mr.*, c.name as class_name, c.schedule
-                    FROM monthly_reports mr
-                    JOIN classes c ON mr.class_id = c.id
-                    WHERE mr.class_id = $1 AND mr.year = $2 AND mr.month = $3
-                    LIMIT 1
-                `, [class_id, reportYear, reportMonth]);
-                if (dupeResult.rows.length > 0) {
-                    const existingReport = dupeResult.rows[0];
-                    const weeksResult = await pool.query(
-                        'SELECT * FROM monthly_report_weeks WHERE monthly_report_id = $1 ORDER BY week_number',
-                        [existingReport.id]
-                    );
-                    existingReport.weeks = weeksResult.rows;
-                    return res.status(200).json({ ...existingReport, alreadyExists: true, message: 'A monthly report for this period already exists' });
-                }
-                throw insertErr;
+                `, [class_id, reportYear, reportMonth, monthly_theme || '', status || 'draft', req.session?.userId || null]);
             } else {
                 throw insertErr;
             }
@@ -528,19 +451,6 @@ router.post('/', async (req, res) => {
         
         await client.query('BEGIN');
         
-        // Check for existing report
-        const existingResult = await client.query(`
-            SELECT id FROM monthly_reports 
-            WHERE class_id = $1 AND year = $2 AND month = $3
-        `, [class_id, year, month]);
-        
-        if (existingResult.rows.length > 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                error: 'A monthly report for this class and month already exists' 
-            });
-        }
-        
         // Insert monthly report
         const reportResult = await client.query(`
             INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
@@ -552,7 +462,7 @@ router.post('/', async (req, res) => {
             month, 
             monthly_theme || '', 
             status || 'draft',
-            req.session.userId
+            req.session?.userId || null
         ]);
         
         const reportId = reportResult.rows[0].id;
@@ -801,7 +711,7 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
             uploadResult.key,
             pdfUrl,
             uploadResult.size,
-            req.session.userId
+            req.session?.userId || null
         ]);
         
         res.json({ 
@@ -856,8 +766,9 @@ router.post('/generate-test-data', async (req, res) => {
     
     try {
         // Admin-only check (if session userId is set, check if user is admin)
-        if (req.session.userId) {
-            const userCheck = await client.query('SELECT role FROM users WHERE id = $1', [req.session.userId]);
+        const sessionUserId = req.session?.userId || null;
+        if (sessionUserId) {
+            const userCheck = await client.query('SELECT role FROM users WHERE id = $1', [sessionUserId]);
             if (userCheck.rows.length === 0 || userCheck.rows[0].role !== 'admin') {
                 return res.status(403).json({ error: 'Admin access required' });
             }
@@ -972,7 +883,7 @@ router.post('/generate-test-data', async (req, res) => {
             '2024-01-31',
             'Winter Communication Skills',
             'draft',
-            req.session.userId || null
+            req.session?.userId || null
         ]);
         
         const reportId = reportResult.rows[0].id;
