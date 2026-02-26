@@ -321,9 +321,6 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 currentY += rowHeight;
             });
             
-            // Footer position is fixed at bottom of page
-            const footerY = pageHeight - 50;
-
             // Monthly Theme Section
             const themeY = currentY + 12;
             
@@ -340,16 +337,21 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const themeBoxTop = themeY + 28;
             const themeText = sanitizeForPDF(reportData.monthly_theme) || '';
             
-            // Calculate height needed for text
+            // Calculate height needed for text (no upper cap so content is never clipped)
             const textHeight = themeText ? doc.heightOfString(themeText, {
                 width: contentWidth - 20,
                 lineGap: 5
             }) : 20;
-            const maxThemeHeight = Math.max(50, (footerY - 12) - themeBoxTop);
-            const boxHeight = Math.min(Math.max(textHeight + 20, 50), maxThemeHeight);
-            
-            doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
-               .fillAndStroke('#F1F8E9', '#4CAF50');
+            const boxHeight = Math.max(textHeight + 20, 50);
+
+            // Only draw the light-green background box when the text fits on the current
+            // page; if it would overflow PDFKit will flow the text to a new page but
+            // the rect() call cannot follow, so we skip the box in that case.
+            const remainingPageSpace = pageHeight - themeBoxTop - margin;
+            if (boxHeight <= remainingPageSpace) {
+                doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
+                   .fillAndStroke('#F1F8E9', '#4CAF50');
+            }
             
             if (themeText) {
                 doc.fontSize(11)
@@ -357,13 +359,16 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                    .font('NotoJP') // Use Japanese font for theme text
                     .text(themeText, margin + 10, themeBoxTop + 10, {
                        width: contentWidth - 20,
-                       height: boxHeight - 20,
                        align: 'left',
                        lineGap: 5
                     });
             }
             
-            // Footer with colored background and subtle border
+            // Footer rendered after all content, at the bottom of the last page.
+            // doc.page.height is the height of whatever page PDFKit is currently on
+            // (which may be a new page if the theme text overflowed).
+            const footerY = doc.page.height - 50;
+
             // Colored footer background with border matching header
             doc.rect(margin, footerY - 5, contentWidth, 35)
                .fillAndStroke('#4A90E2', '#2C5AA0');
