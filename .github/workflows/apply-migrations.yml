@@ -27,24 +27,37 @@ jobs:
     name: Apply Database Migrations
     runs-on: ubuntu-latest
     
-    # Only run if DATABASE_URL secret is configured
-    # This prevents failures on forks without database access
-    if: secrets.DATABASE_URL != ''
-    
     steps:
+      - name: Check for DATABASE_URL
+        id: check-db
+        env:
+          DB_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DB_URL" ]; then
+            echo "⚠️ DATABASE_URL not configured, skipping migrations"
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ DATABASE_URL is configured"
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout repository
+        if: steps.check-db.outputs.skip != 'true'
         uses: actions/checkout@v4
       
       - name: Setup Node.js
+        if: steps.check-db.outputs.skip != 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
       
       - name: Install dependencies
+        if: steps.check-db.outputs.skip != 'true'
         run: npm ci
       
       - name: Check migration status
+        if: steps.check-db.outputs.skip != 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
@@ -52,7 +65,7 @@ jobs:
           node scripts/apply-all-migrations.js || echo "Migration check completed"
       
       - name: Apply migrations (if not dry-run)
-        if: ${{ !inputs.dry_run }}
+        if: ${{ steps.check-db.outputs.skip != 'true' && !inputs.dry_run }}
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
@@ -60,7 +73,7 @@ jobs:
           npm run migrate:all
       
       - name: Dry-run completed
-        if: ${{ inputs.dry_run }}
+        if: ${{ steps.check-db.outputs.skip != 'true' && inputs.dry_run }}
         run: |
           echo "✅ Dry-run mode: No changes applied"
           echo "Migration status check completed successfully"
