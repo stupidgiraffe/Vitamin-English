@@ -82,7 +82,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 size: 'A4',
                 margin: 30,
                 bufferPages: true,
-                layout: 'landscape'
+                layout: 'portrait'
             });
             const buffers = [];
             
@@ -194,11 +194,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             // Adaptive column widths based on number of dates
             let categoryColWidth, dateColWidth;
             if (numDates <= 3) {
-                categoryColWidth = 140;
-                dateColWidth = numDates > 0 ? (contentWidth - 140) / numDates : contentWidth - 140;
+                categoryColWidth = 110;
+                dateColWidth = numDates > 0 ? (contentWidth - categoryColWidth) / numDates : contentWidth - categoryColWidth;
             } else if (numDates <= 5) {
-                categoryColWidth = 120;
-                dateColWidth = (contentWidth - 120) / numDates;
+                categoryColWidth = 100;
+                dateColWidth = (contentWidth - categoryColWidth) / numDates;
             } else {
                 // Equal distribution for many dates
                 categoryColWidth = contentWidth / (numDates + 1);
