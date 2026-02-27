@@ -3117,7 +3117,7 @@ function renderCleanTable(data, type, options = {}) {
                     </button>`;
                     if (row.pdf_url) {
                         html += `
-                    <button class="btn btn-small btn-info" onclick="event.stopPropagation(); downloadMonthlyReportPDF(${sanitizedId})" title="View PDF">
+                    <button class="btn btn-small btn-info" onclick="event.stopPropagation(); viewMonthlyReportPDF(${sanitizedId})" title="View PDF">
                         📥 View PDF
                     </button>`;
                     }
@@ -4629,7 +4629,7 @@ function renderMonthlyReportsList() {
                     <button class="btn btn-sm btn-primary" onclick="viewMonthlyReport(${report.id})">View</button>
                     <button class="btn btn-sm btn-secondary" onclick="editMonthlyReport(${report.id})">Edit</button>
                     <button class="btn btn-sm btn-success" onclick="generateMonthlyReportPDF(${report.id})">${report.pdf_url ? 'Regenerate PDF' : 'Generate PDF'}</button>
-                    ${report.pdf_url ? `<button class="btn btn-sm btn-info" onclick="downloadMonthlyReportPDF(${report.id})">View PDF</button>` : ''}
+                    ${report.pdf_url ? `<button class="btn btn-sm btn-info" onclick="viewMonthlyReportPDF(${report.id})">View PDF</button>` : ''}
                     <button class="btn btn-sm btn-danger" onclick="deleteMonthlyReport(${report.id})">Delete</button>
                 </td>
             </tr>

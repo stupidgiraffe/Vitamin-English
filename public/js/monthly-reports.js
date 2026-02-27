@@ -518,9 +518,14 @@ async function generateMonthlyReportPDF(reportId) {
     }
 }
 
-// Download PDF for monthly report
-async function downloadMonthlyReportPDF(reportId) {
+// View PDF for monthly report (always regenerate to avoid stale cached versions)
+async function viewMonthlyReportPDF(reportId) {
     return generateMonthlyReportPDF(reportId);
+}
+
+// Backward-compatible alias for existing inline handlers
+async function downloadMonthlyReportPDF(reportId) {
+    return viewMonthlyReportPDF(reportId);
 }
 
 // Delete monthly report
