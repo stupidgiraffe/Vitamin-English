@@ -682,7 +682,7 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
         }, teachers);
         
         // Upload to R2
-        const fileName = `monthly_report_${report.id}_${report.class_id}_${report.year}_${report.month}_${Date.now()}.pdf`;
+        const fileName = `monthly_report_${report.id}_${report.class_id}_${report.year}_${report.month}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             reportId: report.id.toString(),
             classId: report.class_id.toString(),

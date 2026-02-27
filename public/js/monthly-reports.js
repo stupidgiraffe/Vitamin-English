@@ -520,18 +520,7 @@ async function generateMonthlyReportPDF(reportId) {
 
 // Download PDF for monthly report
 async function downloadMonthlyReportPDF(reportId) {
-    try {
-        const response = await api(`/monthly-reports/${reportId}/pdf`);
-        
-        if (response.pdfUrl) {
-            window.open(response.pdfUrl, '_blank');
-        } else {
-            Toast.error('PDF not available. Please generate it first.');
-        }
-    } catch (error) {
-        console.error('Error downloading PDF:', error);
-        Toast.error('Failed to download PDF');
-    }
+    return generateMonthlyReportPDF(reportId);
 }
 
 // Delete monthly report
