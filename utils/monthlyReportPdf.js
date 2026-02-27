@@ -38,30 +38,104 @@ function formatMonth(year, month) {
 }
 
 /**
- * Wrap text to fit within a width
- * @param {String} text - Text to wrap
- * @param {Number} maxLength - Maximum characters per line
- * @returns {String} Wrapped text with line breaks
+ * Draw a lesson block with dynamic row heights.
+ * Adds a page break before drawing when needed so the block is never split.
+ * @param {PDFDocument} doc
+ * @param {Object} week
+ * @param {Number} currentY
+ * @param {Number} margin
+ * @param {Number} contentWidth
+ * @returns {Number} New Y position after drawing
  */
-function wrapText(text, maxLength) {
-    if (!text || text.length <= maxLength) return text;
-    
-    const words = text.split(' ');
-    const lines = [];
-    let currentLine = '';
-    
-    for (const word of words) {
-        const testLine = currentLine ? currentLine + ' ' + word : word;
-        if (testLine.length <= maxLength) {
-            currentLine = testLine;
+function drawLessonBlock(doc, week, currentY, margin, contentWidth) {
+    const labelColWidth = 120;
+    const dataColWidth = contentWidth - labelColWidth;
+    const dateHeaderHeight = 30;
+    const minRowHeight = 34;
+    const rowPaddingY = 12;
+    const categories = [
+        { label: 'Target (目標)', color: '#E3F2FD', key: 'target' },
+        { label: 'Vocabulary (単語)', color: '#F3E5F5', key: 'vocabulary' },
+        { label: 'Phrase (文)', color: '#FFF3E0', key: 'phrase' },
+        { label: 'Others (その他)', color: '#E8F5E9', key: 'others' }
+    ];
+
+    const rowHeights = categories.map((category) => {
+        const text = sanitizeForPDF(week[category.key] || '');
+        doc.font('NotoJP').fontSize(10);
+        const measured = text ? doc.heightOfString(text, { width: dataColWidth - 10 }) : 0;
+        return Math.max(measured + rowPaddingY, minRowHeight);
+    });
+
+    const blockHeight = dateHeaderHeight + rowHeights.reduce((sum, h) => sum + h, 0);
+    const pageHeight = doc.page.height;
+    if (currentY + blockHeight > pageHeight - 60) {
+        doc.addPage();
+        currentY = margin;
+    }
+
+    const dateText = formatDate(week.lesson_date);
+    doc.rect(margin, currentY, contentWidth, dateHeaderHeight)
+       .fillAndStroke('#4A90E2', '#2C5AA0');
+    doc.font('Helvetica-Bold')
+       .fontSize(11)
+       .fillColor('#FFFFFF')
+       .text(`📅 ${dateText}`, margin + 10, currentY + 9, { width: contentWidth - 20 });
+
+    let rowY = currentY + dateHeaderHeight;
+    categories.forEach((category, index) => {
+        const rowHeight = rowHeights[index];
+        const value = sanitizeForPDF(week[category.key] || '');
+
+        doc.rect(margin, rowY, labelColWidth, rowHeight)
+           .fillAndStroke(category.color, '#D0D7DE');
+        doc.rect(margin + labelColWidth, rowY, dataColWidth, rowHeight)
+           .fillAndStroke('#FFFFFF', '#D0D7DE');
+
+        doc.font('NotoJP')
+           .fontSize(10)
+           .fillColor('#111111')
+           .text(category.label, margin + 8, rowY + 8, { width: labelColWidth - 16 });
+
+        doc.font('NotoJP')
+           .fontSize(10)
+           .fillColor('#111111')
+           .text(value, margin + labelColWidth + 5, rowY + 6, {
+               width: dataColWidth - 10
+           });
+
+        rowY += rowHeight;
+    });
+
+    return rowY + 12;
+}
+
+function findLargestTextChunk(doc, text, width, maxHeight, lineGap) {
+    doc.font('NotoJP').fontSize(11);
+    if (doc.heightOfString(text, { width, lineGap }) <= maxHeight) {
+        return text.length;
+    }
+
+    let low = 1;
+    let high = text.length;
+    let best = 1;
+    while (low <= high) {
+        const mid = Math.floor((low + high) / 2);
+        const candidate = text.slice(0, mid);
+        const h = doc.heightOfString(candidate, { width, lineGap });
+        if (h <= maxHeight) {
+            best = mid;
+            low = mid + 1;
         } else {
-            if (currentLine) lines.push(currentLine);
-            currentLine = word.length > maxLength ? word.substring(0, maxLength - 3) + '...' : word;
+            high = mid - 1;
         }
     }
-    if (currentLine) lines.push(currentLine);
-    
-    return lines.join('\n');
+
+    const breakAt = Math.max(
+        text.lastIndexOf('\n', best),
+        text.lastIndexOf(' ', best)
+    );
+    return breakAt > 0 ? breakAt + 1 : best;
 }
 
 /**
@@ -78,11 +152,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             // Path to Japanese font
             const fontPath = path.join(__dirname, '..', 'fonts', 'NotoSansJP-Regular.ttf');
             
-            const doc = new PDFDocument({ 
+            const doc = new PDFDocument({
                 size: 'A4',
-                margin: 30,
+                layout: 'portrait',
+                margin: 40,
                 bufferPages: true,
-                layout: 'landscape'
             });
             const buffers = [];
             
@@ -99,7 +173,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             // Constants for layout
             const pageWidth = doc.page.width;
             const pageHeight = doc.page.height;
-            const margin = 30;
+            const margin = 40;
             const contentWidth = pageWidth - (margin * 2);
             
             // Sort weeks by date
@@ -124,11 +198,9 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 periodText = `Period: ${formatJapanTime(firstDate)} to ${formatJapanTime(lastDate)}`;
             }
             
-            // Header Section with colored background
-            const headerLeft = margin;
-            
-            // Add a colored header background with subtle border
-            doc.rect(margin, margin - 5, contentWidth, 75)
+            // Header Section
+            const headerHeight = 70;
+            doc.rect(margin, margin, contentWidth, headerHeight)
                .fillAndStroke('#4A90E2', '#2C5AA0');
             
             // Add logo to header if available
@@ -138,9 +210,9 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             // Try PNG logo
             if (fs.existsSync(logoPath)) {
                 try {
-                    const logoSize = 50;
+                    const logoSize = 45;
                     const logoX = margin + 10;
-                    const logoY = margin;
+                    const logoY = margin + 12;
                     doc.image(logoPath, logoX, logoY, { 
                         width: logoSize, 
                         height: logoSize 
@@ -155,24 +227,22 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             }
             
             // Adjust title position if logo was added
-            const titleX = logoAdded ? headerLeft + 70 : headerLeft + 10;
+            const titleX = logoAdded ? margin + 65 : margin + 12;
             doc.fontSize(20)
                .font('Helvetica-Bold')
                .fillColor('#FFFFFF')
-               .text('Monthly Report', titleX, margin + 8, { align: 'left' });
-            
-            // Period and Month info
-            let currentY = margin + 33;
-            doc.fontSize(11)
+               .text('Monthly Report', titleX, margin + 8);
+
+            let headerTextY = margin + 34;
+            doc.fontSize(10)
                .font('Helvetica')
                .fillColor('#FFFFFF');
-            
+
             if (periodText) {
-                doc.text(periodText, margin + 10, currentY, { align: 'left' });
-                currentY += 15;
+                doc.text(periodText, titleX, headerTextY, { width: contentWidth - (titleX - margin) - 10 });
+                headerTextY += 14;
             }
-            
-            // Class info and Teachers on same line
+
             let infoText = sanitizeForPDF(classData.name + (classData.schedule ? ', ' + classData.schedule : ''));
             if (teachers && teachers.length > 0) {
                 const teacherNames = teachers.filter(t => t && t.trim()).join(', ');
@@ -180,204 +250,104 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                     infoText += ` | Teachers: ${sanitizeForPDF(teacherNames)}`;
                 }
             }
-            
-            doc.fontSize(10)
+            doc.fontSize(9)
                .fillColor('#FFFFFF')
-               .text(infoText, margin + 10, currentY, { align: 'left', width: contentWidth - 20 });
-            
-            currentY = margin + 80;
-            
-            // Table Section - Rows as categories, Columns as dates
-            const tableTop = currentY + 10;
-            const numDates = sortedWeeks.length;
+               .text(infoText, titleX, headerTextY, { width: contentWidth - (titleX - margin) - 10 });
 
-            // Adaptive column widths based on number of dates
-            let categoryColWidth, dateColWidth;
-            if (numDates <= 3) {
-                categoryColWidth = 140;
-                dateColWidth = numDates > 0 ? (contentWidth - 140) / numDates : contentWidth - 140;
-            } else if (numDates <= 5) {
-                categoryColWidth = 120;
-                dateColWidth = (contentWidth - 120) / numDates;
+            let currentY = margin + headerHeight + 14;
+
+            if (sortedWeeks.length === 0) {
+                if (currentY + 30 > pageHeight - 60) {
+                    doc.addPage();
+                    currentY = margin;
+                }
+                doc.font('Helvetica')
+                   .fontSize(11)
+                   .fillColor('#444444')
+                   .text('No lesson data available for this period', margin, currentY, { width: contentWidth });
+                currentY += 34;
             } else {
-                // Equal distribution for many dates
-                categoryColWidth = contentWidth / (numDates + 1);
-                dateColWidth = categoryColWidth;
+                sortedWeeks.forEach((week) => {
+                    currentY = drawLessonBlock(doc, week, currentY, margin, contentWidth);
+                });
             }
 
-            // Adaptive font sizes and row height based on number of dates
-            let dateHeaderFontSize, cellFontSize, rowHeight, maxLines;
-            if (numDates <= 4) {
-                dateHeaderFontSize = 11;
-                cellFontSize = 10;
-                rowHeight = 70;
-                maxLines = 4;
-            } else if (numDates <= 6) {
-                dateHeaderFontSize = 10;
-                cellFontSize = 9;
-                rowHeight = 65;
-                maxLines = 4;
-            } else {
-                dateHeaderFontSize = 9;
-                cellFontSize = 9;
-                rowHeight = 60;
-                maxLines = 3;
-            }
-
-            // Calculate text wrap limit from actual column width
-            // 4.5pt is a conservative approximation of character width at typical cell font sizes (8-9pt)
-            const APPROX_CHAR_WIDTH_PT = 4.5;
-            // Minimum 12 chars per line ensures text remains readable even in very narrow columns
-            const MIN_CHARS_PER_LINE = 12;
-            const charsPerLine = Math.max(MIN_CHARS_PER_LINE, Math.floor((dateColWidth - 10) / APPROX_CHAR_WIDTH_PT));
-
-            // Category labels (bilingual)
-            const categories = [
-                { en: 'Target', jp: '目標', color: '#E3F2FD' },
-                { en: 'Vocabulary', jp: '単語', color: '#F3E5F5' },
-                { en: 'Phrase', jp: '文', color: '#FFF3E0' },
-                { en: 'Others', jp: 'その他', color: '#E8F5E9' }
-            ];
-            
-            currentY = tableTop;
-            
-            // Draw header row (dates) with colored background
-            doc.rect(margin, currentY, contentWidth, rowHeight)
-               .fillAndStroke('#4A90E2', '#2C5AA0');
-            
-            doc.fontSize(dateHeaderFontSize)
-               .fillColor('#FFFFFF')
-               .font('Helvetica-Bold');
-            
-            // Date headers - use absolute X positions to ensure alignment with data cells below
-            sortedWeeks.forEach((week, i) => {
-                const dateText = formatDate(week.lesson_date);
-                const cellX = margin + categoryColWidth + i * dateColWidth;
-                doc.text(dateText, cellX + 5, currentY + rowHeight / 2 - dateHeaderFontSize / 2, { 
-                    width: dateColWidth - 10, 
-                    align: 'left',
-                    lineBreak: false
-                });
-            });
-            
-            currentY += rowHeight;
-            
-            // Draw category rows
-            categories.forEach((category, catIndex) => {
-                const rowY = currentY;
-                
-                // Draw row background with category-specific colors
-                doc.rect(margin, rowY, contentWidth, rowHeight)
-                   .fillAndStroke(category.color, '#2C5AA0');
-                
-                // Category label (bilingual) - use Japanese font for Japanese text
-                doc.fontSize(cellFontSize)
-                   .fillColor('#000000')
-                   .font('Helvetica-Bold')
-                   .text(category.en, margin + 5, rowY + 10, { 
-                       width: categoryColWidth - 10, 
-                       align: 'center',
-                       lineBreak: false
-                   });
-                doc.font('NotoJP')
-                   .fontSize(cellFontSize - 1)
-                   .fillColor('#000000')
-                   .text(`(${category.jp})`, margin + 5, rowY + 10 + cellFontSize + 4, { 
-                       width: categoryColWidth - 10, 
-                       align: 'center',
-                       lineBreak: false
-                   });
-                
-                // Data cells for this category - use absolute X positions
-                sortedWeeks.forEach((week, i) => {
-                    let cellText = '';
-                    
-                    if (catIndex === 0) {
-                        cellText = sanitizeForPDF(week.target);
-                    } else if (catIndex === 1) {
-                        cellText = sanitizeForPDF(week.vocabulary);
-                    } else if (catIndex === 2) {
-                        cellText = sanitizeForPDF(week.phrase);
-                    } else if (catIndex === 3) {
-                        cellText = sanitizeForPDF(week.others);
-                    }
-                    
-                    // Wrap and truncate text based on actual column width
-                    const wrappedText = wrapText(cellText, charsPerLine);
-                    const lines = wrappedText.split('\n').slice(0, maxLines);
-                    
-                    const cellX = margin + categoryColWidth + i * dateColWidth;
-                    doc.fontSize(cellFontSize)
-                       .fillColor('#000000')
-                       .font('NotoJP')
-                       .text(lines.join('\n'), cellX + 5, rowY + 8, { 
-                           width: dateColWidth - 10,
-                           height: rowHeight - 16,
-                           align: 'left',
-                           lineBreak: false
-                       });
-                });
-                
-                currentY += rowHeight;
-            });
-            
             // Monthly Theme Section
-            const themeY = currentY + 12;
-            
-            // Monthly theme header with green background - use Japanese font
-            doc.rect(margin, themeY, contentWidth, 28)
+            if (pageHeight - 60 - currentY < 100) {
+                doc.addPage();
+                currentY = margin;
+            }
+            if (currentY + 28 > pageHeight - 60) {
+                doc.addPage();
+                currentY = margin;
+            }
+
+            doc.rect(margin, currentY, contentWidth, 28)
                .fillAndStroke('#4CAF50', '#4CAF50');
-            
             doc.fontSize(13)
                .fillColor('#FFFFFF')
-               .font('NotoJP') // Use Japanese font for Japanese header
-               .text('Monthly Theme (今月のテーマ)', margin + 10, themeY + 8);
-            
-            // Monthly theme content box with light background
-            const themeBoxTop = themeY + 28;
+               .font('NotoJP')
+               .text('Monthly Theme (今月のテーマ)', margin + 10, currentY + 7);
+
+            let themeY = currentY + 28;
             const themeText = sanitizeForPDF(reportData.monthly_theme) || '';
-            
-            // Calculate height needed for text (no upper cap so content is never clipped)
-            const textHeight = themeText ? doc.heightOfString(themeText, {
-                width: contentWidth - 20,
-                lineGap: 5
-            }) : 20;
-            const boxHeight = Math.max(textHeight + 20, 50);
 
-            // Only draw the light-green background box when the text fits on the current
-            // page; if it would overflow PDFKit will flow the text to a new page but
-            // the rect() call cannot follow, so we skip the box in that case.
-            const remainingPageSpace = pageHeight - themeBoxTop - margin;
-            if (boxHeight <= remainingPageSpace) {
-                doc.rect(margin, themeBoxTop, contentWidth, boxHeight)
+            if (!themeText) {
+                if (themeY + 50 > pageHeight - 60) {
+                    doc.addPage();
+                    themeY = margin;
+                }
+                doc.rect(margin, themeY, contentWidth, 50)
                    .fillAndStroke('#F1F8E9', '#4CAF50');
-            }
-            
-            if (themeText) {
-                doc.fontSize(11)
-                   .fillColor('#111111')
-                   .font('NotoJP') // Use Japanese font for theme text
-                    .text(themeText, margin + 10, themeBoxTop + 10, {
-                       width: contentWidth - 20,
-                       align: 'left',
-                       lineGap: 5
-                    });
-            }
-            
-            // Footer rendered after all content, at the bottom of the last page.
-            // doc.page.height is the height of whatever page PDFKit is currently on
-            // (which may be a new page if the theme text overflowed).
-            const footerY = doc.page.height - 50;
+                currentY = themeY + 62;
+            } else {
+                let remaining = themeText;
+                const textWidth = contentWidth - 20;
+                const lineGap = 5;
 
-            // Colored footer background with border matching header
+                while (remaining.length > 0) {
+                    if (themeY + 24 > pageHeight - 60) {
+                        doc.addPage();
+                        themeY = margin;
+                    }
+
+                    const maxTextHeight = pageHeight - 60 - themeY - 10;
+                    const chunkLength = findLargestTextChunk(doc, remaining, textWidth, maxTextHeight, lineGap);
+                    const chunk = remaining.slice(0, chunkLength);
+
+                    doc.font('NotoJP').fontSize(11);
+                    const chunkHeight = doc.heightOfString(chunk, { width: textWidth, lineGap });
+                    const boxHeight = Math.max(chunkHeight + 20, 50);
+
+                    doc.rect(margin, themeY, contentWidth, boxHeight)
+                       .fillAndStroke('#F1F8E9', '#4CAF50');
+
+                    doc.fontSize(11)
+                       .fillColor('#111111')
+                       .font('NotoJP')
+                       .text(chunk, margin + 10, themeY + 10, {
+                           width: textWidth,
+                           lineGap
+                       });
+
+                    themeY += boxHeight + 8;
+                    remaining = remaining.slice(chunkLength).replace(/^\s+/, '');
+                }
+                currentY = themeY;
+            }
+
+            // Footer on last page only (current page is last after content flow)
+            const footerY = doc.page.height - 50;
             doc.rect(margin, footerY - 5, contentWidth, 35)
                .fillAndStroke('#4A90E2', '#2C5AA0');
-            
-            doc.fontSize(14)
+            doc.fontSize(12)
                .fillColor('#FFFFFF')
-               .font('Helvetica-Bold')
-               .text('VitaminEnglishSchool', margin, footerY + 5, { align: 'center', width: contentWidth });
-            
+               .font('Helvetica-Bold');
+            const footerText = 'VitaminEnglishSchool';
+            const footerTextWidth = doc.widthOfString(footerText);
+            const footerTextX = margin + ((contentWidth - footerTextWidth) / 2);
+            doc.text(footerText, footerTextX, footerY + 6, { lineBreak: false });
+
             doc.end();
         } catch (error) {
             reject(error);
