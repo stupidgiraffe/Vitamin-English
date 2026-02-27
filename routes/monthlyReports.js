@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const { randomUUID } = require('crypto');
 const dataHub = require('../database/DataHub');
 const pool = dataHub.pool; // Reference to the connection pool
 const { generateMonthlyReportPDF } = require('../utils/monthlyReportPdf');
-const { uploadPDF, getDownloadUrl, isConfigured } = require('../utils/r2Storage');
+const { uploadPDF, getDownloadUrl, deletePDF, isConfigured } = require('../utils/r2Storage');
 
 // Middleware to check if R2 is configured
 const checkR2Config = (req, res, next) => {
@@ -681,8 +682,9 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
             schedule: report.schedule
         }, teachers);
         
-        // Upload to R2
-        const fileName = `monthly_report_${report.id}_${report.class_id}_${report.year}_${report.month}.pdf`;
+        // Upload to R2 with a versioned key so caches always fetch fresh content
+        const previousPdfKey = report.pdf_url || null;
+        const fileName = `monthly_report_${report.id}_${report.class_id}_${report.year}_${report.month}_${Date.now()}_${randomUUID()}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             reportId: report.id.toString(),
             classId: report.class_id.toString(),
@@ -701,6 +703,14 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
             SET pdf_url = $1
             WHERE id = $2
         `, [uploadResult.key, req.params.id]);
+
+        if (previousPdfKey && previousPdfKey !== uploadResult.key) {
+            try {
+                await deletePDF(previousPdfKey);
+            } catch (deleteError) {
+                console.warn(`⚠️  Failed to delete previous PDF for report ${req.params.id}:`, deleteError.message);
+            }
+        }
         
         // Store in PDF history
         await pool.query(`
