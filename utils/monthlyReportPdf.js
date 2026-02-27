@@ -85,7 +85,7 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth) {
     doc.font('Helvetica-Bold')
        .fontSize(11)
        .fillColor('#FFFFFF')
-       .text(`📅 ${dateText}`, margin + 10, currentY + 9, { width: contentWidth - 20 });
+       .text(dateText, margin + 10, currentY + 9, { width: contentWidth - 20 });
 
     let rowY = currentY + dateHeaderHeight;
     categories.forEach((category, index) => {
