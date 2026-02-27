@@ -315,11 +315,10 @@ async function viewMonthlyReport(reportId) {
         let weeksHtml = '';
         if (report.weeks && report.weeks.length > 0) {
             report.weeks.forEach((week, index) => {
-                // Use the new smart date formatter for lesson dates
+                // Use ASCII-safe date formatter for lesson dates
                 let dateLabel = 'Lesson';
                 if (week.lesson_date) {
-                    // Use formatDateJP for date-only display (no time needed for lesson dates)
-                    dateLabel = formatDateJP(week.lesson_date) || formatDateReadableEN(week.lesson_date) || `Lesson ${index + 1}`;
+                    dateLabel = formatDateReadableEN(week.lesson_date) || `Lesson ${index + 1}`;
                 } else {
                     dateLabel = `Lesson ${index + 1}`;
                 }
@@ -339,8 +338,8 @@ async function viewMonthlyReport(reportId) {
         }
         
         // Format date range using smart formatter
-        const startDateFormatted = report.start_date ? formatDateJP(report.start_date) : 'N/A';
-        const endDateFormatted = report.end_date ? formatDateJP(report.end_date) : 'N/A';
+        const startDateFormatted = report.start_date ? formatDateReadableEN(report.start_date) : 'N/A';
+        const endDateFormatted = report.end_date ? formatDateReadableEN(report.end_date) : 'N/A';
         
         const content = `
             <div class="monthly-report-view">
