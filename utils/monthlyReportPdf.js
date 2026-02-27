@@ -37,6 +37,11 @@ function formatMonth(year, month) {
     return monthAbbr[month - 1];
 }
 
+const FOOTER_RESERVED_SPACE = 60;
+const THEME_MIN_START_SPACE = 100;
+const TEXT_CELL_PADDING_X = 10;
+const THEME_TEXT_TOP_PADDING = 10;
+
 /**
  * Draw a lesson block with dynamic row heights.
  * Adds a page break before drawing when needed so the block is never split.
@@ -63,13 +68,13 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth) {
     const rowHeights = categories.map((category) => {
         const text = sanitizeForPDF(week[category.key] || '');
         doc.font('NotoJP').fontSize(10);
-        const measured = text ? doc.heightOfString(text, { width: dataColWidth - 10 }) : 0;
+        const measured = text ? doc.heightOfString(text, { width: dataColWidth - TEXT_CELL_PADDING_X }) : 0;
         return Math.max(measured + rowPaddingY, minRowHeight);
     });
 
     const blockHeight = dateHeaderHeight + rowHeights.reduce((sum, h) => sum + h, 0);
     const pageHeight = doc.page.height;
-    if (currentY + blockHeight > pageHeight - 60) {
+    if (currentY + blockHeight > pageHeight - FOOTER_RESERVED_SPACE) {
         doc.addPage();
         currentY = margin;
     }
@@ -101,7 +106,7 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth) {
            .fontSize(10)
            .fillColor('#111111')
            .text(value, margin + labelColWidth + 5, rowY + 6, {
-               width: dataColWidth - 10
+               width: dataColWidth - TEXT_CELL_PADDING_X
            });
 
         rowY += rowHeight;
@@ -131,11 +136,15 @@ function findLargestTextChunk(doc, text, width, maxHeight, lineGap) {
         }
     }
 
-    const breakAt = Math.max(
-        text.lastIndexOf('\n', best),
-        text.lastIndexOf(' ', best)
-    );
-    return breakAt > 0 ? breakAt + 1 : best;
+    const newlineBreak = text.lastIndexOf('\n', best);
+    const spaceBreak = text.lastIndexOf(' ', best);
+    if (newlineBreak > 0 && newlineBreak >= spaceBreak) {
+        return newlineBreak;
+    }
+    if (spaceBreak > 0) {
+        return spaceBreak;
+    }
+    return best;
 }
 
 /**
@@ -257,7 +266,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             let currentY = margin + headerHeight + 14;
 
             if (sortedWeeks.length === 0) {
-                if (currentY + 30 > pageHeight - 60) {
+                if (currentY + 30 > pageHeight - FOOTER_RESERVED_SPACE) {
                     doc.addPage();
                     currentY = margin;
                 }
@@ -273,11 +282,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             }
 
             // Monthly Theme Section
-            if (pageHeight - 60 - currentY < 100) {
+            if (pageHeight - FOOTER_RESERVED_SPACE - currentY < THEME_MIN_START_SPACE) {
                 doc.addPage();
                 currentY = margin;
             }
-            if (currentY + 28 > pageHeight - 60) {
+            if (currentY + 28 > pageHeight - FOOTER_RESERVED_SPACE) {
                 doc.addPage();
                 currentY = margin;
             }
@@ -293,7 +302,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const themeText = sanitizeForPDF(reportData.monthly_theme) || '';
 
             if (!themeText) {
-                if (themeY + 50 > pageHeight - 60) {
+                if (themeY + 50 > pageHeight - FOOTER_RESERVED_SPACE) {
                     doc.addPage();
                     themeY = margin;
                 }
@@ -306,12 +315,12 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 const lineGap = 5;
 
                 while (remaining.length > 0) {
-                    if (themeY + 24 > pageHeight - 60) {
+                    if (themeY + 24 > pageHeight - FOOTER_RESERVED_SPACE) {
                         doc.addPage();
                         themeY = margin;
                     }
 
-                    const maxTextHeight = pageHeight - 60 - themeY - 10;
+                    const maxTextHeight = pageHeight - FOOTER_RESERVED_SPACE - themeY - THEME_TEXT_TOP_PADDING;
                     const chunkLength = findLargestTextChunk(doc, remaining, textWidth, maxTextHeight, lineGap);
                     const chunk = remaining.slice(0, chunkLength);
 
@@ -331,7 +340,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                        });
 
                     themeY += boxHeight + 8;
-                    remaining = remaining.slice(chunkLength).replace(/^\s+/, '');
+                    let nextStart = chunkLength;
+                    if (nextStart < remaining.length && (remaining[nextStart] === '\n' || remaining[nextStart] === ' ')) {
+                        nextStart += 1;
+                    }
+                    remaining = remaining.slice(nextStart);
                 }
                 currentY = themeY;
             }
