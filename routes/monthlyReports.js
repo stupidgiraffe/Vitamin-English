@@ -692,6 +692,8 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
         
         // Get signed URL
         const pdfUrl = await getDownloadUrl(uploadResult.key);
+        const cacheBuster = Date.now();
+        const cacheBustedPdfUrl = `${pdfUrl}${pdfUrl.includes('?') ? '&' : '?'}v=${cacheBuster}`;
         
         // Update report with PDF URL
         await pool.query(`
@@ -716,7 +718,7 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
         
         res.json({ 
             success: true,
-            pdfUrl: pdfUrl,
+            pdfUrl: cacheBustedPdfUrl,
             key: uploadResult.key
         });
     } catch (error) {
