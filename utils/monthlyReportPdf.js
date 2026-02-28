@@ -44,6 +44,13 @@ function formatFullDate(dateStr) {
     }
 }
 
+// A4 portrait dimensions in points
+const A4_WIDTH = 595.28;
+const A4_HEIGHT = 841.89;
+
+// Minimum space remaining on page before starting theme section on a new page
+const MIN_REMAINING_FOR_THEME = 100;
+
 // Category definitions (bilingual)
 const CATEGORIES = [
     { en: 'Target', jp: '目標', color: '#E3F2FD', field: 'target' },
@@ -180,8 +187,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             doc.registerFont('NotoJP', fontPath);
 
             // Constants for layout
-            const pageWidth = 595.28;
-            const pageHeight = 841.89;
+            const pageWidth = A4_WIDTH;
+            const pageHeight = A4_HEIGHT;
             const margin = 40;
             const contentWidth = pageWidth - (margin * 2);
             const bottomLimit = pageHeight - 60;
@@ -284,8 +291,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const themeBoxHeight = Math.max(themeTextHeight + 20, 50);
             const totalThemeHeight = themeHeaderHeight + themeBoxHeight;
 
-            // If less than 100pt remaining or theme won't fit, start new page
-            if (currentY + totalThemeHeight > bottomLimit || pageHeight - currentY < 100) {
+            // If less than MIN_REMAINING_FOR_THEME remaining or theme won't fit, start new page
+            if (currentY + totalThemeHeight > bottomLimit || pageHeight - currentY < MIN_REMAINING_FOR_THEME) {
                 doc.addPage();
                 currentY = margin;
             }
