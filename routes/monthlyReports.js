@@ -606,23 +606,40 @@ router.put('/:id', async (req, res) => {
         
         // Insert updated weeks
         if (weeks && Array.isArray(weeks) && weeks.length > 0) {
-            for (const week of weeks) {
-                if (week.week_number) {
-                    await client.query(`
+            // Sort weeks chronologically by lesson date and renumber
+            weeks.sort((a, b) => {
+                if (!a.lesson_date && !b.lesson_date) return 0;
+                if (!a.lesson_date) return 1;
+                if (!b.lesson_date) return -1;
+                return new Date(a.lesson_date) - new Date(b.lesson_date);
+            });
+
+            for (let i = 0; i < weeks.length; i++) {
+                const week = weeks[i];
+                const weekNum = i + 1;
+
+                // Update the linked teacher_comment_sheet's date if it changed
+                if (week.teacher_comment_sheet_id && week.lesson_date) {
+                    await client.query(
+                        'UPDATE teacher_comment_sheets SET date = $1 WHERE id = $2',
+                        [week.lesson_date, week.teacher_comment_sheet_id]
+                    );
+                }
+
+                await client.query(`
                         INSERT INTO monthly_report_weeks 
                         (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     `, [
-                        req.params.id,
-                        week.week_number,
-                        week.lesson_date || null,
-                        week.target || '',
-                        week.vocabulary || '',
-                        week.phrase || '',
-                        week.others || '',
-                        week.teacher_comment_sheet_id || null
-                    ]);
-                }
+                    req.params.id,
+                    weekNum,
+                    week.lesson_date || null,
+                    week.target || '',
+                    week.vocabulary || '',
+                    week.phrase || '',
+                    week.others || '',
+                    week.teacher_comment_sheet_id || null
+                ]);
             }
         }
         

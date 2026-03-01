@@ -182,6 +182,12 @@ router.delete('/:id', async (req, res) => {
             [req.params.id]
         );
 
+        // Nullify FK references in pdf_history before deleting
+        await client.query(
+            'UPDATE pdf_history SET report_id = NULL WHERE report_id = $1',
+            [req.params.id]
+        );
+
         const result = await client.query(
             'DELETE FROM teacher_comment_sheets WHERE id = $1 RETURNING id',
             [req.params.id]

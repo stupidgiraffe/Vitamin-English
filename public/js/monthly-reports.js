@@ -398,32 +398,40 @@ async function editMonthlyReport(reportId) {
         
         let weeksHtml = '';
         if (report.weeks && report.weeks.length > 0) {
-            report.weeks.forEach(week => {
-                const removeBtn = week.week_number > 1
-                    ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${week.week_number})">Remove</button>`
+            // Sort weeks by lesson date before rendering
+            const sortedWeeks = [...report.weeks].sort((a, b) => {
+                if (!a.lesson_date && !b.lesson_date) return 0;
+                if (!a.lesson_date) return 1;
+                if (!b.lesson_date) return -1;
+                return new Date(a.lesson_date) - new Date(b.lesson_date);
+            });
+            sortedWeeks.forEach((week, idx) => {
+                const displayWeekNum = idx + 1;
+                const removeBtn = displayWeekNum > 1
+                    ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${displayWeekNum})">Remove</button>`
                     : '';
                 weeksHtml += `
-                    <div class="mr-week-row" data-week="${week.week_number}">
-                        <h5>Week ${week.week_number} ${removeBtn}</h5>
+                    <div class="mr-week-row" data-week="${displayWeekNum}" data-tcs-id="${week.teacher_comment_sheet_id || ''}">
+                        <h5>Week ${displayWeekNum} ${removeBtn}</h5>
                         <div class="form-group">
                             <label>Date</label>
-                            <input type="date" class="form-control mr-week-date" data-week="${week.week_number}" value="${week.lesson_date ? week.lesson_date.split('T')[0] : ''}">
+                            <input type="date" class="form-control mr-week-date" data-week="${displayWeekNum}" value="${week.lesson_date ? week.lesson_date.split('T')[0] : ''}">
                         </div>
                         <div class="form-group">
                             <label>Target (目標)</label>
-                            <textarea class="form-control mr-week-target" rows="2" data-week="${week.week_number}">${escapeHtml(week.target || '')}</textarea>
+                            <textarea class="form-control mr-week-target" rows="2" data-week="${displayWeekNum}">${escapeHtml(week.target || '')}</textarea>
                         </div>
                         <div class="form-group">
                             <label>Vocabulary (単語)</label>
-                            <textarea class="form-control mr-week-vocabulary" rows="2" data-week="${week.week_number}">${escapeHtml(week.vocabulary || '')}</textarea>
+                            <textarea class="form-control mr-week-vocabulary" rows="2" data-week="${displayWeekNum}">${escapeHtml(week.vocabulary || '')}</textarea>
                         </div>
                         <div class="form-group">
                             <label>Phrase (文)</label>
-                            <textarea class="form-control mr-week-phrase" rows="2" data-week="${week.week_number}">${escapeHtml(week.phrase || '')}</textarea>
+                            <textarea class="form-control mr-week-phrase" rows="2" data-week="${displayWeekNum}">${escapeHtml(week.phrase || '')}</textarea>
                         </div>
                         <div class="form-group">
                             <label>Others (その他)</label>
-                            <textarea class="form-control mr-week-others" rows="2" data-week="${week.week_number}">${escapeHtml(week.others || '')}</textarea>
+                            <textarea class="form-control mr-week-others" rows="2" data-week="${displayWeekNum}">${escapeHtml(week.others || '')}</textarea>
                         </div>
                     </div>
                 `;
@@ -498,6 +506,7 @@ async function handleUpdateMonthlyReport(e) {
         const vocabulary = row.querySelector('.mr-week-vocabulary').value;
         const phrase = row.querySelector('.mr-week-phrase').value;
         const others = row.querySelector('.mr-week-others').value;
+        const tcsId = row.dataset.tcsId ? parseInt(row.dataset.tcsId) : null;
         
         weeks.push({
             week_number: weekNumber,
@@ -505,9 +514,19 @@ async function handleUpdateMonthlyReport(e) {
             target: target,
             vocabulary: vocabulary,
             phrase: phrase,
-            others: others
+            others: others,
+            teacher_comment_sheet_id: tcsId
         });
     });
+
+    // Sort weeks by date and renumber chronologically
+    weeks.sort((a, b) => {
+        if (!a.lesson_date && !b.lesson_date) return 0;
+        if (!a.lesson_date) return 1;
+        if (!b.lesson_date) return -1;
+        return new Date(a.lesson_date) - new Date(b.lesson_date);
+    });
+    weeks.forEach((w, i) => { w.week_number = i + 1; });
     
     try {
         await api(`/monthly-reports/${reportId}`, {
