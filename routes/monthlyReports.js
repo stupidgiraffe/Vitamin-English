@@ -318,7 +318,7 @@ router.post('/auto-generate', async (req, res) => {
             const weeksResult = await pool.query(`
                 SELECT * FROM monthly_report_weeks
                 WHERE monthly_report_id = $1
-                ORDER BY week_number
+                ORDER BY lesson_date NULLS LAST, week_number
             `, [reportId]);
             report.weeks = weeksResult.rows;
 
@@ -386,7 +386,7 @@ router.post('/auto-generate', async (req, res) => {
         const weeksResult = await pool.query(`
             SELECT * FROM monthly_report_weeks
             WHERE monthly_report_id = $1
-            ORDER BY week_number
+            ORDER BY lesson_date NULLS LAST, week_number
         `, [reportId]);
         
         report.weeks = weeksResult.rows;
@@ -472,7 +472,7 @@ router.get('/:id', async (req, res) => {
         const weeksResult = await pool.query(`
             SELECT * FROM monthly_report_weeks
             WHERE monthly_report_id = $1
-            ORDER BY week_number
+            ORDER BY lesson_date NULLS LAST, week_number
         `, [req.params.id]);
         
         report.weeks = weeksResult.rows;
@@ -561,7 +561,7 @@ router.post('/', async (req, res) => {
         const weeksResult = await pool.query(`
             SELECT * FROM monthly_report_weeks
             WHERE monthly_report_id = $1
-            ORDER BY week_number
+            ORDER BY lesson_date NULLS LAST, week_number
         `, [reportId]);
         
         report.weeks = weeksResult.rows;
@@ -646,7 +646,7 @@ router.put('/:id', async (req, res) => {
         const weeksResult = await pool.query(`
             SELECT * FROM monthly_report_weeks
             WHERE monthly_report_id = $1
-            ORDER BY week_number
+            ORDER BY lesson_date NULLS LAST, week_number
         `, [req.params.id]);
         
         report.weeks = weeksResult.rows;
@@ -706,7 +706,7 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
         const weeksResult = await pool.query(`
             SELECT * FROM monthly_report_weeks
             WHERE monthly_report_id = $1
-            ORDER BY week_number
+            ORDER BY lesson_date NULLS LAST, week_number
         `, [req.params.id]);
         
         const weeks = weeksResult.rows;
@@ -872,7 +872,7 @@ router.post('/generate-test-data', async (req, res) => {
             const weeksResult = await pool.query(`
                 SELECT * FROM monthly_report_weeks
                 WHERE monthly_report_id = $1
-                ORDER BY week_number
+                ORDER BY lesson_date NULLS LAST, week_number
             `, [existingId]);
             
             report.weeks = weeksResult.rows;

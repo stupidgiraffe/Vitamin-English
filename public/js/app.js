@@ -3179,6 +3179,9 @@ function renderCleanTable(data, type, options = {}) {
                 }
                 if (type === 'monthly_reports') {
                     html += `
+                    <button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editMonthlyReport(${sanitizedId})" title="Edit">
+                        ✏️
+                    </button>
                     <button class="btn btn-small btn-success" onclick="event.stopPropagation(); generateMonthlyReportPDF(${sanitizedId})" title="Generate PDF">
                         📄 ${row.pdf_url ? 'Regenerate' : 'Generate'} PDF
                     </button>`;
@@ -3188,6 +3191,10 @@ function renderCleanTable(data, type, options = {}) {
                         📥 View PDF
                     </button>`;
                     }
+                    html += `
+                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteMonthlyReport(${sanitizedId})" title="Delete">
+                        🗑️
+                    </button>`;
                 }
                 html += `</td>`;
             } else {
@@ -3611,10 +3618,17 @@ async function viewMonthlyReportDetail(reportId) {
         
         let weeksHtml = '';
         if (report.weeks && report.weeks.length > 0) {
-            report.weeks.forEach((week, index) => {
+            // Sort weeks by lesson_date (nulls last)
+            const sortedWeeks = report.weeks.slice().sort((a, b) => {
+                if (!a.lesson_date && !b.lesson_date) return 0;
+                if (!a.lesson_date) return 1;
+                if (!b.lesson_date) return -1;
+                return new Date(a.lesson_date) - new Date(b.lesson_date);
+            });
+            sortedWeeks.forEach((week, index) => {
                 weeksHtml += `
                     <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                        <strong>Week ${week.week_number}</strong> ${week.lesson_date ? `- ${formatDisplayDate(week.lesson_date)}` : ''}
+                        <strong>Week ${index + 1}</strong> ${week.lesson_date ? `- ${formatDisplayDate(week.lesson_date)}` : ''}
                         <p style="margin: 5px 0;"><strong>Target:</strong> ${week.target || 'N/A'}</p>
                         <p style="margin: 5px 0;"><strong>Vocabulary:</strong> ${week.vocabulary || 'N/A'}</p>
                         <p style="margin: 5px 0;"><strong>Phrase:</strong> ${week.phrase || 'N/A'}</p>
@@ -4593,13 +4607,9 @@ async function initializeMonthlyReportsPage() {
         classFilter.appendChild(option);
     });
     
-    // Set default date range: first day of current month to today
-    const today = new Date();
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const pad = (n) => String(n).padStart(2, '0');
-    const toLocalDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-    document.getElementById('monthly-report-start-date').value = toLocalDate(firstDayOfMonth);
-    document.getElementById('monthly-report-end-date').value = toLocalDate(today);
+    // Clear date filters on initial load so all reports are visible
+    document.getElementById('monthly-report-start-date').value = '';
+    document.getElementById('monthly-report-end-date').value = '';
     
     // Set up event listeners (remove existing ones first to prevent duplicates)
     const filterBtn = document.getElementById('filter-monthly-reports-btn');
