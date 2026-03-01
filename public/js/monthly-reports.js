@@ -51,6 +51,11 @@ async function showNewMonthlyReportModal() {
                     <option value="published">Published</option>
                 </select>
             </div>
+            <hr>
+            <h4>Weekly Lessons (Optional)</h4>
+            <div id="mr-weeks-container"></div>
+            <button type="button" class="btn btn-secondary" id="mr-add-week-btn">+ Add Week</button>
+            <hr>
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Create Report</button>
                 <button type="button" class="btn btn-secondary" id="mr-cancel-btn">Cancel</button>
@@ -61,6 +66,7 @@ async function showNewMonthlyReportModal() {
     showModal('Create Monthly Report', formHtml);
 
     document.getElementById('monthly-report-form').addEventListener('submit', handleCreateMonthlyReport);
+    document.getElementById('mr-add-week-btn').addEventListener('click', addWeekRow);
     document.getElementById('mr-cancel-btn').addEventListener('click', closeModal);
 }
 
@@ -285,6 +291,26 @@ async function handleCreateMonthlyReport(e) {
         return;
     }
 
+    // Collect manually added weeks (if any)
+    const manualWeeks = [];
+    const weekRows = document.querySelectorAll('.mr-week-row');
+    weekRows.forEach((row) => {
+        const weekNumber = parseInt(row.dataset.week);
+        const date = row.querySelector('.mr-week-date').value;
+        const target = row.querySelector('.mr-week-target').value;
+        const vocabulary = row.querySelector('.mr-week-vocabulary').value;
+        const phrase = row.querySelector('.mr-week-phrase').value;
+        const others = row.querySelector('.mr-week-others').value;
+        manualWeeks.push({
+            week_number: weekNumber,
+            lesson_date: date || null,
+            target: target,
+            vocabulary: vocabulary,
+            phrase: phrase,
+            others: others
+        });
+    });
+
     try {
         const response = await api('/monthly-reports/auto-generate', {
             method: 'POST',
@@ -293,7 +319,8 @@ async function handleCreateMonthlyReport(e) {
                 start_date: startDate,
                 end_date: endDate,
                 monthly_theme: theme,
-                status: status
+                status: status,
+                manual_weeks: manualWeeks.length > 0 ? manualWeeks : undefined
             })
         });
 
@@ -372,28 +399,31 @@ async function editMonthlyReport(reportId) {
         let weeksHtml = '';
         if (report.weeks && report.weeks.length > 0) {
             report.weeks.forEach(week => {
+                const removeBtn = week.week_number > 1
+                    ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${week.week_number})">Remove</button>`
+                    : '';
                 weeksHtml += `
                     <div class="mr-week-row" data-week="${week.week_number}">
-                        <h5>Week ${week.week_number}</h5>
+                        <h5>Week ${week.week_number} ${removeBtn}</h5>
                         <div class="form-group">
                             <label>Date</label>
                             <input type="date" class="form-control mr-week-date" data-week="${week.week_number}" value="${week.lesson_date ? week.lesson_date.split('T')[0] : ''}">
                         </div>
                         <div class="form-group">
                             <label>Target (目標)</label>
-                            <textarea class="form-control mr-week-target" rows="2" data-week="${week.week_number}">${week.target || ''}</textarea>
+                            <textarea class="form-control mr-week-target" rows="2" data-week="${week.week_number}">${escapeHtml(week.target || '')}</textarea>
                         </div>
                         <div class="form-group">
                             <label>Vocabulary (単語)</label>
-                            <textarea class="form-control mr-week-vocabulary" rows="2" data-week="${week.week_number}">${week.vocabulary || ''}</textarea>
+                            <textarea class="form-control mr-week-vocabulary" rows="2" data-week="${week.week_number}">${escapeHtml(week.vocabulary || '')}</textarea>
                         </div>
                         <div class="form-group">
                             <label>Phrase (文)</label>
-                            <textarea class="form-control mr-week-phrase" rows="2" data-week="${week.week_number}">${week.phrase || ''}</textarea>
+                            <textarea class="form-control mr-week-phrase" rows="2" data-week="${week.week_number}">${escapeHtml(week.phrase || '')}</textarea>
                         </div>
                         <div class="form-group">
                             <label>Others (その他)</label>
-                            <textarea class="form-control mr-week-others" rows="2" data-week="${week.week_number}">${week.others || ''}</textarea>
+                            <textarea class="form-control mr-week-others" rows="2" data-week="${week.week_number}">${escapeHtml(week.others || '')}</textarea>
                         </div>
                     </div>
                 `;
@@ -420,7 +450,7 @@ async function editMonthlyReport(reportId) {
                 <hr>
                 <div class="form-group">
                     <label>Monthly Theme (今月のテーマ)</label>
-                    <textarea id="mr-theme" class="form-control" rows="4">${report.monthly_theme || ''}</textarea>
+                    <textarea id="mr-theme" class="form-control" rows="4">${escapeHtml(report.monthly_theme || '')}</textarea>
                 </div>
                 <div class="form-group">
                     <label>Status</label>
@@ -437,6 +467,9 @@ async function editMonthlyReport(reportId) {
         `;
         
         showModal('Edit Monthly Report', content);
+        
+        // Set textarea values via JS to ensure special characters are preserved correctly
+        document.getElementById('mr-theme').value = report.monthly_theme || '';
         
         document.getElementById('monthly-report-edit-form').addEventListener('submit', handleUpdateMonthlyReport);
         document.getElementById('mr-add-week-btn').addEventListener('click', addWeekRow);

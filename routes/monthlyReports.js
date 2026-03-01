@@ -204,7 +204,7 @@ router.post('/auto-generate', async (req, res) => {
     const client = await dataHub.pool.connect();
     
     try {
-        const { class_id, start_date, end_date, year, month, monthly_theme, status } = req.body;
+        const { class_id, start_date, end_date, year, month, monthly_theme, status, manual_weeks } = req.body;
         
         if (!class_id) {
             return res.status(400).json({ 
@@ -263,10 +263,66 @@ router.post('/auto-generate', async (req, res) => {
         const lessons = lessonsResult.rows;
         
         if (lessons.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ 
-                error: 'No teacher comment sheets found for this class and date range' 
-            });
+            // No teacher comment sheets found - create report with manually provided weeks (if any)
+            let reportResult;
+            try {
+                reportResult = await client.query(`
+                    INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    RETURNING id
+                `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session?.userId || null]);
+            } catch (insertErr) {
+                if (insertErr.code === '42703' || (insertErr.message && (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')))) {
+                    reportResult = await client.query(`
+                        INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        RETURNING id
+                    `, [class_id, reportYear, reportMonth, monthly_theme || '', status || 'draft', req.session?.userId || null]);
+                } else {
+                    throw insertErr;
+                }
+            }
+
+            const reportId = reportResult.rows[0].id;
+
+            // Insert manually provided weeks if any
+            if (manual_weeks && Array.isArray(manual_weeks) && manual_weeks.length > 0) {
+                for (let i = 0; i < manual_weeks.length; i++) {
+                    const week = manual_weeks[i];
+                    await client.query(`
+                        INSERT INTO monthly_report_weeks
+                        (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    `, [
+                        reportId,
+                        week.week_number || (i + 1),
+                        week.lesson_date || null,
+                        week.target || '',
+                        week.vocabulary || '',
+                        week.phrase || '',
+                        week.others || ''
+                    ]);
+                }
+            }
+
+            await client.query('COMMIT');
+
+            const completeResult = await pool.query(`
+                SELECT mr.*, c.name as class_name, c.schedule
+                FROM monthly_reports mr
+                JOIN classes c ON mr.class_id = c.id
+                WHERE mr.id = $1
+            `, [reportId]);
+
+            const report = completeResult.rows[0];
+            const weeksResult = await pool.query(`
+                SELECT * FROM monthly_report_weeks
+                WHERE monthly_report_id = $1
+                ORDER BY week_number
+            `, [reportId]);
+            report.weeks = weeksResult.rows;
+
+            return res.status(201).json(report);
         }
         
         // Create monthly report - try with start_date/end_date first, fall back without them
