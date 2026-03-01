@@ -26,10 +26,9 @@ const THEME = {
  */
 function sanitizeForPDF(text) {
     if (!text) return '';
-    // Remove control characters and special PDF syntax characters
-    return text.replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-               .replace(/[<>]/g, '')
-               .substring(0, 255); // Limit length
+    // Remove control characters EXCEPT newline (\n), carriage return (\r), and tab (\t)
+    return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
+               .replace(/[<>]/g, '');
 }
 
 /**
