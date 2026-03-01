@@ -331,16 +331,11 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 const leftColX = margin + 10;
                 const rightColX = margin + contentWidth / 2 + 5;
                 const colWidth = contentWidth / 2 - 15;
-                let bodyY = currentY + 8;
 
                 activeStudents.forEach((student, index) => {
                     const isLeft = index % 2 === 0;
                     const x = isLeft ? leftColX : rightColX;
-                    if (!isLeft) {
-                        bodyY = currentY + 8 + Math.floor(index / 2) * rowHeight;
-                    } else if (index > 0) {
-                        bodyY = currentY + 8 + Math.floor(index / 2) * rowHeight;
-                    }
+                    const bodyY = currentY + 8 + Math.floor(index / 2) * rowHeight;
                     const studentName = sanitizeForPDF(student.name);
                     doc.fontSize(10)
                        .font('NotoJP')

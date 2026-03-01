@@ -310,6 +310,38 @@ function getStudentColorInputValue(inputId) {
     return el.value;
 }
 
+// Initialize a student color picker: set initial state and attach event listeners
+function initStudentColorPicker(inputId, previewId, clearBtnId, initialColorCode) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+    const clearBtn = document.getElementById(clearBtnId);
+    if (!input || !preview || !clearBtn) return;
+    const state = normalizeStudentColor(initialColorCode);
+    input.value = state.value;
+    input.dataset.cleared = String(state.cleared);
+    if (state.cleared) {
+        preview.style.background = 'transparent';
+        preview.style.color = '';
+        preview.textContent = 'None';
+    } else {
+        preview.style.background = state.value;
+        preview.style.color = getContrastTextColor(state.value);
+        preview.textContent = 'Preview';
+    }
+    input.addEventListener('input', (e) => {
+        input.dataset.cleared = 'false';
+        preview.style.background = e.target.value;
+        preview.style.color = getContrastTextColor(e.target.value);
+        preview.textContent = 'Preview';
+    });
+    clearBtn.addEventListener('click', () => {
+        input.dataset.cleared = 'true';
+        preview.style.background = 'transparent';
+        preview.style.color = '';
+        preview.textContent = 'None';
+    });
+}
+
 // Date formatting helper for display
 function formatDisplayDate(isoDate) {
     if (!isoDate) return 'N/A';
@@ -1560,35 +1592,7 @@ async function editStudentFromAttendance(studentId) {
             </form>
         `);
 
-        // Initialize color picker state
-        const editColorInput = document.getElementById('edit-student-color');
-        const editColorPreview = document.getElementById('edit-student-color-preview');
-        const editColorClear = document.getElementById('edit-student-color-clear');
-        const editColorState = normalizeStudentColor(student.color_code);
-        editColorInput.value = editColorState.value;
-        editColorInput.dataset.cleared = String(editColorState.cleared);
-        if (editColorState.cleared) {
-            editColorPreview.style.background = 'transparent';
-            editColorPreview.textContent = 'None';
-            editColorPreview.style.color = '';
-        } else {
-            editColorPreview.style.background = editColorState.value;
-            editColorPreview.style.color = getContrastTextColor(editColorState.value);
-            editColorPreview.textContent = 'Preview';
-        }
-        editColorInput.addEventListener('input', (e) => {
-            const color = e.target.value;
-            editColorInput.dataset.cleared = 'false';
-            editColorPreview.style.background = color;
-            editColorPreview.style.color = getContrastTextColor(color);
-            editColorPreview.textContent = 'Preview';
-        });
-        editColorClear.addEventListener('click', () => {
-            editColorInput.dataset.cleared = 'true';
-            editColorPreview.style.background = 'transparent';
-            editColorPreview.style.color = '';
-            editColorPreview.textContent = 'None';
-        });
+        initStudentColorPicker('edit-student-color', 'edit-student-color-preview', 'edit-student-color-clear', student.color_code);
 
         document.getElementById('edit-student-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -2402,23 +2406,7 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
         </form>
     `);
 
-    // Initialize add-student color picker
-    const addColorInput = document.getElementById('student-color');
-    const addColorPreview = document.getElementById('student-color-preview');
-    const addColorClear = document.getElementById('student-color-clear');
-    addColorInput.addEventListener('input', (e) => {
-        const color = e.target.value;
-        addColorInput.dataset.cleared = 'false';
-        addColorPreview.style.background = color;
-        addColorPreview.style.color = getContrastTextColor(color);
-        addColorPreview.textContent = 'Preview';
-    });
-    addColorClear.addEventListener('click', () => {
-        addColorInput.dataset.cleared = 'true';
-        addColorPreview.style.background = 'transparent';
-        addColorPreview.style.color = '';
-        addColorPreview.textContent = 'None';
-    });
+    initStudentColorPicker('student-color', 'student-color-preview', 'student-color-clear', null);
 
     document.getElementById('student-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -2511,35 +2499,7 @@ async function editStudent(id) {
             </form>
         `);
 
-        // Initialize edit-student color picker
-        const editColorInput2 = document.getElementById('edit-student-color');
-        const editColorPreview2 = document.getElementById('edit-student-color-preview');
-        const editColorClear2 = document.getElementById('edit-student-color-clear');
-        const editColorState2 = normalizeStudentColor(student.color_code);
-        editColorInput2.value = editColorState2.value;
-        editColorInput2.dataset.cleared = String(editColorState2.cleared);
-        if (editColorState2.cleared) {
-            editColorPreview2.style.background = 'transparent';
-            editColorPreview2.textContent = 'None';
-            editColorPreview2.style.color = '';
-        } else {
-            editColorPreview2.style.background = editColorState2.value;
-            editColorPreview2.style.color = getContrastTextColor(editColorState2.value);
-            editColorPreview2.textContent = 'Preview';
-        }
-        editColorInput2.addEventListener('input', (e) => {
-            const color = e.target.value;
-            editColorInput2.dataset.cleared = 'false';
-            editColorPreview2.style.background = color;
-            editColorPreview2.style.color = getContrastTextColor(color);
-            editColorPreview2.textContent = 'Preview';
-        });
-        editColorClear2.addEventListener('click', () => {
-            editColorInput2.dataset.cleared = 'true';
-            editColorPreview2.style.background = 'transparent';
-            editColorPreview2.style.color = '';
-            editColorPreview2.textContent = 'None';
-        });
+        initStudentColorPicker('edit-student-color', 'edit-student-color-preview', 'edit-student-color-clear', student.color_code);
 
         document.getElementById('edit-student-form').addEventListener('submit', async (e) => {
             e.preventDefault();
