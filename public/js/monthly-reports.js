@@ -339,14 +339,20 @@ async function viewMonthlyReport(reportId) {
         const report = await api(`/monthly-reports/${reportId}`);
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         
+        // Sort weeks by lesson_date (nulls last)
+        const sortedWeeks = (report.weeks || []).slice().sort((a, b) => {
+            if (!a.lesson_date && !b.lesson_date) return 0;
+            if (!a.lesson_date) return 1;
+            if (!b.lesson_date) return -1;
+            return new Date(a.lesson_date) - new Date(b.lesson_date);
+        });
+
         let weeksHtml = '';
-        if (report.weeks && report.weeks.length > 0) {
-            report.weeks.forEach((week, index) => {
-                // Use the new smart date formatter for lesson dates
-                let dateLabel = 'Lesson';
+        if (sortedWeeks.length > 0) {
+            sortedWeeks.forEach((week, index) => {
+                let dateLabel;
                 if (week.lesson_date) {
-                    // Use formatDateJP for date-only display (no time needed for lesson dates)
-                    dateLabel = formatDateJP(week.lesson_date) || formatDateReadableEN(week.lesson_date) || `Lesson ${index + 1}`;
+                    dateLabel = formatDateReadableEN(week.lesson_date) || `Lesson ${index + 1}`;
                 } else {
                     dateLabel = `Lesson ${index + 1}`;
                 }
@@ -365,9 +371,9 @@ async function viewMonthlyReport(reportId) {
             weeksHtml = '<p>No weekly data available.</p>';
         }
         
-        // Format date range using smart formatter
-        const startDateFormatted = report.start_date ? formatDateJP(report.start_date) : 'N/A';
-        const endDateFormatted = report.end_date ? formatDateJP(report.end_date) : 'N/A';
+        // Format date range using readable formatter to avoid mojibake
+        const startDateFormatted = report.start_date ? formatDateReadableEN(report.start_date) : 'N/A';
+        const endDateFormatted = report.end_date ? formatDateReadableEN(report.end_date) : 'N/A';
         
         const content = `
             <div class="monthly-report-view">
@@ -396,18 +402,37 @@ async function editMonthlyReport(reportId) {
         const report = await api(`/monthly-reports/${reportId}`);
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         
+        // Sort weeks by lesson_date (nulls last) before rendering the edit form
+        const sortedWeeks = (report.weeks || []).slice().sort((a, b) => {
+            if (!a.lesson_date && !b.lesson_date) return 0;
+            if (!a.lesson_date) return 1;
+            if (!b.lesson_date) return -1;
+            return new Date(a.lesson_date) - new Date(b.lesson_date);
+        });
+
+        // Helper: extract YYYY-MM-DD from any date string format
+        // Handles '2024-01-15', '2024-01-15T10:30:00', '2024-01-15 10:30:00', etc.
+        function toDateInputValue(dateStr) {
+            if (!dateStr) return '';
+            const s = String(dateStr);
+            // Match the leading YYYY-MM-DD portion regardless of what follows
+            const match = s.match(/^(\d{4}-\d{2}-\d{2})/);
+            return match ? match[1] : '';
+        }
+
         let weeksHtml = '';
-        if (report.weeks && report.weeks.length > 0) {
-            report.weeks.forEach(week => {
-                const removeBtn = week.week_number > 1
+        if (sortedWeeks.length > 0) {
+            sortedWeeks.forEach((week, index) => {
+                const displayNumber = index + 1;
+                const removeBtn = index > 0
                     ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${week.week_number})">Remove</button>`
                     : '';
                 weeksHtml += `
                     <div class="mr-week-row" data-week="${week.week_number}">
-                        <h5>Week ${week.week_number} ${removeBtn}</h5>
+                        <h5>Week ${displayNumber} ${removeBtn}</h5>
                         <div class="form-group">
                             <label>Date</label>
-                            <input type="date" class="form-control mr-week-date" data-week="${week.week_number}" value="${week.lesson_date ? week.lesson_date.split('T')[0] : ''}">
+                            <input type="date" class="form-control mr-week-date" data-week="${week.week_number}" value="${toDateInputValue(week.lesson_date)}">
                         </div>
                         <div class="form-group">
                             <label>Target (目標)</label>
@@ -508,6 +533,16 @@ async function handleUpdateMonthlyReport(e) {
             others: others
         });
     });
+
+    // Sort weeks by lesson_date before sending (nulls last)
+    weeks.sort((a, b) => {
+        if (!a.lesson_date && !b.lesson_date) return 0;
+        if (!a.lesson_date) return 1;
+        if (!b.lesson_date) return -1;
+        return new Date(a.lesson_date) - new Date(b.lesson_date);
+    });
+    // Re-assign week_number after sorting
+    weeks.forEach((w, i) => { w.week_number = i + 1; });
     
     try {
         await api(`/monthly-reports/${reportId}`, {
