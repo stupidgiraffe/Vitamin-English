@@ -286,6 +286,62 @@ function getContrastTextColor(hexColor) {
     return brightness > 128 ? '#000' : '#fff';
 }
 
+// Build a display label for a class including schedule if available
+function getClassDisplayName(cls) {
+    if (!cls) return '';
+    const name = cls.name || '';
+    const schedule = cls.schedule && cls.schedule.trim() ? cls.schedule.trim() : '';
+    return schedule ? `${name} \u2014 ${schedule}` : name;
+}
+
+// Normalize legacy student color codes to hex values
+function normalizeStudentColor(colorCode) {
+    if (!colorCode) return { value: '#FFFFFF', cleared: true };
+    if (colorCode === 'yellow') return { value: '#FBBC04', cleared: false };
+    if (colorCode === 'blue') return { value: '#4285F4', cleared: false };
+    if (colorCode.startsWith('#')) return { value: colorCode, cleared: false };
+    return { value: '#FFFFFF', cleared: true };
+}
+
+// Read the effective color value from a student color input (respects data-cleared state)
+function getStudentColorInputValue(inputId) {
+    const el = document.getElementById(inputId);
+    if (!el || el.dataset.cleared === 'true') return '';
+    return el.value;
+}
+
+// Initialize a student color picker: set initial state and attach event listeners
+function initStudentColorPicker(inputId, previewId, clearBtnId, initialColorCode) {
+    const input = document.getElementById(inputId);
+    const preview = document.getElementById(previewId);
+    const clearBtn = document.getElementById(clearBtnId);
+    if (!input || !preview || !clearBtn) return;
+    const state = normalizeStudentColor(initialColorCode);
+    input.value = state.value;
+    input.dataset.cleared = String(state.cleared);
+    if (state.cleared) {
+        preview.style.background = 'transparent';
+        preview.style.color = '';
+        preview.textContent = 'None';
+    } else {
+        preview.style.background = state.value;
+        preview.style.color = getContrastTextColor(state.value);
+        preview.textContent = 'Preview';
+    }
+    input.addEventListener('input', (e) => {
+        input.dataset.cleared = 'false';
+        preview.style.background = e.target.value;
+        preview.style.color = getContrastTextColor(e.target.value);
+        preview.textContent = 'Preview';
+    });
+    clearBtn.addEventListener('click', () => {
+        input.dataset.cleared = 'true';
+        preview.style.background = 'transparent';
+        preview.style.color = '';
+        preview.textContent = 'None';
+    });
+}
+
 // Date formatting helper for display
 function formatDisplayDate(isoDate) {
     if (!isoDate) return 'N/A';
@@ -504,7 +560,7 @@ function populateClassSelects() {
         classes.forEach(cls => {
             const option = document.createElement('option');
             option.value = cls.id;
-            option.textContent = cls.name;
+            option.textContent = getClassDisplayName(cls);
             select.appendChild(option);
         });
     });
@@ -973,7 +1029,7 @@ async function showNewAttendanceModal() {
         const allClasses = await api('/classes');
         
         const classOptions = allClasses
-            .map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+            .map(c => `<option value="${c.id}">${escapeHtml(getClassDisplayName(c))}</option>`)
             .join('');
         
         const today = new Date().toISOString().split('T')[0];
@@ -1231,8 +1287,9 @@ function renderAttendanceTable(data, classId) {
     if (regularStudents.length > 0) {
         html += '<tr><td colspan="' + (dates.length + 1) + '" class="student-type-header">Regular Students</td></tr>';
         regularStudents.forEach(student => {
-            const rowClass = student.color_code ? `student-row-${student.color_code}` : '';
-            html += `<tr class="${rowClass}"><td class="student-name">
+            const rowClass = (student.color_code && !student.color_code.startsWith('#')) ? `student-row-${student.color_code}` : '';
+            const rowStyle = (student.color_code && student.color_code.startsWith('#')) ? ` style="background: ${student.color_code}"` : '';
+            html += `<tr class="${rowClass}"${rowStyle}><td class="student-name">
                 <div class="student-name-cell">
                     <span>${escapeHtml(student.name)}</span>
                     <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
@@ -1338,7 +1395,7 @@ function renderAttendanceGridView(data, classId) {
             const rateClass = student.attendanceRate >= 80 ? 'good' : student.attendanceRate >= 60 ? 'warning' : 'poor';
             
             sectionHtml += `
-                <div class="student-grid-card ${student.color_code ? `student-card-${student.color_code}` : ''}">
+                <div class="student-grid-card ${student.color_code && !student.color_code.startsWith('#') ? `student-card-${student.color_code}` : ''}" ${student.color_code && student.color_code.startsWith('#') ? `style="background: ${student.color_code}"` : ''}>
                     <div class="student-card-header">
                         <span class="student-card-name">${escapeHtml(student.name)}</span>
                         <span class="student-card-rate ${rateClass}">${student.attendanceRate}%</span>
@@ -1504,7 +1561,7 @@ async function editStudentFromAttendance(studentId) {
                     <label>Class</label>
                     <select id="edit-student-class" class="form-control">
                         <option value="">Unassigned</option>
-                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -1516,11 +1573,12 @@ async function editStudentFromAttendance(studentId) {
                 </div>
                 <div class="form-group">
                     <label>Color Code</label>
-                    <select id="edit-student-color" class="form-control">
-                        <option value="">None</option>
-                        <option value="yellow" ${student.color_code === 'yellow' ? 'selected' : ''}>Yellow</option>
-                        <option value="blue" ${student.color_code === 'blue' ? 'selected' : ''}>Blue</option>
-                    </select>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" id="edit-student-color" class="form-control"
+                               style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
+                        <span id="edit-student-color-preview" style="padding: 8px 16px; border-radius: 4px; font-size: 12px;">Preview</span>
+                        <button type="button" class="btn btn-small btn-secondary" id="edit-student-color-clear">Clear</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Email</label>
@@ -1534,6 +1592,8 @@ async function editStudentFromAttendance(studentId) {
             </form>
         `);
 
+        initStudentColorPicker('edit-student-color', 'edit-student-color-preview', 'edit-student-color-clear', student.color_code);
+
         document.getElementById('edit-student-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -1544,7 +1604,7 @@ async function editStudentFromAttendance(studentId) {
                         name: document.getElementById('edit-student-name').value,
                         class_id: document.getElementById('edit-student-class').value || null,
                         student_type: document.getElementById('edit-student-type').value,
-                        color_code: document.getElementById('edit-student-color').value,
+                        color_code: getStudentColorInputValue('edit-student-color'),
                         email: document.getElementById('edit-student-email').value || null,
                         phone: document.getElementById('edit-student-phone').value || null,
                         active: 1
@@ -1985,7 +2045,7 @@ async function initMultiClassView() {
         container.innerHTML = classes.map((cls, index) => `
             <div class="multi-select-item" data-class-id="${cls.id}" data-color="${colors[index % colors.length]}">
                 <input type="checkbox" id="class-${cls.id}" value="${cls.id}">
-                <label for="class-${cls.id}">${cls.name}</label>
+                <label for="class-${cls.id}">${escapeHtml(getClassDisplayName(cls))}</label>
             </div>
         `).join('');
         
@@ -2291,7 +2351,7 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                 <label>Class (Optional)</label>
                 <select id="student-class" class="form-control">
                     <option value="">Unassigned (can assign later)</option>
-                    ${classes.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}
+                    ${classes.map(c => `<option value="${c.id}">${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
                 </select>
                 <small class="form-hint">You can assign the student to a class later</small>
             </div>
@@ -2304,11 +2364,13 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
             </div>
             <div class="form-group">
                 <label>Color Code</label>
-                <select id="student-color" class="form-control">
-                    <option value="">None</option>
-                    <option value="yellow">Yellow</option>
-                    <option value="blue">Blue</option>
-                </select>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="color" id="student-color" value="#FFFFFF" class="form-control"
+                           style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;"
+                           data-cleared="true">
+                    <span id="student-color-preview" style="padding: 8px 16px; border-radius: 4px; background: transparent; font-size: 12px;">None</span>
+                    <button type="button" class="btn btn-small btn-secondary" id="student-color-clear">Clear</button>
+                </div>
             </div>
             <div class="form-group">
                 <label>Email (Optional)</label>
@@ -2344,6 +2406,8 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
         </form>
     `);
 
+    initStudentColorPicker('student-color', 'student-color-preview', 'student-color-clear', null);
+
     document.getElementById('student-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -2354,7 +2418,7 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                     name: document.getElementById('student-name').value,
                     class_id: document.getElementById('student-class').value || null,
                     student_type: document.getElementById('student-type').value,
-                    color_code: document.getElementById('student-color').value,
+                    color_code: getStudentColorInputValue('student-color'),
                     email: document.getElementById('student-email').value || null,
                     phone: document.getElementById('student-phone').value || null,
                     parent_name: document.getElementById('student-parent-name').value || null,
@@ -2388,7 +2452,7 @@ async function editStudent(id) {
                     <label>Class</label>
                     <select id="edit-student-class" class="form-control">
                         <option value="">Unassigned</option>
-                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -2400,11 +2464,12 @@ async function editStudent(id) {
                 </div>
                 <div class="form-group">
                     <label>Color Code</label>
-                    <select id="edit-student-color" class="form-control">
-                        <option value="">None</option>
-                        <option value="yellow" ${student.color_code === 'yellow' ? 'selected' : ''}>Yellow</option>
-                        <option value="blue" ${student.color_code === 'blue' ? 'selected' : ''}>Blue</option>
-                    </select>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="color" id="edit-student-color" class="form-control"
+                               style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
+                        <span id="edit-student-color-preview" style="padding: 8px 16px; border-radius: 4px; font-size: 12px;">Preview</span>
+                        <button type="button" class="btn btn-small btn-secondary" id="edit-student-color-clear">Clear</button>
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Email</label>
@@ -2434,6 +2499,8 @@ async function editStudent(id) {
             </form>
         `);
 
+        initStudentColorPicker('edit-student-color', 'edit-student-color-preview', 'edit-student-color-clear', student.color_code);
+
         document.getElementById('edit-student-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
@@ -2444,7 +2511,7 @@ async function editStudent(id) {
                         name: document.getElementById('edit-student-name').value,
                         class_id: document.getElementById('edit-student-class').value || null,
                         student_type: document.getElementById('edit-student-type').value,
-                        color_code: document.getElementById('edit-student-color').value,
+                        color_code: getStudentColorInputValue('edit-student-color'),
                         email: document.getElementById('edit-student-email').value || null,
                         phone: document.getElementById('edit-student-phone').value || null,
                         parent_name: document.getElementById('edit-student-parent-name').value || null,
@@ -4105,7 +4172,7 @@ async function editMakeupLesson(id) {
                 <div class="form-group">
                     <label>Class *</label>
                     <select id="edit-makeup-class" required class="form-control">
-                        ${classes.map(c => `<option value="${c.id}" ${c.id === lesson.class_id ? 'selected' : ''}>${escapeHtml(c.name)}</option>`).join('')}
+                        ${classes.map(c => `<option value="${c.id}" ${c.id === lesson.class_id ? 'selected' : ''}>${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -4263,7 +4330,7 @@ async function showMakeupLessonForm() {
     classes.forEach(c => {
         const option = document.createElement('option');
         option.value = c.id;
-        option.textContent = c.name;
+        option.textContent = getClassDisplayName(c);
         classSelect.appendChild(option);
     });
     
@@ -4364,7 +4431,7 @@ navigateToPage = function(page) {
         classes.forEach(c => {
             const option = document.createElement('option');
             option.value = c.id;
-            option.textContent = c.name;
+            option.textContent = getClassDisplayName(c);
             classFilter.appendChild(option);
         });
     } else if (page === 'makeup') {
@@ -4522,7 +4589,7 @@ async function initializeMonthlyReportsPage() {
     classes.forEach(c => {
         const option = document.createElement('option');
         option.value = c.id;
-        option.textContent = c.name;
+        option.textContent = getClassDisplayName(c);
         classFilter.appendChild(option);
     });
     
