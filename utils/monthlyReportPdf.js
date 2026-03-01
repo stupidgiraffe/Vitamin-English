@@ -141,7 +141,7 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth, lessonIndex,
        });
     // Lesson badge: right-aligned
     if (lessonIndex !== undefined && totalLessons !== undefined) {
-        const badgeText = `Lesson ${lessonIndex + 1} / ${totalLessons}`;
+        const badgeText = `Class ${lessonIndex + 1} / ${totalLessons}`;
         doc.fontSize(9)
            .font('Helvetica')
            .fillColor('#FFFFFF')
@@ -409,8 +409,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const themeBoxHeight = Math.max(themeTextHeight + 20, 50);
             const totalThemeHeight = themeHeaderHeight + themeBoxHeight;
 
-            // If less than MIN_REMAINING_FOR_THEME remaining or theme won't fit, start new page
-            if (currentY + totalThemeHeight > bottomLimit || pageHeight - currentY < MIN_REMAINING_FOR_THEME) {
+            // If theme won't fit on current page, start a new page
+            if (currentY + totalThemeHeight > bottomLimit) {
                 doc.addPage();
                 currentY = margin;
             }
