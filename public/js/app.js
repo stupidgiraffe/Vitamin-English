@@ -299,8 +299,14 @@ function normalizeStudentColor(colorCode) {
     if (!colorCode) return { value: '#FFFFFF', cleared: true };
     if (colorCode === 'yellow') return { value: '#FBBC04', cleared: false };
     if (colorCode === 'blue') return { value: '#4285F4', cleared: false };
-    if (colorCode.startsWith('#')) return { value: colorCode, cleared: false };
+    if (/^#[0-9A-Fa-f]{3,8}$/.test(colorCode)) return { value: colorCode, cleared: false };
     return { value: '#FFFFFF', cleared: true };
+}
+
+// Return a colored dot HTML string for a student, or '' if the student has no color
+function getStudentColorDot(colorCode) {
+    const c = normalizeStudentColor(colorCode);
+    return c.cleared ? '' : `<span style="color: ${c.value}">●</span> `;
 }
 
 // Read the effective color value from a student color input (respects data-cleared state)
@@ -1289,9 +1295,10 @@ function renderAttendanceTable(data, classId) {
         regularStudents.forEach(student => {
             const rowClass = (student.color_code && !student.color_code.startsWith('#')) ? `student-row-${student.color_code}` : '';
             const rowStyle = (student.color_code && student.color_code.startsWith('#')) ? ` style="background: ${student.color_code}"` : '';
+            const colorDot = getStudentColorDot(student.color_code);
             html += `<tr class="${rowClass}"${rowStyle}><td class="student-name">
                 <div class="student-name-cell">
-                    <span>${escapeHtml(student.name)}</span>
+                    <span>${colorDot}${escapeHtml(student.name)}</span>
                     <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
                 </div>
             </td>`;
@@ -1315,9 +1322,10 @@ function renderAttendanceTable(data, classId) {
     if (trialStudents.length > 0) {
         html += '<tr><td colspan="' + (dates.length + 1) + '" class="student-type-header">Make-up / Trial Students</td></tr>';
         trialStudents.forEach(student => {
+            const colorDot = getStudentColorDot(student.color_code);
             html += `<tr class="student-row-trial"><td class="student-name">
                 <div class="student-name-cell">
-                    <span>${escapeHtml(student.name)}</span>
+                    <span>${colorDot}${escapeHtml(student.name)}</span>
                     <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
                 </div>
             </td>`;
@@ -2284,9 +2292,10 @@ async function loadStudentsList() {
         let html = '<table><thead><tr><th>Name</th><th>Class</th><th>Type</th><th>Actions</th></tr></thead><tbody>';
         
         students.forEach(student => {
+            const colorDot = getStudentColorDot(student.color_code);
             html += `
                 <tr>
-                    <td>${student.name}</td>
+                    <td>${colorDot}${student.name}</td>
                     <td>${student.class_name || 'Unassigned'}</td>
                     <td>${student.student_type}</td>
                     <td class="action-buttons">
@@ -3892,11 +3901,12 @@ function renderStudentProfiles(filteredStudents = null) {
         const typeClass = student.student_type === 'trial' ? 'trial' : 'regular';
         const typeName = student.student_type === 'trial' ? 'Trial' : 'Regular';
         const enrollmentDate = student.enrollment_date ? new Date(student.enrollment_date + 'T00:00:00').toLocaleDateString() : 'N/A';
+        const colorDot = getStudentColorDot(student.color_code);
         
         html += `
             <div class="student-card" onclick="showStudentDetail(${student.id})">
                 <span class="student-type-badge ${typeClass}">${typeName}</span>
-                <h3>${escapeHtml(student.name)}</h3>
+                <h3>${colorDot}${escapeHtml(student.name)}</h3>
                 <div class="student-info">
                     ${escapeHtml(student.class_name) || 'No class assigned'}
                 </div>
