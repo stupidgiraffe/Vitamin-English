@@ -172,12 +172,34 @@ router.put('/:id', async (req, res) => {
 
 // Delete a teacher comment sheet
 router.delete('/:id', async (req, res) => {
+    const client = await dataHub.pool.connect();
     try {
-        await dataHub.teacherCommentSheets.delete(req.params.id);
+        await client.query('BEGIN');
+
+        // Nullify FK references in monthly_report_weeks before deleting
+        await client.query(
+            'UPDATE monthly_report_weeks SET teacher_comment_sheet_id = NULL WHERE teacher_comment_sheet_id = $1',
+            [req.params.id]
+        );
+
+        const result = await client.query(
+            'DELETE FROM teacher_comment_sheets WHERE id = $1 RETURNING id',
+            [req.params.id]
+        );
+
+        if (result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Teacher comment sheet not found' });
+        }
+
+        await client.query('COMMIT');
         res.json({ message: 'Teacher comment sheet deleted successfully' });
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error('❌ Error deleting teacher comment sheet:', error);
         res.status(500).json({ error: 'Failed to delete teacher comment sheet' });
+    } finally {
+        client.release();
     }
 });
 

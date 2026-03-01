@@ -1938,18 +1938,18 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
 });
 
 document.getElementById('delete-report-btn').addEventListener('click', async () => {
-    if (!confirm('Are you sure you want to delete this report?')) return;
+    if (!confirm('Are you sure you want to delete this teacher comment sheet?')) return;
 
     const reportId = document.getElementById('report-id').value;
     
     try {
-        await api(`/reports/${reportId}`, { method: 'DELETE' });
-        Toast.success('Report deleted successfully!');
+        await api(`/teacher-comment-sheets/${reportId}`, { method: 'DELETE' });
+        Toast.success('Teacher comment sheet deleted successfully!');
         document.getElementById('report-form-container').style.display = 'none';
         document.getElementById('reports-list-container').style.display = 'block';
         loadReportsList();
     } catch (error) {
-        Toast.error('Error deleting report: ' + error.message);
+        Toast.error('Error deleting teacher comment sheet: ' + error.message);
     }
 });
 
@@ -3375,18 +3375,18 @@ async function editReportFromDatabase(reportId) {
 
 // Delete report from database viewer
 async function deleteReportFromDatabase(reportId) {
-    if (!confirm('Are you sure you want to delete this lesson report? This action cannot be undone.')) {
+    if (!confirm('Are you sure you want to delete this teacher comment sheet? This action cannot be undone.')) {
         return;
     }
     
     try {
-        await api(`/reports/${reportId}`, { method: 'DELETE' });
-        Toast.success('Report deleted successfully');
+        await api(`/teacher-comment-sheets/${reportId}`, { method: 'DELETE' });
+        Toast.success('Teacher comment sheet deleted successfully');
         
         // Reload the database table
         await loadDatabaseTable();
     } catch (error) {
-        Toast.error('Failed to delete report: ' + error.message);
+        Toast.error('Failed to delete teacher comment sheet: ' + error.message);
     }
 }
 
