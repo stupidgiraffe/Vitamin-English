@@ -52,9 +52,9 @@ async function showNewMonthlyReportModal() {
                 </select>
             </div>
             <hr>
-            <h4>Weekly Lessons (Optional)</h4>
+            <h4>Lessons (Optional)</h4>
             <div id="mr-weeks-container"></div>
-            <button type="button" class="btn btn-secondary" id="mr-add-week-btn">+ Add Week</button>
+            <button type="button" class="btn btn-secondary" id="mr-add-week-btn">+ Add Class</button>
             <hr>
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Create Report</button>
@@ -87,7 +87,7 @@ function addWeekRow() {
     weekRow.className = 'mr-week-row';
     weekRow.dataset.week = nextWeekNumber;
     weekRow.innerHTML = `
-        <h5>Week ${nextWeekNumber} <button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${nextWeekNumber})">Remove</button></h5>
+        <h5>Class ${nextWeekNumber} <button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${nextWeekNumber})">Remove</button></h5>
         <div class="form-group">
             <label>Date</label>
             <input type="date" class="form-control mr-week-date" data-week="${nextWeekNumber}">
@@ -124,7 +124,7 @@ function removeWeekRow(weekNumber) {
         weekRows.forEach((row, index) => {
             const newWeekNumber = index + 1;
             row.dataset.week = newWeekNumber;
-            row.querySelector('h5').innerHTML = `Week ${newWeekNumber} ${newWeekNumber > 1 ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${newWeekNumber})">Remove</button>` : ''}`;
+            row.querySelector('h5').innerHTML = `Class ${newWeekNumber} ${newWeekNumber > 1 ? `<button type="button" class="btn btn-sm btn-danger" onclick="removeWeekRow(${newWeekNumber})">Remove</button>` : ''}`;
             row.querySelectorAll('[data-week]').forEach(el => {
                 el.dataset.week = newWeekNumber;
             });
@@ -184,7 +184,7 @@ function populateWeekFields(weeks) {
         
         // Create header
         const header = document.createElement('h5');
-        header.textContent = `Week ${week.week_number} `;
+        header.textContent = `Class ${week.week_number} `;
         
         if (week.week_number > 1) {
             const removeBtn = document.createElement('button');
@@ -381,7 +381,7 @@ async function viewMonthlyReport(reportId) {
                 <p><strong>Date Range:</strong> ${startDateFormatted} — ${endDateFormatted}</p>
                 <p><strong>Status:</strong> ${report.status === 'published' ? '<span class="badge badge-success">Published</span>' : '<span class="badge badge-warning">Draft</span>'}</p>
                 <hr>
-                <h4>Weekly Lessons</h4>
+                <h4>Lessons</h4>
                 ${weeksHtml}
                 <hr>
                 <h4>Monthly Theme (今月のテーマ)</h4>
@@ -429,7 +429,7 @@ async function editMonthlyReport(reportId) {
                     : '';
                 weeksHtml += `
                     <div class="mr-week-row" data-week="${week.week_number}">
-                        <h5>Week ${displayNumber} ${removeBtn}</h5>
+                        <h5>Class ${displayNumber} ${removeBtn}</h5>
                         <div class="form-group">
                             <label>Date</label>
                             <input type="date" class="form-control mr-week-date" data-week="${week.week_number}" value="${toDateInputValue(week.lesson_date)}">
@@ -467,11 +467,11 @@ async function editMonthlyReport(reportId) {
                     <input type="text" class="form-control" value="${monthNames[report.month - 1]} ${report.year}" disabled>
                 </div>
                 <hr>
-                <h4>Weekly Lessons</h4>
+                <h4>Lessons</h4>
                 <div id="mr-weeks-container">
                     ${weeksHtml}
                 </div>
-                <button type="button" class="btn btn-secondary" id="mr-add-week-btn">+ Add Week</button>
+                <button type="button" class="btn btn-secondary" id="mr-add-week-btn">+ Add Class</button>
                 <hr>
                 <div class="form-group">
                     <label>Monthly Theme (今月のテーマ)</label>

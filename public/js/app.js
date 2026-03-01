@@ -615,7 +615,7 @@ function navigateToPage(page) {
     else if (page === 'admin') loadAdminData();
     else if (page === 'attendance') initializeAttendancePage();
     else if (page === 'database') initializeDatabasePage();
-    else if (page === 'reports') initMultiClassView();
+    else if (page === 'reports') { initMultiClassView(); loadReportsList(); }
 }
 
 // Initialize attendance page with default date range (last 6 months)
@@ -1996,7 +1996,7 @@ document.getElementById('export-report-pdf-btn').addEventListener('click', async
 
 async function loadReportsList() {
     try {
-        const reports = await api('/reports');
+        const reports = await api('/teacher-comment-sheets');
         const container = document.getElementById('reports-list');
         
         if (reports.length === 0) {
@@ -3176,7 +3176,7 @@ function renderCleanTable(data, type, options = {}) {
         } else if (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports') {
             // New view/PDF buttons for search results
             if (!isNaN(sanitizedId)) {
-                html += `<td class="actions-cell">
+                html += `<td class="actions-cell" style="white-space: nowrap;">
                     <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewSearchResult('${type}', ${sanitizedId})" title="View Details">
                         👁️
                     </button>`;
@@ -3637,7 +3637,7 @@ async function viewMonthlyReportDetail(reportId) {
             sortedWeeks.forEach((week, index) => {
                 weeksHtml += `
                     <div style="margin: 10px 0; padding: 10px; border: 1px solid #ddd; border-radius: 4px;">
-                        <strong>Week ${index + 1}</strong> ${week.lesson_date ? `- ${formatDisplayDate(week.lesson_date)}` : ''}
+                        <strong>Class ${index + 1}</strong> ${week.lesson_date ? `- ${formatDisplayDate(week.lesson_date)}` : ''}
                         <p style="margin: 5px 0;"><strong>Target:</strong> ${week.target || 'N/A'}</p>
                         <p style="margin: 5px 0;"><strong>Vocabulary:</strong> ${week.vocabulary || 'N/A'}</p>
                         <p style="margin: 5px 0;"><strong>Phrase:</strong> ${week.phrase || 'N/A'}</p>
@@ -3656,7 +3656,7 @@ async function viewMonthlyReportDetail(reportId) {
                 <p><strong>Status:</strong> ${report.status}</p>
                 <p><strong>Theme:</strong> ${report.monthly_theme || 'N/A'}</p>
                 
-                <h4 style="margin-top: 20px;">Weekly Lessons:</h4>
+                <h4 style="margin-top: 20px;">Lessons:</h4>
                 ${weeksHtml}
                 
                 <div class="modal-actions" style="margin-top: 20px;">

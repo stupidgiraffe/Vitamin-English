@@ -748,7 +748,10 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
         }, teachers, students);
         
         // Upload to R2
-        const fileName = `monthly_report_${report.id}_${report.class_id}_${report.year}_${report.month}.pdf`;
+        const sanitizedClassName = report.class_name.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const monthLabel = (report.month >= 1 && report.month <= 12) ? monthNames[report.month - 1] : `M${report.month}`;
+        const fileName = `${sanitizedClassName}_${monthLabel}_${report.year}.pdf`;
         const uploadResult = await uploadPDF(pdfBuffer, fileName, {
             reportId: report.id.toString(),
             classId: report.class_id.toString(),
