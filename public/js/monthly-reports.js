@@ -21,7 +21,7 @@ async function showNewMonthlyReportModal() {
     let classOpts = '<option value="">Select Class</option>';
     classes.forEach(c => {
         const isSelected = c.id == selectedClassId ? 'selected' : '';
-        classOpts += `<option value="${c.id}" ${isSelected}>${escapeHtml(c.name)}</option>`;
+        classOpts += `<option value="${c.id}" ${isSelected}>${escapeHtml(getClassDisplayName(c))}</option>`;
     });
 
     const formHtml = `
