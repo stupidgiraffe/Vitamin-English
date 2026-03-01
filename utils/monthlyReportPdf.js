@@ -60,6 +60,39 @@ const CATEGORIES = [
 ];
 
 /**
+ * Draw a rounded rectangle path.
+ * corners: 'all' (default), 'top' (only top corners rounded), 'bottom' (only bottom corners rounded)
+ */
+function roundedRect(doc, x, y, w, h, r, corners) {
+    const tl = (corners === 'all' || corners === 'top' || !corners) ? r : 0;
+    const tr = (corners === 'all' || corners === 'top' || !corners) ? r : 0;
+    const br = (corners === 'all' || corners === 'bottom' || !corners) ? r : 0;
+    const bl = (corners === 'all' || corners === 'bottom' || !corners) ? r : 0;
+
+    doc.moveTo(x + tl, y);
+    if (tr > 0) {
+        doc.lineTo(x + w - tr, y).quadraticCurveTo(x + w, y, x + w, y + tr);
+    } else {
+        doc.lineTo(x + w, y);
+    }
+    if (br > 0) {
+        doc.lineTo(x + w, y + h - br).quadraticCurveTo(x + w, y + h, x + w - br, y + h);
+    } else {
+        doc.lineTo(x + w, y + h);
+    }
+    if (bl > 0) {
+        doc.lineTo(x + bl, y + h).quadraticCurveTo(x, y + h, x, y + h - bl);
+    } else {
+        doc.lineTo(x, y + h);
+    }
+    if (tl > 0) {
+        doc.lineTo(x, y + tl).quadraticCurveTo(x, y, x + tl, y);
+    } else {
+        doc.lineTo(x, y);
+    }
+}
+
+/**
  * Measure the height of a single lesson block (date header + 4 category rows)
  */
 function measureLessonBlock(doc, week, labelColWidth, dataColWidth) {
@@ -88,24 +121,36 @@ function measureLessonBlock(doc, week, labelColWidth, dataColWidth) {
 /**
  * Draw a single lesson block and return the new Y position
  */
-function drawLessonBlock(doc, week, currentY, margin, contentWidth) {
+function drawLessonBlock(doc, week, currentY, margin, contentWidth, lessonIndex, totalLessons) {
     const labelColWidth = 120;
     const dataColWidth = contentWidth - labelColWidth;
     const dateHeaderHeight = 28;
     const cellPadding = 10;
     const minRowHeight = 28;
 
-    // Date header bar
-    doc.rect(margin, currentY, contentWidth, dateHeaderHeight)
-       .fillAndStroke('#4A90E2', '#2C5AA0');
+    // Date header bar (rounded top corners only)
+    roundedRect(doc, margin, currentY, contentWidth, dateHeaderHeight, 6, 'top');
+    doc.fillAndStroke('#3B82F6', '#2563EB');
     const dateText = formatFullDate(week.lesson_date);
     doc.fontSize(11)
        .font('Helvetica-Bold')
        .fillColor('#FFFFFF')
-       .text(`📅 ${dateText}`, margin + 10, currentY + 7, {
+       .text(dateText, margin + 10, currentY + 7, {
            width: contentWidth - 20,
            lineBreak: false
        });
+    // Lesson badge: right-aligned
+    if (lessonIndex !== undefined && totalLessons !== undefined) {
+        const badgeText = `Lesson ${lessonIndex + 1} / ${totalLessons}`;
+        doc.fontSize(9)
+           .font('Helvetica')
+           .fillColor('#FFFFFF')
+           .text(badgeText, margin + 10, currentY + 9, {
+               width: contentWidth - 20,
+               align: 'right',
+               lineBreak: false
+           });
+    }
     currentY += dateHeaderHeight;
 
     // Category rows
@@ -212,8 +257,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
 
             // ── Page 1: Header ──
             const headerHeight = 70;
-            doc.rect(margin, margin, contentWidth, headerHeight)
-               .fillAndStroke('#4A90E2', '#2C5AA0');
+            roundedRect(doc, margin, margin, contentWidth, headerHeight, 8);
+            doc.fillAndStroke('#3B82F6', '#2563EB');
 
             // Logo
             const logoPath = path.join(__dirname, '..', 'public', 'assets', 'orange-logo.png');
@@ -255,6 +300,17 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
 
             let currentY = margin + headerHeight + 15;
 
+            // ── Month Focus Summary ──
+            const focusTargets = sortedWeeks
+                .map(w => sanitizeForPDF(w.target))
+                .filter(t => t && t.trim());
+            if (focusTargets.length > 0) {
+                const focusText = `This month's focus: ${focusTargets.join(', ')}`;
+                doc.font('NotoJP').fontSize(10).fillColor('#555555')
+                   .text(focusText, margin, currentY, { width: contentWidth, align: 'left' });
+                currentY = doc.y + 10;
+            }
+
             // ── Lesson Blocks ──
             if (sortedWeeks.length === 0) {
                 // No lessons message
@@ -267,7 +323,9 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                    });
                 currentY += 40;
             } else {
-                for (const week of sortedWeeks) {
+                const totalLessons = sortedWeeks.length;
+                for (let i = 0; i < sortedWeeks.length; i++) {
+                    const week = sortedWeeks[i];
                     const blockHeight = measureLessonBlock(doc, week, 120, contentWidth - 120);
 
                     // Page break if block won't fit
@@ -276,8 +334,22 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                         currentY = margin;
                     }
 
-                    currentY = drawLessonBlock(doc, week, currentY, margin, contentWidth);
-                    currentY += 12; // spacing between blocks
+                    currentY = drawLessonBlock(doc, week, currentY, margin, contentWidth, i, totalLessons);
+
+                    // Divider between blocks (not after the last one)
+                    if (i < sortedWeeks.length - 1) {
+                        currentY += 6;
+                        doc.moveTo(margin + 40, currentY)
+                           .lineTo(margin + contentWidth - 40, currentY)
+                           .lineWidth(0.5)
+                           .strokeColor('#E0E0E0')
+                           .stroke();
+                        // Reset stroke defaults
+                        doc.lineWidth(1).strokeColor('#000000');
+                        currentY += 6;
+                    } else {
+                        currentY += 12;
+                    }
                 }
             }
 
@@ -297,18 +369,18 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 currentY = margin;
             }
 
-            // Green header bar
-            doc.rect(margin, currentY, contentWidth, themeHeaderHeight)
-               .fillAndStroke('#4CAF50', '#4CAF50');
+            // Green header bar (rounded top corners only)
+            roundedRect(doc, margin, currentY, contentWidth, themeHeaderHeight, 6, 'top');
+            doc.fillAndStroke('#22C55E', '#22C55E');
             doc.fontSize(13)
                .fillColor('#FFFFFF')
                .font('NotoJP')
                .text('Monthly Theme (今月のテーマ)', margin + 10, currentY + 7);
             currentY += themeHeaderHeight;
 
-            // Theme content box
-            doc.rect(margin, currentY, contentWidth, themeBoxHeight)
-               .fillAndStroke('#F1F8E9', '#4CAF50');
+            // Theme content box (rounded bottom corners only)
+            roundedRect(doc, margin, currentY, contentWidth, themeBoxHeight, 6, 'bottom');
+            doc.fillAndStroke('#F0FDF4', '#22C55E');
 
             if (themeText) {
                 doc.fontSize(11)
@@ -321,18 +393,52 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                    });
             }
 
+            // ── Page Numbers (all pages except last) ──
+            const pageRange = doc.bufferedPageRange();
+            const pageCount = pageRange.count;
+            for (let i = 0; i < pageCount - 1; i++) {
+                doc.switchToPage(pageRange.start + i);
+                doc.font('Helvetica').fontSize(8).fillColor('#AAAAAA')
+                   .text(`Page ${i + 1} of ${pageCount}`, margin, pageHeight - 20, {
+                       width: contentWidth,
+                       align: 'center',
+                       lineBreak: false
+                   });
+            }
+
             // ── Footer on last page only ──
-            const pageCount = doc.bufferedPageRange().count;
             const lastPageIndex = pageCount - 1;
-            doc.switchToPage(lastPageIndex);
+            doc.switchToPage(pageRange.start + lastPageIndex);
 
             const footerY = pageHeight - 50;
-            doc.rect(margin, footerY - 5, contentWidth, 35)
-               .fillAndStroke('#4A90E2', '#2C5AA0');
-            doc.fontSize(12)
-               .fillColor('#FFFFFF')
+            // Thin horizontal line
+            doc.moveTo(margin, footerY)
+               .lineTo(margin + contentWidth, footerY)
+               .lineWidth(1)
+               .strokeColor('#3B82F6')
+               .stroke();
+            // School name
+            doc.fontSize(9)
                .font('Helvetica-Bold')
-               .text('VitaminEnglishSchool', margin, footerY + 5, { align: 'center', width: contentWidth });
+               .fillColor('#666666')
+               .text('Vitamin English School', margin, footerY + 6, {
+                   width: contentWidth,
+                   align: 'center',
+                   lineBreak: false
+               });
+            // Generation date
+            const nowJP = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+            const monthAbbr = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
+                              'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
+            const genDateText = `Generated on ${monthAbbr[nowJP.getMonth()]} ${nowJP.getDate()}, ${nowJP.getFullYear()}`;
+            doc.fontSize(8)
+               .font('Helvetica')
+               .fillColor('#999999')
+               .text(genDateText, margin, footerY + 18, {
+                   width: contentWidth,
+                   align: 'center',
+                   lineBreak: false
+               });
 
             doc.end();
         } catch (error) {
