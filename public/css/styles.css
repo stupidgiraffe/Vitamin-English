@@ -1312,7 +1312,7 @@ body {
     color: #667eea;
 }
 
-.tab-btn.active {
+.admin-tabs .tab-btn.active {
     background: #667eea;
     border-color: #667eea;
     color: white;
@@ -2560,7 +2560,7 @@ body {
     background-color: var(--bg-hover);
 }
 
-.tab-btn.active {
+.tab-navigation .tab-btn.active {
     color: var(--primary-color);
     border-bottom-color: var(--primary-color);
     font-weight: 600;

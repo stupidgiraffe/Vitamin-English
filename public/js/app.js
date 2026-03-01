@@ -3309,14 +3309,14 @@ async function searchDatabase() {
         if (results.teacherCommentSheets && results.teacherCommentSheets.length > 0) {
             totalResults += results.teacherCommentSheets.length;
             html += `<h3>Teacher Comment Sheets (${results.teacherCommentSheets.length})</h3>`;
-            html += renderCleanTable(results.teacherCommentSheets, 'teacher_comment_sheets', { includeSelection: true });
+            html += renderCleanTable(results.teacherCommentSheets, 'teacher_comment_sheets');
             html += '<br>';
         }
         
         if (results.monthly_reports && results.monthly_reports.length > 0) {
             totalResults += results.monthly_reports.length;
             html += `<h3>Monthly Reports (${results.monthly_reports.length})</h3>`;
-            html += renderCleanTable(results.monthly_reports, 'monthly_reports', { includeSelection: true });
+            html += renderCleanTable(results.monthly_reports, 'monthly_reports');
             html += '<br>';
         }
         
@@ -4716,7 +4716,7 @@ function renderMonthlyReportsList() {
                     <button class="btn btn-sm btn-primary" onclick="viewMonthlyReport(${report.id})">View</button>
                     <button class="btn btn-sm btn-secondary" onclick="editMonthlyReport(${report.id})">Edit</button>
                     <button class="btn btn-sm btn-success" onclick="generateMonthlyReportPDF(${report.id})">${report.pdf_url ? 'Regenerate PDF' : 'Generate PDF'}</button>
-                    ${report.pdf_url ? `<button class="btn btn-sm btn-info" onclick="downloadMonthlyReportPDF(${report.id})">View PDF</button>` : ''}
+                    <button class="btn btn-sm btn-info" onclick="downloadMonthlyReportPDF(${report.id})" ${report.pdf_url ? '' : 'disabled style="opacity:0.4;cursor:not-allowed;"'}>View PDF</button>
                     <button class="btn btn-sm btn-danger" onclick="deleteMonthlyReport(${report.id})">Delete</button>
                 </td>
             </tr>

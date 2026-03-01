@@ -346,17 +346,6 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                 currentY += studentsBodyHeight + 12;
             }
 
-            // ── Month Focus Summary ──
-            const focusTargets = sortedWeeks
-                .map(w => sanitizeForPDF(w.target))
-                .filter(t => t && t.trim());
-            if (focusTargets.length > 0) {
-                const focusText = `This month's focus: ${focusTargets.join(', ')}`;
-                doc.font('NotoJP').fontSize(10).fillColor('#555555')
-                   .text(focusText, margin, currentY, { width: contentWidth, align: 'left' });
-                currentY = doc.y + 10;
-            }
-
             // ── Lesson Blocks ──
             if (sortedWeeks.length === 0) {
                 // No lessons message
