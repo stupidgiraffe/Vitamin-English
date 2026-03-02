@@ -183,6 +183,28 @@ const Toast = {
     
     info(message, title) {
         return this.show(message, 'info', title);
+    },
+
+    prompt(message, onYes, onNo) {
+        this.init();
+        const toast = document.createElement('div');
+        toast.className = 'toast info';
+        toast.innerHTML = `
+            <div class="toast-icon">ℹ</div>
+            <div class="toast-content">
+                <div class="toast-title">Draft Found</div>
+                <div class="toast-message">${escapeHtml(message)}</div>
+                <div style="margin-top:8px;display:flex;gap:8px;">
+                    <button class="btn btn-small btn-primary" id="toast-yes">Restore</button>
+                    <button class="btn btn-small btn-secondary" id="toast-no">Discard</button>
+                </div>
+            </div>
+        `;
+        this.container.appendChild(toast);
+        const remove = () => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); };
+        toast.querySelector('#toast-yes').addEventListener('click', () => { remove(); onYes && onYes(); });
+        toast.querySelector('#toast-no').addEventListener('click', () => { remove(); onNo && onNo(); });
+        return toast;
     }
 };
 
@@ -652,8 +674,7 @@ function clearDraft() {
 
 function scheduleDraftSave() {
     clearTimeout(draftSaveTimer);
-    draftSaveTimer = setTimeout(saveDraft, 30000);
-    saveDraft(); // also save immediately on change (debounced via timer for repeat events)
+    draftSaveTimer = setTimeout(saveDraft, 2000);
 }
 
 function restoreDraftIfAvailable() {
@@ -663,7 +684,7 @@ function restoreDraftIfAvailable() {
         const draft = JSON.parse(raw);
         if (!draft.savedAt) return;
         const ageMin = Math.round((Date.now() - draft.savedAt) / 60000);
-        if (confirm(`Restore unsaved draft from ${ageMin} minute(s) ago?`)) {
+        Toast.prompt(`Restore unsaved draft from ${ageMin} minute(s) ago?`, () => {
             if (draft.date) document.getElementById('report-form-date').value = draft.date;
             if (draft.class_id) document.getElementById('report-class').value = draft.class_id;
             if (draft.teacher_id) document.getElementById('report-teacher').value = draft.teacher_id;
@@ -673,9 +694,9 @@ function restoreDraftIfAvailable() {
             if (draft.strengths) document.getElementById('report-strengths').value = draft.strengths;
             if (draft.comments) document.getElementById('report-comments').value = draft.comments;
             setFormDirty(true);
-        } else {
+        }, () => {
             clearDraft();
-        }
+        });
     } catch (_) { /* ignore */ }
 }
 

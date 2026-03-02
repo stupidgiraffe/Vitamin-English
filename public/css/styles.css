@@ -3019,12 +3019,7 @@ body {
     }
 }
 
-/* ── Skeleton loading states ──────────────────────────────────────────────── */
-@keyframes skeleton-shimmer {
-    0%   { background-position: -400px 0; }
-    100% { background-position: 400px 0; }
-}
-
+/* ── Skeleton loading state sizes ─────────────────────────────────────────── */
 .skeleton-card {
     display: block;
     height: 80px;
