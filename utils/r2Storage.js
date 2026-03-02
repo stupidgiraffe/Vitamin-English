@@ -68,14 +68,21 @@ async function uploadPDF(pdfBuffer, fileName, metadata = {}) {
  * Generate a signed URL for downloading a PDF from R2
  * @param {String} key - The file key in R2
  * @param {Number} expiresIn - URL expiration time in seconds (default: 1 hour)
+ * @param {String|null} displayName - Optional clean filename for Content-Disposition header
  * @returns {Promise<String>} Signed download URL
  */
-async function getDownloadUrl(key, expiresIn = 3600) {
+async function getDownloadUrl(key, expiresIn = 3600, displayName = null) {
     try {
-        const command = new GetObjectCommand({
+        const commandParams = {
             Bucket: BUCKET_NAME,
             Key: key
-        });
+        };
+
+        if (displayName) {
+            commandParams.ResponseContentDisposition = `attachment; filename="${displayName}"`;
+        }
+
+        const command = new GetObjectCommand(commandParams);
         
         const signedUrl = await getSignedUrl(r2Client, command, { expiresIn });
         

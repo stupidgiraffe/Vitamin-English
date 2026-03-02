@@ -2177,7 +2177,7 @@ body {
 /* Toast Notification System */
 .toast-container {
     position: fixed;
-    bottom: 20px;
+    top: 70px;
     right: 20px;
     z-index: 10000;
     display: flex;
@@ -3017,4 +3017,24 @@ body {
     .reports-table {
         min-width: 600px;
     }
+}
+
+/* ── Skeleton loading states ──────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+
+.skeleton-card {
+    display: block;
+    height: 80px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+}
+
+.skeleton-row {
+    display: block;
+    height: 40px;
+    margin-bottom: 8px;
+    border-radius: 4px;
 }
