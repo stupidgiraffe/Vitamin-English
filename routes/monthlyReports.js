@@ -731,21 +731,11 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
         
         const teachers = teachersResult.rows.map(t => t.full_name);
         
-        // Get active students in this class
-        const studentsResult = await dataHub.students.findAll({
-            classId: report.class_id,
-            active: true,
-            orderBy: 'name',
-            orderDirection: 'ASC',
-            perPage: 0
-        });
-        const students = studentsResult || [];
-        
-        // Generate PDF with teacher and student information
+        // Generate PDF with teacher information
         const pdfBuffer = await generateMonthlyReportPDF(report, weeks, {
             name: report.class_name,
             schedule: report.schedule
-        }, teachers, students);
+        }, teachers, []);
         
         // Upload to R2
         const sanitizedClassName = report.class_name.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');

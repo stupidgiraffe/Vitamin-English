@@ -300,52 +300,6 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
 
             let currentY = margin + headerHeight + 15;
 
-            // ── Students Section ──
-            const activeStudents = Array.isArray(students) ? students.filter(s => s && s.name) : [];
-            if (activeStudents.length > 0) {
-                const studentsHeaderHeight = 28;
-                const rowsNeeded = Math.ceil(activeStudents.length / 2);
-                const rowHeight = 18;
-                const studentsBodyHeight = rowsNeeded * rowHeight + 16;
-                const totalStudentsHeight = studentsHeaderHeight + studentsBodyHeight;
-
-                // Page break if students section doesn't fit
-                if (currentY + totalStudentsHeight > bottomLimit) {
-                    doc.addPage();
-                    currentY = margin;
-                }
-
-                // Blue header bar (rounded top corners only)
-                roundedRect(doc, margin, currentY, contentWidth, studentsHeaderHeight, 6, 'top');
-                doc.fillAndStroke('#3B82F6', '#2563EB');
-                doc.fontSize(12)
-                   .font('Helvetica-Bold')
-                   .fillColor('#FFFFFF')
-                   .text(`Students (${activeStudents.length})`, margin + 10, currentY + 7, { lineBreak: false });
-                currentY += studentsHeaderHeight;
-
-                // Students body (rounded bottom corners only)
-                roundedRect(doc, margin, currentY, contentWidth, studentsBodyHeight, 6, 'bottom');
-                doc.fillAndStroke('#EFF6FF', '#BFDBFE');
-
-                const leftColX = margin + 10;
-                const rightColX = margin + contentWidth / 2 + 5;
-                const colWidth = contentWidth / 2 - 15;
-
-                activeStudents.forEach((student, index) => {
-                    const isLeft = index % 2 === 0;
-                    const x = isLeft ? leftColX : rightColX;
-                    const bodyY = currentY + 8 + Math.floor(index / 2) * rowHeight;
-                    const studentName = sanitizeForPDF(student.name);
-                    doc.fontSize(10)
-                       .font('NotoJP')
-                       .fillColor('#1E3A5F')
-                       .text(`\u2022 ${studentName}`, x, bodyY, { width: colWidth, lineBreak: false });
-                });
-
-                currentY += studentsBodyHeight + 12;
-            }
-
             // ── Lesson Blocks ──
             if (sortedWeeks.length === 0) {
                 // No lessons message
@@ -399,7 +353,8 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             const totalThemeHeight = themeHeaderHeight + themeBoxHeight;
 
             // If theme won't fit on current page, start a new page
-            if (currentY + totalThemeHeight > bottomLimit) {
+            // Only break if there's already meaningful content on the current page
+            if (currentY + totalThemeHeight > bottomLimit && currentY > margin + MIN_REMAINING_FOR_THEME) {
                 doc.addPage();
                 currentY = margin;
             }
