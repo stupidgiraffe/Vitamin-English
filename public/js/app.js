@@ -183,6 +183,28 @@ const Toast = {
     
     info(message, title) {
         return this.show(message, 'info', title);
+    },
+
+    prompt(message, onYes, onNo) {
+        this.init();
+        const toast = document.createElement('div');
+        toast.className = 'toast info';
+        toast.innerHTML = `
+            <div class="toast-icon">ℹ</div>
+            <div class="toast-content">
+                <div class="toast-title">Draft Found</div>
+                <div class="toast-message">${escapeHtml(message)}</div>
+                <div style="margin-top:8px;display:flex;gap:8px;">
+                    <button class="btn btn-small btn-primary" id="toast-yes">Restore</button>
+                    <button class="btn btn-small btn-secondary" id="toast-no">Discard</button>
+                </div>
+            </div>
+        `;
+        this.container.appendChild(toast);
+        const remove = () => { toast.classList.add('hiding'); setTimeout(() => toast.remove(), 300); };
+        toast.querySelector('#toast-yes').addEventListener('click', () => { remove(); onYes && onYes(); });
+        toast.querySelector('#toast-no').addEventListener('click', () => { remove(); onNo && onNo(); });
+        return toast;
     }
 };
 
@@ -449,7 +471,9 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
             document.getElementById('login-screen').classList.remove('active');
             document.getElementById('app-screen').classList.add('active');
             
-            loadDashboard();
+            const initialPage = getPageFromHash() || 'dashboard';
+            history.replaceState({ page: initialPage }, '', `#${initialPage}`);
+            navigateToPage(initialPage, false);
             
         } catch (dataError) {
             console.error('Error loading initial data:', dataError);
@@ -598,7 +622,90 @@ document.querySelectorAll('.nav-item').forEach(item => {
     });
 });
 
-function navigateToPage(page) {
+function getPageFromHash() {
+    const hash = window.location.hash.replace('#', '');
+    const validPages = ['dashboard', 'attendance', 'reports', 'monthly-reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
+    return validPages.includes(hash) ? hash : null;
+}
+
+window.addEventListener('popstate', (event) => {
+    const page = event.state?.page || getPageFromHash() || 'dashboard';
+    navigateToPage(page, false);
+});
+
+// ── QoL: Unsaved changes tracking ──────────────────────────────────────────
+let formDirty = false;
+
+function setFormDirty(dirty) {
+    formDirty = dirty;
+}
+
+window.addEventListener('beforeunload', (e) => {
+    if (formDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
+
+// ── QoL: Auto-save draft to localStorage ───────────────────────────────────
+const DRAFT_KEY = 'vitamin_draft_comment_sheet';
+let draftSaveTimer = null;
+
+function saveDraft() {
+    const reportId = document.getElementById('report-id')?.value;
+    if (reportId) return; // Only auto-save new (unsaved) sheets
+    const draft = {
+        date: document.getElementById('report-form-date')?.value || '',
+        class_id: document.getElementById('report-class')?.value || '',
+        teacher_id: document.getElementById('report-teacher')?.value || '',
+        target_topic: document.getElementById('report-target')?.value || '',
+        vocabulary: document.getElementById('report-vocabulary')?.value || '',
+        mistakes: document.getElementById('report-mistakes')?.value || '',
+        strengths: document.getElementById('report-strengths')?.value || '',
+        comments: document.getElementById('report-comments')?.value || '',
+        savedAt: Date.now()
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+}
+
+function clearDraft() {
+    localStorage.removeItem(DRAFT_KEY);
+}
+
+function scheduleDraftSave() {
+    clearTimeout(draftSaveTimer);
+    draftSaveTimer = setTimeout(saveDraft, 2000);
+}
+
+function restoreDraftIfAvailable() {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return;
+    try {
+        const draft = JSON.parse(raw);
+        if (!draft.savedAt) return;
+        const ageMin = Math.round((Date.now() - draft.savedAt) / 60000);
+        Toast.prompt(`Restore unsaved draft from ${ageMin} minute(s) ago?`, () => {
+            if (draft.date) document.getElementById('report-form-date').value = draft.date;
+            if (draft.class_id) document.getElementById('report-class').value = draft.class_id;
+            if (draft.teacher_id) document.getElementById('report-teacher').value = draft.teacher_id;
+            if (draft.target_topic) document.getElementById('report-target').value = draft.target_topic;
+            if (draft.vocabulary) document.getElementById('report-vocabulary').value = draft.vocabulary;
+            if (draft.mistakes) document.getElementById('report-mistakes').value = draft.mistakes;
+            if (draft.strengths) document.getElementById('report-strengths').value = draft.strengths;
+            if (draft.comments) document.getElementById('report-comments').value = draft.comments;
+            setFormDirty(true);
+        }, () => {
+            clearDraft();
+        });
+    } catch (_) { /* ignore */ }
+}
+
+function navigateToPage(page, pushState = true) {
+    // Warn about unsaved changes
+    if (formDirty && !confirm('You have unsaved changes. Leave anyway?')) {
+        return;
+    }
+
     // Update nav items
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === page);
@@ -609,6 +716,11 @@ function navigateToPage(page) {
         p.classList.remove('active');
     });
     document.getElementById(`${page}-page`).classList.add('active');
+
+    // Update browser history
+    if (pushState) {
+        history.pushState({ page }, '', `#${page}`);
+    }
 
     // Load page-specific data
     if (page === 'dashboard') loadDashboard();
@@ -654,7 +766,7 @@ async function initializeDatabasePage() {
     
     // Load all data types by default to show an overview
     try {
-        container.innerHTML = '<p class="info-text">Loading database overview...</p>';
+        container.innerHTML = '<span class="skeleton skeleton-row"></span><span class="skeleton skeleton-row"></span><span class="skeleton skeleton-row"></span>';
         // Set type to empty string which will trigger "all" type search
         document.getElementById('db-search-type').value = '';
         await searchDatabase();
@@ -667,6 +779,11 @@ async function initializeDatabasePage() {
 async function loadDashboard() {
     const todayClassesDiv = document.getElementById('today-classes');
     const recentActivityDiv = document.getElementById('recent-activity');
+
+    // Show skeleton placeholders while data loads
+    todayClassesDiv.innerHTML = '<span class="skeleton skeleton-card"></span><span class="skeleton skeleton-card"></span>';
+    recentActivityDiv.innerHTML = '<span class="skeleton skeleton-row"></span><span class="skeleton skeleton-row"></span><span class="skeleton skeleton-row"></span>';
+
     const today = new Date();
     const todayISO = today.toISOString().split('T')[0];
 
@@ -1891,6 +2008,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('export-report-pdf-btn').style.display = 'inline-block';
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
+            setFormDirty(false);
         } else {
             // Create new report with pre-filled data
             document.getElementById('report-form').reset();
@@ -1901,6 +2019,8 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('export-report-pdf-btn').style.display = 'none';
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
+            setFormDirty(false);
+            restoreDraftIfAvailable();
         }
     } catch (error) {
         console.error('Error loading report:', error);
@@ -1936,6 +2056,8 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
             });
         }
 
+        setFormDirty(false);
+        clearDraft();
         Toast.success('Report saved successfully!');
         document.getElementById('report-form-container').style.display = 'none';
         document.getElementById('reports-list-container').style.display = 'block';
@@ -1945,19 +2067,28 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
     }
 });
 
+// Track dirty state and auto-save for comment sheet form
+['report-form-date', 'report-class', 'report-teacher', 'report-target',
+ 'report-vocabulary', 'report-mistakes', 'report-strengths', 'report-comments'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', () => {
+        setFormDirty(true);
+        scheduleDraftSave();
+    });
+});
+
 document.getElementById('delete-report-btn').addEventListener('click', async () => {
-    if (!confirm('Are you sure you want to delete this teacher comment sheet?')) return;
+    if (!confirm('Are you sure you want to delete this comment sheet?')) return;
 
     const reportId = document.getElementById('report-id').value;
     
     try {
         await api(`/teacher-comment-sheets/${reportId}`, { method: 'DELETE' });
-        Toast.success('Teacher comment sheet deleted successfully!');
+        Toast.success('Comment sheet deleted successfully!');
         document.getElementById('report-form-container').style.display = 'none';
         document.getElementById('reports-list-container').style.display = 'block';
         loadReportsList();
     } catch (error) {
-        Toast.error('Error deleting teacher comment sheet: ' + error.message);
+        Toast.error('Error deleting comment sheet: ' + error.message);
     }
 });
 
@@ -1995,9 +2126,10 @@ document.getElementById('export-report-pdf-btn').addEventListener('click', async
 });
 
 async function loadReportsList() {
+    const container = document.getElementById('reports-list');
+    container.innerHTML = '<span class="skeleton skeleton-row"></span><span class="skeleton skeleton-row"></span><span class="skeleton skeleton-row"></span>';
     try {
         const reports = await api('/teacher-comment-sheets');
-        const container = document.getElementById('reports-list');
         
         if (reports.length === 0) {
             container.innerHTML = '<p class="info-text">No reports found</p>';
@@ -2107,7 +2239,7 @@ async function loadMultiClassReports() {
     
     try {
         const grid = document.getElementById('multi-class-grid');
-        grid.innerHTML = '<p class="info-text">Loading reports...</p>';
+        grid.innerHTML = '<span class="skeleton skeleton-card"></span><span class="skeleton skeleton-card"></span><span class="skeleton skeleton-card"></span>';
         
         // Fetch reports for all selected classes
         const reportsPromises = selectedClasses.map(cls => 
@@ -3022,6 +3154,12 @@ document.getElementById('db-advanced-toggle')?.addEventListener('click', functio
 // PDF Export functionality
 document.getElementById('db-export-pdf-btn')?.addEventListener('click', exportDatabasePDF);
 
+// Helper function to strip timestamp prefix from PDF filenames
+function cleanPdfFilename(filename) {
+    if (!filename) return '';
+    return filename.replace(/^\d{13,}_/, '');
+}
+
 // Helper function to render clean database tables
 function renderCleanTable(data, type, options = {}) {
     if (!data || data.length === 0) return '';
@@ -3090,6 +3228,14 @@ function renderCleanTable(data, type, options = {}) {
             headers: ['Date', 'Student', 'Class', 'Status'],
             formatters: {
                 scheduled_date: formatDisplayDate
+            }
+        },
+        pdf_history: {
+            columns: ['filename', 'type', 'created_at'],
+            headers: ['Filename', 'Type', 'Created'],
+            formatters: {
+                filename: cleanPdfFilename,
+                created_at: formatDisplayDate
             }
         }
     };
@@ -3308,7 +3454,7 @@ async function searchDatabase() {
         
         if (results.teacherCommentSheets && results.teacherCommentSheets.length > 0) {
             totalResults += results.teacherCommentSheets.length;
-            html += `<h3>Teacher Comment Sheets (${results.teacherCommentSheets.length})</h3>`;
+            html += `<h3>Comment Sheets (${results.teacherCommentSheets.length})</h3>`;
             html += renderCleanTable(results.teacherCommentSheets, 'teacher_comment_sheets');
             html += '<br>';
         }
@@ -3391,18 +3537,18 @@ async function editReportFromDatabase(reportId) {
 
 // Delete report from database viewer
 async function deleteReportFromDatabase(reportId) {
-    if (!confirm('Are you sure you want to delete this teacher comment sheet? This action cannot be undone.')) {
+    if (!confirm('Are you sure you want to delete this comment sheet? This action cannot be undone.')) {
         return;
     }
     
     try {
         await api(`/teacher-comment-sheets/${reportId}`, { method: 'DELETE' });
-        Toast.success('Teacher comment sheet deleted successfully');
+        Toast.success('Comment sheet deleted successfully');
         
         // Reload the database table
         await loadDatabaseTable();
     } catch (error) {
-        Toast.error('Failed to delete teacher comment sheet: ' + error.message);
+        Toast.error('Failed to delete comment sheet: ' + error.message);
     }
 }
 
@@ -3827,7 +3973,7 @@ async function exportAllAsCombined(type) {
     closeModal();
     
     if (type !== 'reports' && type !== 'teacher_comment_sheets') {
-        Toast.error('Combined export only available for teacher comment sheets');
+        Toast.error('Combined export only available for comment sheets');
         return;
     }
     
@@ -4444,8 +4590,8 @@ loadDashboard = async function() {
 
 // Update navigateToPage to handle new pages
 const originalNavigateToPage = navigateToPage;
-navigateToPage = function(page) {
-    originalNavigateToPage(page);
+navigateToPage = function(page, pushState = true) {
+    originalNavigateToPage(page, pushState);
     
     if (page === 'students-profile') {
         loadStudentProfiles();

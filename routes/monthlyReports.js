@@ -760,7 +760,7 @@ router.post('/:id/generate-pdf', checkR2Config, async (req, res) => {
         });
         
         // Get signed URL
-        const pdfUrl = await getDownloadUrl(uploadResult.key);
+        const pdfUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
         
         // Update report with PDF URL
         await pool.query(`
@@ -817,7 +817,8 @@ router.get('/:id/pdf', async (req, res) => {
         }
         
         // Generate new signed URL
-        const signedUrl = await getDownloadUrl(report.pdf_url);
+        const cleanFileName = report.pdf_url.split('/').pop().replace(/^\d{13,}_/, '');
+        const signedUrl = await getDownloadUrl(report.pdf_url, 3600, cleanFileName);
         
         res.json({ pdfUrl: signedUrl });
     } catch (error) {

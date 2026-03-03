@@ -56,7 +56,7 @@ router.post('/student-attendance/:studentId', checkR2Config, async (req, res) =>
         });
         
         // Generate signed download URL
-        const downloadUrl = await getDownloadUrl(uploadResult.key);
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
         
         res.json({
             success: true,
@@ -128,7 +128,7 @@ router.post('/class-attendance/:classId', checkR2Config, async (req, res) => {
         });
         
         // Generate signed download URL
-        const downloadUrl = await getDownloadUrl(uploadResult.key);
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
         
         res.json({
             success: true,
@@ -218,7 +218,7 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
         });
         
         // Generate signed download URL
-        const downloadUrl = await getDownloadUrl(uploadResult.key);
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
         
         res.json({
             success: true,
@@ -286,7 +286,7 @@ router.post('/lesson-report/:reportId', checkR2Config, async (req, res) => {
         });
         
         // Generate signed download URL
-        const downloadUrl = await getDownloadUrl(uploadResult.key);
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
         
         res.json({
             success: true,
@@ -350,7 +350,7 @@ router.get('/download/:pdfId', async (req, res) => {
         }
         
         // Generate signed download URL (valid for 1 hour)
-        const downloadUrl = await getDownloadUrl(pdf.r2_key, 3600);
+        const downloadUrl = await getDownloadUrl(pdf.r2_key, 3600, pdf.filename);
         
         res.json({
             success: true,
@@ -446,7 +446,7 @@ router.post('/multi-class-reports', checkR2Config, async (req, res) => {
         });
         
         // Generate signed download URL
-        const downloadUrl = await getDownloadUrl(uploadResult.key);
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
         
         res.json({
             success: true,
