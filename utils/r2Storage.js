@@ -79,7 +79,7 @@ async function getDownloadUrl(key, expiresIn = 3600, displayName = null) {
         };
 
         if (displayName) {
-            commandParams.ResponseContentDisposition = `attachment; filename="${displayName}"`;
+            commandParams.ResponseContentDisposition = `inline; filename="${displayName}"`;
         }
 
         const command = new GetObjectCommand(commandParams);
