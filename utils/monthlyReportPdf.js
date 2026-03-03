@@ -103,10 +103,12 @@ function measureLessonBlock(doc, week, labelColWidth, dataColWidth) {
 
     for (const cat of CATEGORIES) {
         const cellText = sanitizeForPDF(week[cat.field]) || '';
-        // Measure label height
+        // Measure label height — bold English + Japanese on separate lines
+        doc.font('Helvetica-Bold').fontSize(10);
+        const enHeight = doc.heightOfString(cat.en, { width: labelColWidth - 10 });
         doc.font('NotoJP').fontSize(9);
-        const labelText = `${cat.en}\n(${cat.jp})`;
-        const labelHeight = doc.heightOfString(labelText, { width: labelColWidth - 10 });
+        const jpHeight = doc.heightOfString(`(${cat.jp})`, { width: labelColWidth - 10 });
+        const labelHeight = enHeight + jpHeight + 2;
         // Measure data height
         doc.font('NotoJP').fontSize(10);
         const dataHeight = cellText
@@ -157,9 +159,11 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth, lessonIndex,
     for (const cat of CATEGORIES) {
         const cellText = sanitizeForPDF(week[cat.field]) || '';
         // Measure heights
+        doc.font('Helvetica-Bold').fontSize(10);
+        const enLabelHeight = doc.heightOfString(cat.en, { width: labelColWidth - 10 });
         doc.font('NotoJP').fontSize(9);
-        const labelText = `${cat.en}\n(${cat.jp})`;
-        const labelHeight = doc.heightOfString(labelText, { width: labelColWidth - 10 });
+        const jpLabelHeight = doc.heightOfString(`(${cat.jp})`, { width: labelColWidth - 10 });
+        const labelHeight = enLabelHeight + jpLabelHeight + 2;
         doc.font('NotoJP').fontSize(10);
         const dataHeight = cellText
             ? doc.heightOfString(cellText, { width: dataColWidth - 10 })
@@ -173,14 +177,23 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth, lessonIndex,
         doc.rect(margin + labelColWidth, currentY, dataColWidth, rowHeight)
            .fillAndStroke('#FFFFFF', '#CCCCCC');
 
-        // Label text
+        // Label text (bold)
         const labelY = currentY + (rowHeight - labelHeight) / 2;
+        doc.fontSize(10)
+           .font('Helvetica-Bold')
+           .fillColor('#222222')
+           .text(cat.en, margin + 5, labelY, {
+               width: labelColWidth - 10,
+               align: 'center',
+               lineBreak: false
+           });
         doc.fontSize(9)
            .font('NotoJP')
-           .fillColor('#333333')
-           .text(labelText, margin + 5, labelY, {
+           .fillColor('#555555')
+           .text(`(${cat.jp})`, margin + 5, labelY + enLabelHeight, {
                width: labelColWidth - 10,
-               align: 'center'
+               align: 'center',
+               lineBreak: false
            });
 
         // Data text
@@ -216,8 +229,7 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
 
             const doc = new PDFDocument({
                 size: 'A4',
-                margin: 40,
-                bufferPages: true
+                margin: 40
             });
             const buffers = [];
 
@@ -382,53 +394,6 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
                        lineGap: 5
                    });
             }
-
-            // ── Page Numbers (all pages except last) ──
-            const pageRange = doc.bufferedPageRange();
-            const pageCount = pageRange.count;
-            for (let i = 0; i < pageCount - 1; i++) {
-                doc.switchToPage(pageRange.start + i);
-                doc.font('Helvetica').fontSize(8).fillColor('#AAAAAA')
-                   .text(`Page ${i + 1} of ${pageCount}`, margin, pageHeight - 20, {
-                       width: contentWidth,
-                       align: 'center',
-                       lineBreak: false
-                   });
-            }
-
-            // ── Footer on last page only ──
-            const lastPageIndex = pageCount - 1;
-            doc.switchToPage(pageRange.start + lastPageIndex);
-
-            const footerY = pageHeight - 50;
-            // Thin horizontal line
-            doc.moveTo(margin, footerY)
-               .lineTo(margin + contentWidth, footerY)
-               .lineWidth(1)
-               .strokeColor('#3B82F6')
-               .stroke();
-            // School name
-            doc.fontSize(9)
-               .font('Helvetica-Bold')
-               .fillColor('#666666')
-               .text('Vitamin English School', margin, footerY + 6, {
-                   width: contentWidth,
-                   align: 'center',
-                   lineBreak: false
-               });
-            // Generation date
-            const nowJP = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
-            const monthAbbr = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June',
-                              'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
-            const genDateText = `Generated on ${monthAbbr[nowJP.getMonth()]} ${nowJP.getDate()}, ${nowJP.getFullYear()}`;
-            doc.fontSize(8)
-               .font('Helvetica')
-               .fillColor('#999999')
-               .text(genDateText, margin, footerY + 18, {
-                   width: contentWidth,
-                   align: 'center',
-                   lineBreak: false
-               });
 
             doc.end();
         } catch (error) {
