@@ -2000,7 +2000,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
         if (report) {
             // Load existing report
             document.getElementById('report-id').value = report.id;
-            document.getElementById('report-form-date').value = report.date;
+            document.getElementById('report-form-date').value = normalizeToISO(report.date) || report.date;
             document.getElementById('report-teacher').value = report.teacher_id;
             document.getElementById('report-class').value = report.class_id;
             document.getElementById('report-target').value = report.target_topic || '';
@@ -2145,13 +2145,18 @@ async function loadReportsList() {
         }
 
         container.innerHTML = reports.map(report => `
-            <div class="report-item" onclick="loadReportById(${report.id})">
+            <div class="report-item">
                 <div class="report-header">
                     <span class="report-date">${formatDisplayDate(report.date)}</span>
                     <span class="report-class">${escapeHtml(report.class_name)}</span>
                 </div>
                 <div><strong>Teacher:</strong> ${escapeHtml(report.teacher_name)}</div>
                 <div><strong>Topic:</strong> ${escapeHtml(report.target_topic || 'N/A')}</div>
+                <div class="report-item-actions" style="margin-top:6px;">
+                    <button class="btn btn-small btn-primary" onclick="loadReportById(${report.id})">✏️ Edit</button>
+                    <button class="btn btn-small btn-secondary" onclick="exportSinglePDF('teacher_comment_sheets', ${report.id})">📄 PDF</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteTeacherCommentSheetInline(${report.id})">🗑️ Delete</button>
+                </div>
             </div>
         `).join('');
     } catch (error) {
@@ -2159,11 +2164,22 @@ async function loadReportsList() {
     }
 }
 
+async function deleteTeacherCommentSheetInline(id) {
+    if (!confirm('Are you sure you want to delete this comment sheet?')) return;
+    try {
+        await api(`/teacher-comment-sheets/${id}`, { method: 'DELETE' });
+        Toast.success('Comment sheet deleted successfully!');
+        loadReportsList();
+    } catch (error) {
+        Toast.error('Error deleting comment sheet: ' + error.message);
+    }
+}
+
 async function loadReportById(id) {
     try {
         const report = await api(`/reports/${id}`);
         document.getElementById('report-id').value = report.id;
-        document.getElementById('report-form-date').value = report.date;
+        document.getElementById('report-form-date').value = normalizeToISO(report.date) || report.date;
         document.getElementById('report-teacher').value = report.teacher_id;
         document.getElementById('report-class').value = report.class_id;
         document.getElementById('report-target').value = report.target_topic || '';
@@ -2174,6 +2190,7 @@ async function loadReportById(id) {
         document.getElementById('report-comments').value = report.comments || '';
         document.getElementById('report-others').value = report.others || '';
         document.getElementById('delete-report-btn').style.display = 'inline-block';
+        document.getElementById('export-report-pdf-btn').style.display = 'inline-block';
         document.getElementById('report-form-container').style.display = 'block';
         document.getElementById('reports-list-container').style.display = 'none';
     } catch (error) {
@@ -2323,8 +2340,14 @@ function renderMultiClassGrid(classReports) {
                             <td class="report-teacher">${escapeHtml(report.teacher_name)}</td>
                             <td class="report-topic">${escapeHtml(report.target_topic || 'No topic specified')}</td>
                             <td class="report-actions">
-                                <button class="btn btn-small btn-primary" onclick="viewReportDetails(${report.id})" title="Open Report">
-                                    📖 Open
+                                <button class="btn btn-small btn-primary" onclick="viewReportDetails(${report.id})" title="Edit Report">
+                                    ✏️ Edit
+                                </button>
+                                <button class="btn btn-small btn-secondary" onclick="exportSinglePDF('teacher_comment_sheets', ${report.id})" title="Export PDF">
+                                    📄 PDF
+                                </button>
+                                <button class="btn btn-small btn-danger" onclick="deleteTeacherCommentSheetInline(${report.id})" title="Delete">
+                                    🗑️
                                 </button>
                             </td>
                         </tr>
