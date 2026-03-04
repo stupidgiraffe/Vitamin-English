@@ -177,7 +177,7 @@ router.post('/preview-generate', async (req, res) => {
             target: lesson.target_topic || '',
             vocabulary: lesson.vocabulary || '',
             phrase: lesson.phrases || '',
-            others: lesson.others || [lesson.strengths, lesson.comments, lesson.mistakes].filter(Boolean).join(' | '),
+            others: lesson.others || '',
             teacher_comment_sheet_id: lesson.id
         }));
         
@@ -352,8 +352,6 @@ router.post('/auto-generate', async (req, res) => {
         // Create weekly entries from teacher comment sheets
         for (let index = 0; index < lessons.length; index++) {
             const lesson = lessons[index];
-            // Use dedicated others column if available, otherwise fall back to combining strengths+comments+mistakes
-            const othersContent = lesson.others || [lesson.strengths, lesson.comments, lesson.mistakes].filter(Boolean).join(' | ');
             await client.query(`
                 INSERT INTO monthly_report_weeks 
                 (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
@@ -365,7 +363,7 @@ router.post('/auto-generate', async (req, res) => {
                 lesson.target_topic || '',
                 lesson.vocabulary || '',
                 lesson.phrases || '',
-                othersContent,
+                lesson.others || '',
                 lesson.id
             ]);
         }

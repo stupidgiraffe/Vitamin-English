@@ -67,12 +67,13 @@ CREATE TABLE IF NOT EXISTS teacher_comment_sheets (
     date VARCHAR(50) NOT NULL,
     target_topic TEXT,
     vocabulary TEXT,
+    phrases TEXT,
     mistakes TEXT,
     strengths TEXT,
     comments TEXT,
+    others TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(class_id, date),
     FOREIGN KEY (class_id) REFERENCES classes(id),
     FOREIGN KEY (teacher_id) REFERENCES users(id)
 );

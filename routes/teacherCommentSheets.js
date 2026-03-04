@@ -102,15 +102,6 @@ router.post('/', async (req, res) => {
             });
         }
         
-        const existing = await dataHub.teacherCommentSheets.getByClassAndDate(class_id, date);
-        
-        if (existing) {
-            return res.status(400).json({ 
-                error: 'Teacher comment sheet for this class and date already exists',
-                existingReportId: existing.id
-            });
-        }
-        
         const report = await dataHub.teacherCommentSheets.create({
             class_id,
             teacher_id,

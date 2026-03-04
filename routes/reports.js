@@ -114,7 +114,7 @@ router.get('/:id', async (req, res) => {
 // Create a new report
 router.post('/', async (req, res) => {
     try {
-        const { class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
+        const { class_id, teacher_id, date, target_topic, vocabulary, phrases, mistakes, strengths, comments, others } = req.body;
         
         console.log('Saving report:', { class_id, teacher_id, date }); // Debug logging
         
@@ -129,25 +129,17 @@ router.post('/', async (req, res) => {
             });
         }
         
-        // Check if report already exists
-        const existing = await dataHub.teacherCommentSheets.getByClassAndDate(class_id, date);
-        
-        if (existing) {
-            return res.status(400).json({ 
-                error: 'Report for this class and date already exists',
-                existingReportId: existing.id
-            });
-        }
-        
         const report = await dataHub.teacherCommentSheets.create({
             class_id,
             teacher_id,
             date,
             target_topic: target_topic || '',
             vocabulary: vocabulary || '',
+            phrases: phrases || '',
             mistakes: mistakes || '',
             strengths: strengths || '',
-            comments: comments || ''
+            comments: comments || '',
+            others: others || ''
         });
         
         console.log('Report created successfully:', report.id); // Debug logging
@@ -164,7 +156,7 @@ router.post('/', async (req, res) => {
 // Update a report
 router.put('/:id', async (req, res) => {
     try {
-        const { teacher_id, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
+        const { teacher_id, target_topic, vocabulary, phrases, mistakes, strengths, comments, others } = req.body;
         
         console.log('Updating report:', req.params.id); // Debug logging
         
@@ -178,9 +170,11 @@ router.put('/:id', async (req, res) => {
             teacher_id,
             target_topic: target_topic || '',
             vocabulary: vocabulary || '',
+            phrases: phrases || '',
             mistakes: mistakes || '',
             strengths: strengths || '',
-            comments: comments || ''
+            comments: comments || '',
+            others: others || ''
         });
         
         if (!report) {

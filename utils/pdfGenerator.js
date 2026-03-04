@@ -1,5 +1,6 @@
 const PDFDocument = require('pdfkit');
 const { Readable } = require('stream');
+const { formatShortDate } = require('./dateUtils');
 
 // Theme constants for consistent styling across PDFs
 const THEME = {
@@ -756,6 +757,20 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
 }
 
 /**
+ * Format a date for display in PDFs (e.g., "Mar. 4, 2026")
+ * @param {string} dateStr - Date string (YYYY-MM-DD or similar)
+ * @returns {string} Formatted date
+ */
+function formatPDFDate(dateStr) {
+    if (!dateStr) return '';
+    const shortDate = formatShortDate(dateStr);
+    if (!shortDate) return dateStr;
+    const d = new Date(String(dateStr).split('T')[0] + 'T00:00:00');
+    const jpDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+    return `${shortDate}, ${jpDate.getFullYear()}`;
+}
+
+/**
  * Generate a PDF for lesson report
  * @param {Object} reportData - Lesson report data
  * @param {Object} classData - Class information
@@ -814,7 +829,7 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                .font('Helvetica')
                .text(`Class: ${sanitizeForPDF(classData.name) || ''}`, 60, detailsY)
                .text(`Teacher: ${sanitizeForPDF(reportData.teacher_name) || ''}`, 60, detailsY + 20)
-               .text(`Date: ${reportData.date || ''}`, 60, detailsY + 40);
+               .text(`Date: ${formatPDFDate(reportData.date)}`, 60, detailsY + 40);
             
             doc.moveDown(3);
             
@@ -907,11 +922,13 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                 doc.moveDown(0.8);
             };
             
-            addField('Target Topic:', reportData.target_topic);
-            addField('New Vocabulary/Phrases:', reportData.vocabulary);
-            addField('Common Mistakes:', reportData.mistakes);
-            addField('Student Strengths:', reportData.strengths);
+            addField('Target/Topic:', reportData.target_topic);
+            addField('Vocabulary (単語):', reportData.vocabulary);
+            addField('Phrases (文):', reportData.phrases);
+            addField('Mistakes (specific):', reportData.mistakes);
+            addField('Strengths (specific):', reportData.strengths);
             addField('Comments/Homework:', reportData.comments);
+            addField('Others (その他):', reportData.others);
             
             // Footer
             doc.fontSize(9)

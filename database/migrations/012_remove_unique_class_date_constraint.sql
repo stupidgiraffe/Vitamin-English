@@ -1,0 +1,1 @@
+ALTER TABLE teacher_comment_sheets DROP CONSTRAINT IF EXISTS teacher_comment_sheets_class_id_date_key;
