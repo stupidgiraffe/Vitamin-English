@@ -106,7 +106,7 @@ function measureLessonBlock(doc, week, labelColWidth, dataColWidth) {
         // Measure label height — bold English + Japanese on separate lines
         doc.font('Helvetica-Bold').fontSize(10);
         const enHeight = doc.heightOfString(cat.en, { width: labelColWidth - 10 });
-        doc.font('NotoJP').fontSize(9);
+        doc.font('NotoJP-Bold').fontSize(9);
         const jpHeight = doc.heightOfString(`(${cat.jp})`, { width: labelColWidth - 10 });
         const labelHeight = enHeight + jpHeight + 2;
         // Measure data height
@@ -161,7 +161,7 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth, lessonIndex,
         // Measure heights
         doc.font('Helvetica-Bold').fontSize(10);
         const enLabelHeight = doc.heightOfString(cat.en, { width: labelColWidth - 10 });
-        doc.font('NotoJP').fontSize(9);
+        doc.font('NotoJP-Bold').fontSize(9);
         const jpLabelHeight = doc.heightOfString(`(${cat.jp})`, { width: labelColWidth - 10 });
         const labelHeight = enLabelHeight + jpLabelHeight + 2;
         doc.font('NotoJP').fontSize(10);
@@ -188,7 +188,7 @@ function drawLessonBlock(doc, week, currentY, margin, contentWidth, lessonIndex,
                lineBreak: false
            });
         doc.fontSize(9)
-           .font('NotoJP')
+           .font('NotoJP-Bold')
            .fillColor('#555555')
            .text(`(${cat.jp})`, margin + 5, labelY + enLabelHeight, {
                width: labelColWidth - 10,
@@ -240,8 +240,10 @@ async function generateMonthlyReportPDF(reportData, weeklyData, classData, teach
             });
             doc.on('error', reject);
 
-            // Register Japanese font
+            // Register Japanese fonts
+            const boldFontPath = path.join(__dirname, '..', 'fonts', 'NotoSansJP-Bold.ttf');
             doc.registerFont('NotoJP', fontPath);
+            doc.registerFont('NotoJP-Bold', boldFontPath);
 
             // Constants for layout
             const pageWidth = A4_WIDTH;

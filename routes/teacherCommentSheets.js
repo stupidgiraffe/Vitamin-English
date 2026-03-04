@@ -87,7 +87,7 @@ router.get('/:id', async (req, res) => {
 // Create a new teacher comment sheet
 router.post('/', async (req, res) => {
     try {
-        const { class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
+        const { class_id, teacher_id, date, target_topic, vocabulary, phrases, mistakes, strengths, comments, others } = req.body;
         
         console.log('Saving teacher comment sheet:', { class_id, teacher_id, date });
         
@@ -117,9 +117,11 @@ router.post('/', async (req, res) => {
             date,
             target_topic: target_topic || '',
             vocabulary: vocabulary || '',
+            phrases: phrases || '',
             mistakes: mistakes || '',
             strengths: strengths || '',
-            comments: comments || ''
+            comments: comments || '',
+            others: others || ''
         });
         
         console.log('Teacher comment sheet created successfully:', report.id);
@@ -136,7 +138,7 @@ router.post('/', async (req, res) => {
 // Update a teacher comment sheet
 router.put('/:id', async (req, res) => {
     try {
-        const { teacher_id, target_topic, vocabulary, mistakes, strengths, comments } = req.body;
+        const { teacher_id, target_topic, vocabulary, phrases, mistakes, strengths, comments, others } = req.body;
         
         console.log('Updating teacher comment sheet:', req.params.id);
         
@@ -150,9 +152,11 @@ router.put('/:id', async (req, res) => {
             teacher_id,
             target_topic: target_topic || '',
             vocabulary: vocabulary || '',
+            phrases: phrases || '',
             mistakes: mistakes || '',
             strengths: strengths || '',
-            comments: comments || ''
+            comments: comments || '',
+            others: others || ''
         });
         
         if (!report) {

@@ -660,9 +660,11 @@ function saveDraft() {
         teacher_id: document.getElementById('report-teacher')?.value || '',
         target_topic: document.getElementById('report-target')?.value || '',
         vocabulary: document.getElementById('report-vocabulary')?.value || '',
+        phrases: document.getElementById('report-phrases')?.value || '',
         mistakes: document.getElementById('report-mistakes')?.value || '',
         strengths: document.getElementById('report-strengths')?.value || '',
         comments: document.getElementById('report-comments')?.value || '',
+        others: document.getElementById('report-others')?.value || '',
         savedAt: Date.now()
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
@@ -690,9 +692,11 @@ function restoreDraftIfAvailable() {
             if (draft.teacher_id) document.getElementById('report-teacher').value = draft.teacher_id;
             if (draft.target_topic) document.getElementById('report-target').value = draft.target_topic;
             if (draft.vocabulary) document.getElementById('report-vocabulary').value = draft.vocabulary;
+            if (draft.phrases) document.getElementById('report-phrases').value = draft.phrases;
             if (draft.mistakes) document.getElementById('report-mistakes').value = draft.mistakes;
             if (draft.strengths) document.getElementById('report-strengths').value = draft.strengths;
             if (draft.comments) document.getElementById('report-comments').value = draft.comments;
+            if (draft.others) document.getElementById('report-others').value = draft.others;
             setFormDirty(true);
         }, () => {
             clearDraft();
@@ -2001,9 +2005,11 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('report-class').value = report.class_id;
             document.getElementById('report-target').value = report.target_topic || '';
             document.getElementById('report-vocabulary').value = report.vocabulary || '';
+            document.getElementById('report-phrases').value = report.phrases || '';
             document.getElementById('report-mistakes').value = report.mistakes || '';
             document.getElementById('report-strengths').value = report.strengths || '';
             document.getElementById('report-comments').value = report.comments || '';
+            document.getElementById('report-others').value = report.others || '';
             document.getElementById('delete-report-btn').style.display = 'inline-block';
             document.getElementById('export-report-pdf-btn').style.display = 'inline-block';
             document.getElementById('report-form-container').style.display = 'block';
@@ -2038,9 +2044,11 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
         date: document.getElementById('report-form-date').value,
         target_topic: document.getElementById('report-target').value,
         vocabulary: document.getElementById('report-vocabulary').value,
+        phrases: document.getElementById('report-phrases').value,
         mistakes: document.getElementById('report-mistakes').value,
         strengths: document.getElementById('report-strengths').value,
-        comments: document.getElementById('report-comments').value
+        comments: document.getElementById('report-comments').value,
+        others: document.getElementById('report-others').value
     };
 
     try {
@@ -2069,7 +2077,7 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
 
 // Track dirty state and auto-save for comment sheet form
 ['report-form-date', 'report-class', 'report-teacher', 'report-target',
- 'report-vocabulary', 'report-mistakes', 'report-strengths', 'report-comments'].forEach(id => {
+ 'report-vocabulary', 'report-phrases', 'report-mistakes', 'report-strengths', 'report-comments', 'report-others'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', () => {
         setFormDirty(true);
         scheduleDraftSave();
@@ -2160,9 +2168,11 @@ async function loadReportById(id) {
         document.getElementById('report-class').value = report.class_id;
         document.getElementById('report-target').value = report.target_topic || '';
         document.getElementById('report-vocabulary').value = report.vocabulary || '';
+        document.getElementById('report-phrases').value = report.phrases || '';
         document.getElementById('report-mistakes').value = report.mistakes || '';
         document.getElementById('report-strengths').value = report.strengths || '';
         document.getElementById('report-comments').value = report.comments || '';
+        document.getElementById('report-others').value = report.others || '';
         document.getElementById('delete-report-btn').style.display = 'inline-block';
         document.getElementById('report-form-container').style.display = 'block';
         document.getElementById('reports-list-container').style.display = 'none';

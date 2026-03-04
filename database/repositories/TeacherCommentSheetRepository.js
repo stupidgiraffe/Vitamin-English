@@ -115,23 +115,25 @@ class TeacherCommentSheetRepository extends BaseRepository {
      * @returns {Promise<Object>} Upserted record
      */
     async upsert(data) {
-        const { class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments } = data;
+        const { class_id, teacher_id, date, target_topic, vocabulary, phrases, mistakes, strengths, comments, others } = data;
         
         const result = await this.query(
             `INSERT INTO teacher_comment_sheets 
-                (class_id, teacher_id, date, target_topic, vocabulary, mistakes, strengths, comments)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (class_id, teacher_id, date, target_topic, vocabulary, phrases, mistakes, strengths, comments, others)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT (class_id, date)
              DO UPDATE SET 
                 teacher_id = EXCLUDED.teacher_id,
                 target_topic = EXCLUDED.target_topic,
                 vocabulary = EXCLUDED.vocabulary,
+                phrases = EXCLUDED.phrases,
                 mistakes = EXCLUDED.mistakes,
                 strengths = EXCLUDED.strengths,
-                comments = EXCLUDED.comments
+                comments = EXCLUDED.comments,
+                others = EXCLUDED.others
              RETURNING *`,
-            [class_id, teacher_id, date, target_topic || null, vocabulary || null, 
-             mistakes || null, strengths || null, comments || null]
+            [class_id, teacher_id, date, target_topic || null, vocabulary || null,
+             phrases || null, mistakes || null, strengths || null, comments || null, others || null]
         );
         
         return result.rows[0];
