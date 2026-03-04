@@ -2000,7 +2000,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
         if (report) {
             // Load existing report
             document.getElementById('report-id').value = report.id;
-            document.getElementById('report-form-date').value = report.date;
+            document.getElementById('report-form-date').value = normalizeToISO(report.date);
             document.getElementById('report-teacher').value = report.teacher_id;
             document.getElementById('report-class').value = report.class_id;
             document.getElementById('report-target').value = report.target_topic || '';
@@ -2152,6 +2152,10 @@ async function loadReportsList() {
                 </div>
                 <div><strong>Teacher:</strong> ${escapeHtml(report.teacher_name)}</div>
                 <div><strong>Topic:</strong> ${escapeHtml(report.target_topic || 'N/A')}</div>
+                <div class="report-item-actions" onclick="event.stopPropagation()">
+                    <button class="btn btn-small btn-secondary" onclick="exportReportPdfById(${report.id})">📄 Export PDF</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteReportById(${report.id})">🗑️ Delete</button>
+                </div>
             </div>
         `).join('');
     } catch (error) {
@@ -2163,7 +2167,7 @@ async function loadReportById(id) {
     try {
         const report = await api(`/reports/${id}`);
         document.getElementById('report-id').value = report.id;
-        document.getElementById('report-form-date').value = report.date;
+        document.getElementById('report-form-date').value = normalizeToISO(report.date);
         document.getElementById('report-teacher').value = report.teacher_id;
         document.getElementById('report-class').value = report.class_id;
         document.getElementById('report-target').value = report.target_topic || '';
@@ -2174,10 +2178,46 @@ async function loadReportById(id) {
         document.getElementById('report-comments').value = report.comments || '';
         document.getElementById('report-others').value = report.others || '';
         document.getElementById('delete-report-btn').style.display = 'inline-block';
+        document.getElementById('export-report-pdf-btn').style.display = 'inline-block';
         document.getElementById('report-form-container').style.display = 'block';
         document.getElementById('reports-list-container').style.display = 'none';
     } catch (error) {
         Toast.error('Error loading report: ' + error.message);
+    }
+}
+
+async function deleteReportById(id, refreshMulti = false) {
+    if (!confirm('Are you sure you want to delete this comment sheet?')) return;
+    try {
+        await api(`/teacher-comment-sheets/${id}`, { method: 'DELETE' });
+        Toast.success('Comment sheet deleted successfully!');
+        if (refreshMulti) {
+            loadMultiClassReports();
+        } else {
+            loadReportsList();
+        }
+    } catch (error) {
+        Toast.error('Error deleting comment sheet: ' + error.message);
+    }
+}
+
+async function exportReportPdfById(id) {
+    try {
+        Toast.info('Generating PDF...', 'Please wait');
+        const response = await api(`/pdf/lesson-report/${id}`, { method: 'POST' });
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated successfully!');
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error generating lesson report PDF:', error);
+        if (error.message.includes('not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
+        } else {
+            Toast.error('Error generating PDF: ' + error.message);
+        }
     }
 }
 
@@ -2325,6 +2365,12 @@ function renderMultiClassGrid(classReports) {
                             <td class="report-actions">
                                 <button class="btn btn-small btn-primary" onclick="viewReportDetails(${report.id})" title="Open Report">
                                     📖 Open
+                                </button>
+                                <button class="btn btn-small btn-secondary" onclick="exportReportPdfById(${report.id})" title="Export PDF">
+                                    📄 PDF
+                                </button>
+                                <button class="btn btn-small btn-danger" onclick="deleteReportById(${report.id}, true)" title="Delete">
+                                    🗑️ Delete
                                 </button>
                             </td>
                         </tr>
