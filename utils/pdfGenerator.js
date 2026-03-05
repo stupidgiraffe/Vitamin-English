@@ -809,8 +809,9 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             });
             doc.on('error', reject);
 
-            // Register Japanese font
+            // Register Japanese fonts
             doc.registerFont('NotoJP', path.join(__dirname, '..', 'fonts', 'NotoSansJP-Regular.ttf'));
+            doc.registerFont('NotoJP-Bold', path.join(__dirname, '..', 'fonts', 'NotoSansJP-Bold.ttf'));
             
             // Professional Header with Branding
             doc.rect(0, 0, doc.page.width, 100)
@@ -914,25 +915,48 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                .fillColor(THEME.colors.textDark)
                .text('Lesson Details', 60, lessonY + 7);
             
-            doc.moveDown(1.5);
+            doc.moveDown(1.0);
             
             // Helper function to add a field with proper styling
             const addField = (label, content) => {
                 if (!content) return;
                 
                 // Check for page break
-                if (doc.y > doc.page.height - 150) {
+                if (doc.y > doc.page.height - 80) {
                     doc.addPage();
                     doc.y = 50;
                 }
                 
-                // Use NotoJP for labels containing Japanese characters
+                // Render label with consistent Helvetica-Bold styling, using NotoJP-Bold
+                // only for any Japanese portion so all labels share the same visual weight and colour.
                 const hasJapanese = CJK_REGEX.test(label);
                 const fieldY = doc.y;
-                doc.fontSize(11)
-                   .font(hasJapanese ? 'NotoJP' : 'Helvetica-Bold')
-                   .fillColor(THEME.colors.primaryBlue)
-                   .text(label, 60, fieldY);
+                if (hasJapanese) {
+                    // Split at the opening parenthesis that precedes Japanese text so the
+                    // Latin portion renders in Helvetica-Bold and the Japanese portion in
+                    // NotoJP-Bold – both at the same size and colour for visual consistency.
+                    const parenIdx = label.search(/\([\u3040-\u30FF\u3000-\u9FFF\uF900-\uFAFF]/);
+                    if (parenIdx > 0) {
+                        const englishPart = label.slice(0, parenIdx);
+                        const japanesePart = label.slice(parenIdx);
+                        doc.fontSize(11)
+                           .font('Helvetica-Bold')
+                           .fillColor(THEME.colors.primaryBlue)
+                           .text(englishPart, 60, fieldY, { continued: true });
+                        doc.font('NotoJP-Bold')
+                           .text(japanesePart);
+                    } else {
+                        doc.fontSize(11)
+                           .font('NotoJP-Bold')
+                           .fillColor(THEME.colors.primaryBlue)
+                           .text(label, 60, fieldY);
+                    }
+                } else {
+                    doc.fontSize(11)
+                       .font('Helvetica-Bold')
+                       .fillColor(THEME.colors.primaryBlue)
+                       .text(label, 60, fieldY);
+                }
                 
                 doc.moveDown(0.3);
                 doc.fontSize(10)
@@ -943,7 +967,7 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                        align: 'left'
                    });
                 
-                doc.moveDown(0.8);
+                doc.moveDown(0.5);
             };
             
             addField('Target/Topic:', reportData.target_topic);

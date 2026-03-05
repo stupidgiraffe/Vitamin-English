@@ -170,6 +170,14 @@ router.post('/preview-generate', async (req, res) => {
         
         const lessons = lessonsResult.rows;
         
+        // Debug logging to trace phrase values from teacher comment sheets
+        if (lessons.length > 0) {
+            console.log(`📋 preview-generate: found ${lessons.length} lesson(s) for class ${class_id}`);
+            lessons.forEach((l, i) => {
+                console.log(`   Lesson ${i + 1} (id=${l.id}): phrases=${JSON.stringify(l.phrases)}, others=${JSON.stringify(l.others)}`);
+            });
+        }
+        
         // Map to weekly format
         const weeks = lessons.map((lesson, index) => ({
             week_number: index + 1,
@@ -261,6 +269,14 @@ router.post('/auto-generate', async (req, res) => {
         }
         
         const lessons = lessonsResult.rows;
+        
+        // Debug logging to trace phrase values from teacher comment sheets
+        if (lessons.length > 0) {
+            console.log(`📋 auto-generate: found ${lessons.length} lesson(s) for class ${class_id} (${startDate} to ${endDate})`);
+            lessons.forEach((l, i) => {
+                console.log(`   Lesson ${i + 1} (id=${l.id}): phrases=${JSON.stringify(l.phrases)}, others=${JSON.stringify(l.others)}`);
+            });
+        }
         
         if (lessons.length === 0) {
             // No teacher comment sheets found - create report with manually provided weeks (if any)
