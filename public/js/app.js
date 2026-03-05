@@ -205,6 +205,36 @@ const Toast = {
         toast.querySelector('#toast-yes').addEventListener('click', () => { remove(); onYes && onYes(); });
         toast.querySelector('#toast-no').addEventListener('click', () => { remove(); onNo && onNo(); });
         return toast;
+    },
+
+    // Part 4A: Undo toast
+    undo(message, undoCallback, duration = 5000) {
+        this.init();
+        const toast = document.createElement('div');
+        toast.className = 'toast success undo-toast';
+        toast.innerHTML = `
+            <div class="toast-icon">✓</div>
+            <div class="toast-content">
+                <div class="toast-message">${escapeHtml(message)}</div>
+            </div>
+            <button class="toast-undo-btn">Undo</button>
+            <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+        `;
+        this.container.appendChild(toast);
+        let undone = false;
+        const removeToast = () => {
+            toast.classList.add('hiding');
+            setTimeout(() => toast.remove(), 300);
+        };
+        toast.querySelector('.toast-undo-btn').addEventListener('click', () => {
+            undone = true;
+            removeToast();
+            if (undoCallback) undoCallback();
+        });
+        if (duration > 0) {
+            setTimeout(() => { if (!undone) removeToast(); }, duration);
+        }
+        return toast;
     }
 };
 
@@ -745,6 +775,21 @@ function initializeAttendancePage() {
         startDateInput.value = startDate;
         endDateInput.value = endDate;
     }
+
+    // Part 1A: Initialize month display to current month if not already set
+    if (!currentAttendanceMonth || !currentAttendanceYear) {
+        const now = new Date();
+        currentAttendanceMonth = now.getMonth() + 1;
+        currentAttendanceYear  = now.getFullYear();
+    }
+    updateMonthDisplay();
+
+    // Part 1C: sync toggle with current state
+    const toggle = document.getElementById('show-schedule-only');
+    if (toggle) toggle.checked = showScheduleDatesOnly;
+
+    // Part 4F: check initial online status
+    updateOfflineIndicator();
 }
 
 // Helper: Get default date range for attendance (last 6 months)
@@ -898,6 +943,9 @@ async function loadDashboard() {
     } catch (error) {
         recentActivityDiv.innerHTML = '<p class="info-text">Unable to load recent activity</p>';
     }
+
+    // Part 2C: Load attendance overview card
+    loadAttendanceOverview();
 }
 
 // Load weekly schedule showing classes organized by day
@@ -1089,6 +1137,18 @@ let currentAttendanceView = 'list'; // 'list' or 'grid'
 let lastAttendanceData = null; // Store last loaded attendance data
 let lastAttendanceClassId = null;
 
+// ── Part 1: Month navigation state ────────────────────────────────────────────
+let currentAttendanceMonth = null; // 1-12
+let currentAttendanceYear  = null;
+let attendanceMonthPickerYear = new Date().getFullYear();
+let showScheduleDatesOnly = true; // Part 1C toggle
+
+// ── Part 4A: Undo stack ────────────────────────────────────────────────────────
+const undoStack = []; // max 10 entries
+
+// ── Part 4C: Keyboard navigation state ────────────────────────────────────────
+let focusedCell = null; // currently focused attendance cell element
+
 document.getElementById('view-list-btn')?.addEventListener('click', () => {
     if (currentAttendanceView !== 'list') {
         currentAttendanceView = 'list';
@@ -1148,6 +1208,798 @@ async function useScheduleForDates() {
         console.error('Error using schedule:', error);
         Toast.error('Failed to load schedule-based dates');
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 1: MONTH NAVIGATION (1A, 1B)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const MONTH_NAMES_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONTH_NAMES_FULL  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+/** Update the month display button text */
+function updateMonthDisplay() {
+    const el = document.getElementById('month-display-text');
+    if (!el) return;
+    if (currentAttendanceMonth && currentAttendanceYear) {
+        el.textContent = `${MONTH_NAMES_FULL[currentAttendanceMonth - 1]} ${currentAttendanceYear}`;
+    } else {
+        el.textContent = 'Select Month';
+    }
+}
+
+/** Fill the month picker grid with 12 month buttons for attendanceMonthPickerYear */
+function renderMonthPickerGrid() {
+    const grid = document.getElementById('month-picker-grid');
+    if (!grid) return;
+    document.getElementById('month-picker-year').textContent = attendanceMonthPickerYear;
+    grid.innerHTML = MONTH_NAMES_SHORT.map((m, i) => {
+        const isActive = (i + 1 === currentAttendanceMonth && attendanceMonthPickerYear === currentAttendanceYear);
+        return `<button class="month-picker-btn${isActive ? ' active' : ''}" data-month="${i+1}" data-year="${attendanceMonthPickerYear}">${m}</button>`;
+    }).join('');
+    grid.querySelectorAll('.month-picker-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            selectMonth(parseInt(btn.dataset.month), parseInt(btn.dataset.year));
+            document.getElementById('month-picker-dropdown').style.display = 'none';
+        });
+    });
+}
+
+/** Set the current month/year, auto-fill start/end date inputs */
+function selectMonth(month, year) {
+    currentAttendanceMonth = month;
+    currentAttendanceYear  = year;
+    updateMonthDisplay();
+
+    const firstDay = `${year}-${String(month).padStart(2,'0')}-01`;
+    const lastDay  = new Date(year, month, 0).getDate();
+    const lastDate = `${year}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+
+    document.getElementById('attendance-start-date').value = firstDay;
+    document.getElementById('attendance-end-date').value   = lastDate;
+
+    // Part 1B: auto-load if class is selected
+    const classId = document.getElementById('attendance-class-select').value;
+    if (classId) {
+        loadAttendance();
+    }
+}
+
+/** Navigate months: offset = -1 (prev) or +1 (next) */
+function navigateMonth(offset) {
+    const now = new Date();
+    let month = currentAttendanceMonth || (now.getMonth() + 1);
+    let year  = currentAttendanceYear  || now.getFullYear();
+    month += offset;
+    if (month < 1)  { month = 12; year--; }
+    if (month > 12) { month = 1;  year++; }
+    selectMonth(month, year);
+}
+
+// Month nav button listeners
+document.getElementById('month-prev-btn')?.addEventListener('click', () => navigateMonth(-1));
+document.getElementById('month-next-btn')?.addEventListener('click', () => navigateMonth(+1));
+document.getElementById('month-today-btn')?.addEventListener('click', () => {
+    const now = new Date();
+    selectMonth(now.getMonth() + 1, now.getFullYear());
+});
+
+// Month display button opens/closes picker
+document.getElementById('month-display-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const dropdown = document.getElementById('month-picker-dropdown');
+    if (!dropdown) return;
+    attendanceMonthPickerYear = currentAttendanceYear || new Date().getFullYear();
+    renderMonthPickerGrid();
+    dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+});
+
+// Month picker year navigation
+document.getElementById('month-picker-prev-year')?.addEventListener('click', () => {
+    attendanceMonthPickerYear--;
+    renderMonthPickerGrid();
+});
+document.getElementById('month-picker-next-year')?.addEventListener('click', () => {
+    attendanceMonthPickerYear++;
+    renderMonthPickerGrid();
+});
+
+// Close month picker on outside click
+document.addEventListener('click', (e) => {
+    const dropdown = document.getElementById('month-picker-dropdown');
+    const bar = document.getElementById('month-nav-bar');
+    if (dropdown && bar && !bar.contains(e.target)) {
+        dropdown.style.display = 'none';
+    }
+});
+
+// Part 1B: Auto-load when class changes AND a month is selected
+document.getElementById('attendance-class-select')?.addEventListener('change', () => {
+    if (currentAttendanceMonth && currentAttendanceYear) {
+        loadAttendance();
+    }
+});
+
+// Part 1C: Schedule toggle
+document.getElementById('show-schedule-only')?.addEventListener('change', function() {
+    showScheduleDatesOnly = this.checked;
+    if (lastAttendanceData && lastAttendanceClassId) {
+        if (currentAttendanceView === 'grid') {
+            renderAttendanceGridView(lastAttendanceData, lastAttendanceClassId);
+        } else {
+            renderAttendanceTable(lastAttendanceData, lastAttendanceClassId);
+        }
+    }
+});
+
+// Part 4G: PDF preview modal
+function showPDFPreviewModal() {
+    const classId   = document.getElementById('attendance-class-select').value;
+    const startDate = document.getElementById('attendance-start-date').value;
+    const endDate   = document.getElementById('attendance-end-date').value;
+
+    if (!classId) { Toast.error('Please select a class first'); return; }
+    if (!startDate || !endDate) { Toast.error('Please select both start and end dates'); return; }
+
+    showModal('📄 Export PDF Options', `
+        <div class="pdf-preview-modal-body">
+            <div class="pdf-option-group">
+                <label>Date range: <strong>${escapeHtml(startDate)}</strong> → <strong>${escapeHtml(endDate)}</strong></label>
+            </div>
+            <div class="pdf-option-group">
+                <label>PDF Type:</label>
+                <div class="pdf-option-row">
+                    <label><input type="radio" name="pdf-type" value="standard" checked> Standard</label>
+                    <label><input type="radio" name="pdf-type" value="enhanced"> Enhanced (Bilingual JP/EN)</label>
+                </div>
+            </div>
+            <div class="pdf-option-group">
+                <label>Include Statistics:</label>
+                <div class="pdf-option-row">
+                    <label><input type="radio" name="pdf-stats" value="yes" checked> Yes</label>
+                    <label><input type="radio" name="pdf-stats" value="no"> No</label>
+                </div>
+            </div>
+            <div class="pdf-option-group">
+                <label>Teacher Comments Section:</label>
+                <div class="pdf-option-row">
+                    <label><input type="radio" name="pdf-comments" value="yes" checked> Yes</label>
+                    <label><input type="radio" name="pdf-comments" value="no"> No</label>
+                </div>
+            </div>
+            <div style="margin-top:16px;display:flex;gap:10px;">
+                <button id="pdf-generate-btn" class="btn btn-primary">📄 Generate PDF</button>
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    `);
+
+    document.getElementById('pdf-generate-btn')?.addEventListener('click', async () => {
+        const pdfType    = document.querySelector('input[name="pdf-type"]:checked')?.value;
+        const inclStats  = document.querySelector('input[name="pdf-stats"]:checked')?.value !== 'no';
+        const inclComments = document.querySelector('input[name="pdf-comments"]:checked')?.value !== 'no';
+        closeModal();
+
+        const normalizedStart = normalizeToISO(startDate);
+        const normalizedEnd   = normalizeToISO(endDate);
+        if (!normalizedStart || !normalizedEnd) { Toast.error('Invalid date format'); return; }
+
+        Toast.info('Generating PDF...', 'Please wait');
+        try {
+            let endpoint, body;
+            if (pdfType === 'enhanced') {
+                endpoint = `/pdf/attendance-grid-enhanced/${classId}`;
+                body = JSON.stringify({ startDate: normalizedStart, endDate: normalizedEnd, includeStats: inclStats, includeComments: inclComments });
+            } else {
+                endpoint = `/pdf/attendance-grid/${classId}`;
+                body = JSON.stringify({ startDate: normalizedStart, endDate: normalizedEnd });
+            }
+            const response = await api(endpoint, { method: 'POST', body });
+            if (response.success && response.downloadUrl) {
+                Toast.success('PDF generated successfully!');
+                window.open(response.downloadUrl, '_blank');
+            } else {
+                Toast.error('Failed to generate PDF');
+            }
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            if (error.message && error.message.includes('not configured')) {
+                Toast.error('PDF export requires Cloudflare R2 configuration.', 'Configuration Required');
+            } else {
+                Toast.error('Error generating PDF: ' + (error.message || 'Unknown error'));
+            }
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 4F: OFFLINE INDICATOR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function updateOfflineIndicator() {
+    const banner = document.getElementById('offline-banner');
+    if (!banner) return;
+    if (!navigator.onLine) {
+        banner.style.display = 'block';
+        banner.classList.remove('synced');
+        document.getElementById('offline-banner-text').textContent = '📴 Offline — changes saved locally';
+    } else {
+        banner.style.display = 'none';
+    }
+}
+
+window.addEventListener('offline', () => {
+    const banner = document.getElementById('offline-banner');
+    if (banner) {
+        banner.style.display = 'block';
+        banner.classList.remove('synced');
+        document.getElementById('offline-banner-text').textContent = '📴 Offline — changes saved locally';
+    }
+});
+
+window.addEventListener('online', () => {
+    const banner = document.getElementById('offline-banner');
+    if (banner) {
+        banner.style.display = 'block';
+        banner.classList.add('synced');
+        document.getElementById('offline-banner-text').textContent = '☁️ Synced!';
+        // Process any queued attendance saves
+        if (AttendanceSaveQueue.queue.size > 0) {
+            AttendanceSaveQueue.processSave();
+        }
+        setTimeout(() => {
+            banner.style.display = 'none';
+            banner.classList.remove('synced');
+        }, 3000);
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 4B: QUICK MARK ALL PRESENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+document.getElementById('quick-mark-present-btn')?.addEventListener('click', quickMarkAllPresent);
+
+async function quickMarkAllPresent() {
+    const startDate = document.getElementById('attendance-start-date').value;
+    const endDate   = document.getElementById('attendance-end-date').value;
+    // Only active when viewing a single date
+    if (!startDate || !endDate || startDate !== endDate) {
+        Toast.info('Quick mark is only available when viewing a single date');
+        return;
+    }
+
+    const cells = document.querySelectorAll(`.attendance-cell[data-date="${startDate}"]`);
+    const emptyCells = Array.from(cells).filter(c => !c.textContent.trim());
+
+    if (emptyCells.length === 0) {
+        Toast.info('All students already marked for this date');
+        return;
+    }
+
+    // Store snapshot for undo
+    const snapshot = emptyCells.map(c => ({ cell: c, prev: c.textContent.trim() }));
+
+    // Apply optimistic UI update
+    emptyCells.forEach(cell => {
+        cell.textContent = 'O';
+        cell.className = 'attendance-cell present';
+        const studentId = cell.dataset.student;
+        const classId   = cell.dataset.class;
+        const date      = cell.dataset.date;
+        const selectedClass = classes.find(c => c.id == classId);
+        const teacherId = selectedClass ? selectedClass.teacher_id : null;
+        AttendanceSaveQueue.add(studentId, classId, date, 'O', null, teacherId);
+    });
+
+    Toast.undo(`Marked ${emptyCells.length} student${emptyCells.length !== 1 ? 's' : ''} present`, () => {
+        // Undo: revert all cells and remove from queue
+        snapshot.forEach(({ cell, prev }) => {
+            AttendanceSaveQueue.queue.delete(`${cell.dataset.student}-${cell.dataset.class}-${cell.dataset.date}`);
+            cell.textContent = prev;
+            cell.className = 'attendance-cell';
+        });
+        Toast.info('Quick mark undone');
+    });
+}
+
+/** Show/hide Quick Mark button based on date range */
+function updateQuickMarkButtonVisibility() {
+    const btn = document.getElementById('quick-mark-present-btn');
+    if (!btn) return;
+    const startDate = document.getElementById('attendance-start-date').value;
+    const endDate   = document.getElementById('attendance-end-date').value;
+    btn.style.display = (startDate && endDate && startDate === endDate) ? 'inline-block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 4C: KEYBOARD NAVIGATION FOR ATTENDANCE GRID
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/** Returns all attendance cells in the table in reading order */
+function getAllAttendanceCells() {
+    return Array.from(document.querySelectorAll('.attendance-table .attendance-cell'));
+}
+
+/** Get cell position (row, col) within the table */
+function getCellPosition(cell) {
+    const row = cell.closest('tr');
+    const table = cell.closest('table');
+    if (!row || !table) return null;
+    const rows = Array.from(table.querySelectorAll('tbody tr')).filter(r => !r.classList.contains('student-type-header') && r.querySelectorAll('.attendance-cell').length > 0);
+    const rowIdx = rows.indexOf(row);
+    const cellsInRow = Array.from(row.querySelectorAll('.attendance-cell'));
+    const colIdx = cellsInRow.indexOf(cell);
+    return { rowIdx, colIdx, rows, cellsInRow };
+}
+
+function setFocusedCell(cell) {
+    if (focusedCell) {
+        focusedCell.removeAttribute('data-focused');
+        focusedCell.removeAttribute('tabindex');
+    }
+    focusedCell = cell;
+    if (cell) {
+        cell.setAttribute('data-focused', 'true');
+        cell.setAttribute('tabindex', '0');
+        cell.focus();
+    }
+}
+
+function announceAttendance(message) {
+    const region = document.getElementById('attendance-aria-live');
+    if (region) { region.textContent = ''; setTimeout(() => { region.textContent = message; }, 50); }
+}
+
+// Delegate keyboard events from attendance container
+document.getElementById('attendance-container')?.addEventListener('keydown', (e) => {
+    // Don't capture if user is in an input/select/textarea
+    if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+
+    const cell = e.target.closest('.attendance-cell');
+    if (!cell) return;
+
+    const pos = getCellPosition(cell);
+    if (!pos) return;
+    const { rowIdx, colIdx, rows } = pos;
+
+    let handled = true;
+    if (e.key === 'ArrowDown' && rowIdx + 1 < rows.length) {
+        const nextRow = rows[rowIdx + 1];
+        const cells = nextRow.querySelectorAll('.attendance-cell');
+        if (cells[colIdx]) setFocusedCell(cells[colIdx]);
+    } else if (e.key === 'ArrowUp' && rowIdx > 0) {
+        const prevRow = rows[rowIdx - 1];
+        const cells = prevRow.querySelectorAll('.attendance-cell');
+        if (cells[colIdx]) setFocusedCell(cells[colIdx]);
+    } else if (e.key === 'ArrowRight') {
+        const cells = pos.cellsInRow;
+        if (colIdx + 1 < cells.length) setFocusedCell(cells[colIdx + 1]);
+    } else if (e.key === 'ArrowLeft') {
+        if (colIdx > 0) setFocusedCell(pos.cellsInRow[colIdx - 1]);
+    } else if (e.key === 'Tab') {
+        // Move to next student (next row, same column)
+        if (!e.shiftKey && rowIdx + 1 < rows.length) {
+            e.preventDefault();
+            const nextRow = rows[rowIdx + 1];
+            const cells = nextRow.querySelectorAll('.attendance-cell');
+            if (cells[colIdx]) setFocusedCell(cells[colIdx]);
+        }
+    } else if (e.key === ' ' || e.key === 'Enter') {
+        toggleAttendance(cell);
+    } else if (e.key === 'o' || e.key === 'O') {
+        setAttendanceStatus(cell, 'O');
+    } else if (e.key === 'x' || e.key === 'X') {
+        setAttendanceStatus(cell, 'X');
+    } else if (e.key === '/') {
+        setAttendanceStatus(cell, '/');
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        setAttendanceStatus(cell, '');
+    } else {
+        handled = false;
+    }
+    if (handled) e.preventDefault();
+});
+
+function setAttendanceStatus(cell, newStatus) {
+    // Get student name for announcement
+    const row = cell.closest('tr');
+    const nameCell = row ? row.querySelector('.student-name') : null;
+    const studentName = nameCell ? nameCell.textContent.trim().replace(/✏️/g, '').trim() : 'Student';
+
+    cell.textContent = newStatus;
+    cell.className = 'attendance-cell';
+    if (newStatus === 'O') cell.classList.add('present');
+    else if (newStatus === 'X') cell.classList.add('absent');
+    else if (newStatus === '/') cell.classList.add('partial');
+
+    const timeInput = document.getElementById('attendance-time');
+    const time = timeInput ? timeInput.value.trim() : null;
+    const selectedClass = classes.find(c => c.id == cell.dataset.class);
+    const teacherId = selectedClass ? selectedClass.teacher_id : null;
+    const normalizedDate = normalizeToISO(cell.dataset.date) || cell.dataset.date;
+    AttendanceSaveQueue.add(cell.dataset.student, cell.dataset.class, normalizedDate, newStatus, time, teacherId);
+
+    const statusLabel = { 'O': 'Present', 'X': 'Absent', '/': 'Partial', '': 'Cleared' };
+    const dateLabel = cell.dataset.date ? new Date(cell.dataset.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+    announceAttendance(`Marked ${studentName} as ${statusLabel[newStatus] || newStatus} for ${dateLabel}`);
+}
+
+// Make attendance cells keyboard focusable when clicked
+document.getElementById('attendance-container')?.addEventListener('click', (e) => {
+    const cell = e.target.closest('.attendance-cell');
+    if (cell) setFocusedCell(cell);
+}, true);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 4D: ATTENDANCE PATTERN DETECTION (client-side)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detects absence patterns in attendance data.
+ * Returns array of human-readable pattern strings.
+ */
+function detectAttendancePatterns(records, studentName) {
+    const patterns = [];
+    const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+    // Check for day-of-week pattern (absent same day 3+ weeks in a row)
+    const absentByDay = {};
+    records.filter(r => r.status === 'X').forEach(r => {
+        const d = new Date(r.date + 'T00:00:00').getDay();
+        if (!absentByDay[d]) absentByDay[d] = [];
+        absentByDay[d].push(r.date);
+    });
+    Object.entries(absentByDay).forEach(([day, dates]) => {
+        if (dates.length >= 3) {
+            // Check if 3 consecutive weeks
+            const sorted = dates.map(d => new Date(d + 'T00:00:00')).sort((a,b) => a-b);
+            let consecutive = 1;
+            for (let i = 1; i < sorted.length; i++) {
+                const diff = (sorted[i] - sorted[i-1]) / (1000 * 60 * 60 * 24);
+                if (diff >= 6 && diff <= 8) consecutive++;
+                else consecutive = 1;
+                if (consecutive >= 3) {
+                    patterns.push(`⚠️ ${escapeHtml(studentName)} has been absent every ${dayNames[day]} for the last ${consecutive} weeks`);
+                    break;
+                }
+            }
+        }
+    });
+    return patterns;
+}
+
+/**
+ * Compare two months: returns '↗️', '↘️', or '→' and delta.
+ */
+function compareMonthlyRates(rate1, rate2) {
+    if (rate1 === null || rate2 === null) return { arrow: '→', delta: null };
+    const delta = rate2 - rate1;
+    const arrow = delta > 3 ? '↗️' : delta < -3 ? '↘️' : '→';
+    return { arrow, delta };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 2A: STUDENT INDIVIDUAL ATTENDANCE VIEW (enhanced)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function viewStudentAttendanceSummary(studentId) {
+    try {
+        const startDate = document.getElementById('attendance-start-date').value;
+        const endDate   = document.getElementById('attendance-end-date').value;
+        let url = `/attendance/student-summary/${studentId}`;
+        if (startDate && endDate) url += `?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+
+        const data = await api(url);
+        const { student, records, heatmap, stats, streaks } = data;
+
+        // Milestone badges
+        const milestones = [
+            { n: 5, badge: '🌟', label: '5-class' }, { n: 10, badge: '⭐', label: '10-class' },
+            { n: 20, badge: '🏆', label: '20-class' }, { n: 30, badge: '👑', label: '30-class' },
+            { n: 50, badge: '💎', label: '50-class' }
+        ];
+        const earnedBadges = milestones.filter(m => streaks.best >= m.n)
+            .map(m => `<span title="${m.label} streak" class="streak-milestones">${m.badge}</span>`).join('');
+
+        // Rate color class
+        const rateClass = stats.rate >= 85 ? 'rate-green' : stats.rate >= 65 ? 'rate-yellow' : 'rate-red';
+
+        // Build heatmap SVG
+        const heatmapSVG = buildHeatmapSVG(heatmap, startDate, endDate);
+
+        // Absent dates list
+        const absentRecords = records.filter(r => r.status === 'X');
+
+        // Patterns
+        const patterns = detectAttendancePatterns(records, student.name);
+
+        showModal(`📊 Attendance: ${escapeHtml(student.name)}`, `
+            <div class="student-detail-modal">
+                <div class="streak-display">
+                    <span class="streak-badge">🔥 Current streak: ${streaks.current} classes</span>
+                    <span class="streak-badge" style="background:linear-gradient(135deg,#f093fb,#f5576c);">🏆 Best streak: ${streaks.best} classes</span>
+                    ${earnedBadges}
+                </div>
+                <div class="attendance-rate-cell ${rateClass}" style="margin:10px 0;padding:8px;border-radius:8px;font-size:1rem;">
+                    Attendance Rate: <strong>${stats.rate}%</strong> (${stats.present} / ${stats.total} classes)
+                </div>
+                <div class="heatmap-container">
+                    ${heatmapSVG}
+                </div>
+                ${absentRecords.length > 0 ? `
+                    <details style="margin-top:10px;">
+                        <summary style="cursor:pointer;font-weight:600;margin-bottom:6px;">📅 Absent Dates (${absentRecords.length})</summary>
+                        <div class="absent-list">
+                            ${absentRecords.slice().reverse().map(r => `
+                                <div class="absent-list-item">
+                                    <span>${escapeHtml(r.date)}</span>
+                                    <span style="color:#888;font-size:0.82em;">${escapeHtml(r.class_name || '')}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </details>
+                ` : ''}
+                ${patterns.length > 0 ? `
+                    <div style="margin-top:10px;padding:8px;background:#fff3cd;border-radius:6px;font-size:0.85rem;">
+                        ${patterns.map(p => `<div>${p}</div>`).join('')}
+                    </div>
+                ` : ''}
+                <div style="margin-top:12px;display:flex;gap:8px;">
+                    <button class="btn btn-small btn-secondary" onclick="exportStudentAttendancePDF(${student.id})">📄 Export PDF</button>
+                </div>
+            </div>
+        `);
+    } catch (error) {
+        console.error('Error loading student summary:', error);
+        Toast.error('Failed to load student attendance summary');
+    }
+}
+
+/**
+ * Build an SVG heatmap (GitHub contribution graph style)
+ * heatmap: { "YYYY-MM-DD": { status, classes } }
+ */
+function buildHeatmapSVG(heatmap, startDateStr, endDateStr) {
+    if (!startDateStr || !endDateStr) {
+        // Derive range from heatmap keys
+        const keys = Object.keys(heatmap).sort();
+        if (keys.length === 0) return '<p class="info-text">No data</p>';
+        startDateStr = keys[0];
+        endDateStr   = keys[keys.length - 1];
+    }
+
+    const CELL = 12, GAP = 2, STEP = CELL + GAP;
+    const start = new Date(startDateStr + 'T00:00:00');
+    const end   = new Date(endDateStr   + 'T00:00:00');
+
+    // Align to Sunday
+    const startSunday = new Date(start);
+    startSunday.setDate(startSunday.getDate() - startSunday.getDay());
+
+    const colorMap = {
+        'O': 'var(--heatmap-present)',
+        'X': 'var(--heatmap-absent)',
+        '/': 'var(--heatmap-partial)',
+        '': 'var(--heatmap-noclass)'
+    };
+
+    const LABEL_W = 22, TOP_PAD = 20;
+    const cells = [];
+    const cur = new Date(startSunday);
+    let col = 0;
+
+    while (cur <= end || col % 1 !== 0) {
+        for (let row = 0; row < 7; row++) {
+            const iso = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+            const isInRange = cur >= start && cur <= end;
+            const hd = heatmap[iso];
+            const status = isInRange && hd ? hd.status : (isInRange ? '' : null);
+            if (status !== null) {
+                const x = LABEL_W + col * STEP;
+                const y = TOP_PAD + row * STEP;
+                const color = colorMap[status] || 'var(--heatmap-noclass)';
+                const tooltip = isInRange && hd
+                    ? `${iso}: ${hd.status === 'O' ? 'Present' : hd.status === 'X' ? 'Absent' : hd.status === '/' ? 'Partial' : 'No record'} — ${(hd.classes || []).map(c => escapeHtml(c.class_name)).join(', ')}`
+                    : `${iso}: No class`;
+                cells.push(`<rect class="heatmap-cell" x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="${color}" rx="2" ry="2" aria-label="${escapeHtml(tooltip)}" tabindex="0"><title>${escapeHtml(tooltip)}</title></rect>`);
+            }
+            cur.setDate(cur.getDate() + 1);
+            if (cur > end && row === 6) { col++; break; }
+        }
+        if (cur.getDay() === 0) col++;
+        if (cur > end) break;
+    }
+
+    const svgWidth  = LABEL_W + (col + 1) * STEP + 10;
+    const svgHeight = TOP_PAD + 7 * STEP + 20;
+
+    // Day labels
+    const dayLabels = ['Su','Mo','Tu','We','Th','Fr','Sa'].map((d, i) =>
+        `<text x="${LABEL_W - 4}" y="${TOP_PAD + i * STEP + CELL - 1}" font-size="8" fill="#888" text-anchor="end">${d}</text>`
+    ).join('');
+
+    // Legend
+    const legend = [['O','Present'],['X','Absent'],['/','Partial'],['','No class']].map(([s, l], i) =>
+        `<rect x="${LABEL_W + i * 70}" y="${svgHeight - 16}" width="${CELL}" height="${CELL}" fill="${colorMap[s]}" rx="2"/>
+         <text x="${LABEL_W + i * 70 + CELL + 3}" y="${svgHeight - 6}" font-size="9" fill="#666">${escapeHtml(l)}</text>`
+    ).join('');
+
+    return `<svg class="heatmap-svg" viewBox="0 0 ${svgWidth} ${svgHeight + 20}" role="img" aria-label="Attendance heatmap">
+        <title>Attendance heatmap</title>
+        ${dayLabels}
+        ${cells.join('')}
+        ${legend}
+    </svg>`;
+}
+
+async function exportStudentAttendancePDF(studentId) {
+    try {
+        const startDate = document.getElementById('attendance-start-date').value;
+        const endDate   = document.getElementById('attendance-end-date').value;
+        Toast.info('Generating PDF...', 'Please wait');
+        const response = await api(`/pdf/student-attendance-report/${studentId}`, {
+            method: 'POST',
+            body: JSON.stringify({ startDate: normalizeToISO(startDate), endDate: normalizeToISO(endDate) })
+        });
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated!');
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error exporting student PDF:', error);
+        if (error.message && error.message.includes('not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration.', 'Configuration Required');
+        } else {
+            Toast.error('Error generating PDF: ' + (error.message || ''));
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 2B: CLASS SUMMARY VIEW
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function showClassSummary(classId) {
+    if (!classId) {
+        classId = document.getElementById('attendance-class-select').value;
+        if (!classId) { Toast.error('Please select a class first'); return; }
+    }
+    try {
+        const year = currentAttendanceYear || new Date().getFullYear();
+        const data = await api(`/attendance/class-summary/${classId}?year=${year}`);
+        const { class: cls, monthlyStats, studentStats, lowestPerformers, overallRate } = data;
+
+        const rateClass = overallRate >= 85 ? 'rate-green' : overallRate >= 65 ? 'rate-yellow' : 'rate-red';
+
+        // Monthly chips
+        const monthChips = Object.entries(monthlyStats)
+            .filter(([, ms]) => ms.rate !== null)
+            .map(([m, ms]) => {
+                const rc = ms.rate >= 85 ? 'rate-green' : ms.rate >= 65 ? 'rate-yellow' : 'rate-red';
+                return `<span class="monthly-rate-chip ${rc}">${MONTH_NAMES_SHORT[parseInt(m)-1]}: ${ms.rate}%</span>`;
+            }).join('');
+
+        // Trend analysis (last 2 months with data)
+        const withData = Object.entries(monthlyStats).filter(([, ms]) => ms.rate !== null);
+        let trendHtml = '';
+        if (withData.length >= 2) {
+            const last = withData[withData.length - 1];
+            const prev = withData[withData.length - 2];
+            const { arrow, delta } = compareMonthlyRates(prev[1].rate, last[1].rate);
+            const mn1 = MONTH_NAMES_SHORT[parseInt(prev[0])-1], mn2 = MONTH_NAMES_SHORT[parseInt(last[0])-1];
+            trendHtml = `<div style="margin-top:8px;font-size:0.88rem;color:var(--text-secondary);">
+                ${arrow} ${mn2}: ${last[1].rate}% vs ${mn1}: ${prev[1].rate}% (${delta >= 0 ? '+' : ''}${delta}%)
+            </div>`;
+        }
+
+        // Pattern detection
+        const patterns = [];
+        studentStats.forEach(ss => {
+            const recs = []; // We don't have full records here, skip day-pattern detection
+            // Just flag low attendance
+            if (ss.total > 0 && ss.rate < 65) {
+                patterns.push(`⚠️ ${escapeHtml(ss.name)}: ${ss.rate}% attendance`);
+            }
+        });
+
+        showModal(`📊 Class Summary: ${escapeHtml(cls.name)}`, `
+            <div>
+                ${overallRate !== null ? `<div class="attendance-rate-cell ${rateClass}" style="padding:8px;border-radius:8px;font-size:1rem;margin-bottom:10px;">Overall ${year}: <strong>${overallRate}%</strong></div>` : ''}
+                <h4 style="margin-bottom:6px;">Monthly Rates:</h4>
+                <div class="class-summary-monthly">${monthChips || '<em>No data yet</em>'}</div>
+                ${trendHtml}
+                ${lowestPerformers.length > 0 ? `
+                    <h4 style="margin:12px 0 6px;">Lowest Attendance (Bottom 3):</h4>
+                    <ul class="lowest-performers-list">
+                        ${lowestPerformers.map(lp => `<li><span>${escapeHtml(lp.name)}</span><span>${lp.rate}%</span></li>`).join('')}
+                    </ul>
+                ` : ''}
+                ${patterns.length > 0 ? `
+                    <div style="margin-top:10px;padding:8px;background:#fff3cd;border-radius:6px;font-size:0.84rem;">
+                        ${patterns.map(p => `<div>${p}</div>`).join('')}
+                    </div>
+                ` : ''}
+                <div style="margin-top:12px;display:flex;gap:8px;">
+                    <button class="btn btn-small btn-secondary" onclick="exportClassSummaryPDF(${cls.id})">📄 Export PDF</button>
+                </div>
+            </div>
+        `);
+    } catch (error) {
+        console.error('Error loading class summary:', error);
+        Toast.error('Failed to load class summary');
+    }
+}
+
+async function exportClassSummaryPDF(classId) {
+    try {
+        const year = currentAttendanceYear || new Date().getFullYear();
+        Toast.info('Generating PDF...', 'Please wait');
+        const response = await api(`/pdf/class-summary/${classId}`, {
+            method: 'POST',
+            body: JSON.stringify({ year })
+        });
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated!');
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error exporting class summary PDF:', error);
+        if (error.message && error.message.includes('not configured')) {
+            Toast.error('PDF export requires Cloudflare R2 configuration.', 'Configuration Required');
+        } else {
+            Toast.error('Error generating PDF: ' + (error.message || ''));
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// PART 2C: ENHANCED TEACHER DASHBOARD ATTENDANCE OVERVIEW
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadAttendanceOverview() {
+    const container = document.getElementById('attendance-overview-container');
+    const monthLabel = document.getElementById('attendance-overview-month');
+    if (!container) return;
+    try {
+        const data = await api('/attendance/teacher-dashboard');
+        if (monthLabel) monthLabel.textContent = `— ${data.monthLabel}`;
+        if (!data.classes || data.classes.length === 0) {
+            container.innerHTML = '<p class="info-text">No classes found</p>';
+            return;
+        }
+        const rateClass = (r) => r >= 85 ? 'rate-green' : r >= 65 ? 'rate-yellow' : 'rate-red';
+        container.innerHTML = `<div class="attendance-overview-grid">
+            ${data.classes.map(cls => `
+                <div class="attendance-overview-class-card" onclick="quickAttendanceLink(${cls.id})" title="Click to view attendance for ${escapeHtml(cls.name)}">
+                    <div class="attendance-overview-class-name" style="color:${cls.color || '#667eea'}">${escapeHtml(cls.name)}</div>
+                    ${cls.monthlyRate !== null
+                        ? `<div class="attendance-overview-rate attendance-rate-cell ${rateClass(cls.monthlyRate)}" style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:1rem;">${cls.monthlyRate}%</div>`
+                        : `<div class="attendance-overview-no-data">No data this month</div>`}
+                    ${cls.flaggedStudents && cls.flaggedStudents.length > 0
+                        ? `<div class="attendance-overview-flagged">⚠️ ${cls.flaggedStudents.map(s => `${escapeHtml(s.name)} (${s.rate}%)`).join(', ')}</div>`
+                        : ''}
+                </div>
+            `).join('')}
+        </div>`;
+    } catch (error) {
+        console.error('Error loading attendance overview:', error);
+        if (container) container.innerHTML = '<p class="info-text">Unable to load attendance overview</p>';
+    }
+}
+
+function quickAttendanceLink(classId) {
+    const now = new Date();
+    const month = currentAttendanceMonth || (now.getMonth() + 1);
+    const year  = currentAttendanceYear  || now.getFullYear();
+    selectMonth(month, year);
+    document.getElementById('attendance-class-select').value = classId;
+    navigateToPage('attendance');
+    requestAnimationFrame(() => loadAttendance());
 }
 
 async function showNewAttendanceModal() {
@@ -1360,6 +2212,9 @@ async function loadAttendance() {
         lastAttendanceData = data;
         lastAttendanceClassId = classId;
 
+        // Part 4B: Update Quick Mark button visibility
+        updateQuickMarkButtonVisibility();
+
         // Render based on current view mode
         if (currentAttendanceView === 'grid') {
             renderAttendanceGridView(data, classId);
@@ -1376,51 +2231,87 @@ async function loadAttendance() {
 
 function renderAttendanceTable(data, classId) {
     const container = document.getElementById('attendance-container');
-    const { students, dates, attendance } = data;
+    const { students, dates: allDates, attendance } = data;
+
+    // ── Part 1C: Schedule-filtered dates ────────────────────────────────────────
+    // Get schedule dates for the class
+    const selectedClass = classes.find(c => c.id == classId);
+    let scheduleDatesSet = new Set();
+    if (selectedClass && selectedClass.schedule) {
+        const sched = selectedClass.schedule.toLowerCase();
+        const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+        const dayAbbr  = ['sun','mon','tue','wed','thu','fri','sat'];
+        const scheduledDays = [];
+        dayNames.forEach((d, i) => { if (sched.includes(d) || sched.includes(dayAbbr[i])) scheduledDays.push(i); });
+        allDates.forEach(date => {
+            const d = new Date(date + 'T00:00:00').getDay();
+            if (scheduledDays.includes(d)) scheduleDatesSet.add(date);
+        });
+    }
+
+    // Filter dates based on toggle
+    let dates;
+    if (showScheduleDatesOnly && scheduleDatesSet.size > 0) {
+        dates = allDates.filter(d => scheduleDatesSet.has(d));
+    } else {
+        dates = allDates;
+    }
+
+    // Update quick mark button visibility
+    updateQuickMarkButtonVisibility();
 
     // Separate regular and trial students
     const regularStudents = students.filter(s => s.student_type === 'regular');
     const trialStudents = students.filter(s => s.student_type !== 'regular');
 
-    let html = '<table class="attendance-table"><thead><tr><th>Student Name</th>';
+    // ── Part 1D: Per-student rate calculation ─────────────────────────────────
+    const getStudentRate = (student) => {
+        let present = 0, total = 0;
+        dates.forEach(date => {
+            const key = `${student.id}-${date}`;
+            const status = attendance[key] || '';
+            if (status) { total++; if (status === 'O') present++; }
+        });
+        return { present, total, rate: total > 0 ? Math.round((present / total) * 100) : null };
+    };
+
+    const colSpan = dates.length + 2; // +2 for name + rate columns
+
+    let html = `<table class="attendance-table" role="grid" aria-label="Attendance table">
+<thead><tr>
+    <th>Student Name</th>`;
     
     dates.forEach(date => {
-        // Normalize date to ensure it's in ISO format
         const normalizedDate = normalizeToISO(date) || date;
-        
-        // Safely parse date for display - handle invalid dates gracefully
         let formattedDate;
         try {
             const dateObj = new Date(normalizedDate + 'T00:00:00');
-            if (!isNaN(dateObj.getTime())) {
-                formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            } else {
-                // Fallback: display raw date string if invalid
-                formattedDate = normalizedDate;
-                console.warn('Invalid date encountered:', date, '-> normalized to:', normalizedDate);
-            }
-        } catch (e) {
-            // Fallback: display raw date string if parsing fails
-            formattedDate = normalizedDate;
-            console.error('Error parsing date:', date, e);
-        }
-        
-        html += `<th>${formattedDate}</th>`;
-    });
-    
-    html += '</tr></thead><tbody>';
+            formattedDate = !isNaN(dateObj.getTime())
+                ? dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                : normalizedDate;
+        } catch (e) { formattedDate = normalizedDate; }
 
-    // Regular students section
-    if (regularStudents.length > 0) {
-        html += '<tr><td colspan="' + (dates.length + 1) + '" class="student-type-header">Regular Students</td></tr>';
-        regularStudents.forEach(student => {
+        // ── Makeup/extra date detection (★ badge) ────────────────────────
+        const isMakeup = scheduleDatesSet.size > 0 && !scheduleDatesSet.has(date);
+        const headerClass = isMakeup ? ' class="makeup-date-header"' : '';
+        const star = isMakeup ? '<span class="makeup-star" title="Extra/makeup date">★</span>' : '';
+        html += `<th${headerClass}>${formattedDate}${star}</th>`;
+    });
+    html += '<th style="min-width:70px;">Rate</th></tr></thead><tbody>';
+
+    // ── Render a section of students ────────────────────────────────────────
+    const renderSection = (sectionStudents, sectionTitle) => {
+        if (sectionStudents.length === 0) return '';
+        let s = `<tr><td colspan="${colSpan}" class="student-type-header">${sectionTitle}</td></tr>`;
+        sectionStudents.forEach(student => {
             const rowClass = (student.color_code && !student.color_code.startsWith('#')) ? `student-row-${student.color_code}` : '';
             const rowStyle = (student.color_code && student.color_code.startsWith('#')) ? ` style="background: ${student.color_code}"` : '';
             const colorDot = getStudentColorDot(student.color_code);
-            html += `<tr class="${rowClass}"${rowStyle}><td class="student-name">
+            s += `<tr class="${rowClass}"${rowStyle}><td class="student-name">
                 <div class="student-name-cell">
                     <span>${colorDot}${escapeHtml(student.name)}</span>
                     <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
+                    <button class="edit-student-btn" onclick="viewStudentAttendanceSummary(${student.id})" title="View attendance summary" aria-label="View attendance for ${escapeHtml(student.name)}">📊</button>
                 </div>
             </td>`;
             
@@ -1428,42 +2319,38 @@ function renderAttendanceTable(data, classId) {
                 const key = `${student.id}-${date}`;
                 const status = attendance[key] || '';
                 const statusClass = status === 'O' ? 'present' : status === 'X' ? 'absent' : status === '/' ? 'partial' : '';
-                html += `<td class="attendance-cell ${statusClass}" 
+                s += `<td class="attendance-cell ${statusClass}" 
                     data-student="${student.id}" 
                     data-class="${classId}" 
                     data-date="${date}"
+                    role="gridcell"
+                    tabindex="-1"
                     onclick="toggleAttendance(this)">${status}</td>`;
             });
-            
-            html += '</tr>';
-        });
-    }
 
-    // Trial/Make-up students section
-    if (trialStudents.length > 0) {
-        html += '<tr><td colspan="' + (dates.length + 1) + '" class="student-type-header">Make-up / Trial Students</td></tr>';
-        trialStudents.forEach(student => {
-            const colorDot = getStudentColorDot(student.color_code);
-            html += `<tr class="student-row-trial"><td class="student-name">
-                <div class="student-name-cell">
-                    <span>${colorDot}${escapeHtml(student.name)}</span>
-                    <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
-                </div>
-            </td>`;
-            
-            dates.forEach(date => {
-                const key = `${student.id}-${date}`;
-                const status = attendance[key] || '';
-                const statusClass = status === 'O' ? 'present' : status === 'X' ? 'absent' : status === '/' ? 'partial' : '';
-                html += `<td class="attendance-cell ${statusClass}" 
-                    data-student="${student.id}" 
-                    data-class="${classId}" 
-                    data-date="${date}"
-                    onclick="toggleAttendance(this)">${status}</td>`;
-            });
-            
-            html += '</tr>';
+            // ── Part 1D: Summary column ───────────────────────────────────
+            const { present, total, rate } = getStudentRate(student);
+            const rateClass = rate === null ? '' : rate >= 85 ? 'rate-green' : rate >= 65 ? 'rate-yellow' : 'rate-red';
+            s += `<td class="attendance-rate-cell ${rateClass}" title="${present} present out of ${total}">`;
+            if (rate !== null) s += `${present}/${total}<br><small>${rate}%</small>`;
+            else s += '—';
+            s += '</td></tr>';
         });
+        return s;
+    };
+
+    html += renderSection(regularStudents, 'Regular Students');
+    html += renderSection(trialStudents, 'Make-up / Trial Students');
+
+    // ── Part 1D: Summary row (present count per column) ──────────────────────
+    if (dates.length > 0) {
+        html += `<tr class="attendance-summary-row"><td class="summary-label-cell">Present / Total</td>`;
+        dates.forEach(date => {
+            const presentCount = students.filter(s => (attendance[`${s.id}-${date}`] || '') === 'O').length;
+            const totalCount   = students.length;
+            html += `<td title="${date}: ${presentCount} present">${presentCount}/${totalCount}</td>`;
+        });
+        html += '<td></td></tr>';
     }
 
     html += '</tbody></table>';
@@ -1598,33 +2485,10 @@ function renderAttendanceGridView(data, classId) {
 }
 
 // View student attendance detail (popup with full history)
+// Part 2A: Replaced with enhanced summary view that uses the new API endpoint
 async function viewStudentDetail(studentId, classId) {
-    try {
-        const student = students.find(s => s.id == studentId) || await api(`/students/${studentId}`);
-        const attendanceData = await api(`/attendance?studentId=${studentId}&classId=${classId}`);
-        
-        const sortedAttendance = attendanceData.sort((a, b) => new Date(b.date) - new Date(a.date));
-        
-        showModal(`Attendance History: ${escapeHtml(student.name)}`, `
-            <div class="student-detail-modal">
-                <div class="student-info-summary">
-                    <p><strong>Class:</strong> ${escapeHtml(student.class_name || 'N/A')}</p>
-                    <p><strong>Type:</strong> ${escapeHtml(student.student_type || 'regular')}</p>
-                </div>
-                <div class="attendance-history-list">
-                    ${sortedAttendance.length > 0 ? sortedAttendance.map(record => `
-                        <div class="history-item ${record.status === 'O' ? 'present' : record.status === 'X' ? 'absent' : record.status === '/' ? 'partial' : ''}">
-                            <span class="history-date">${escapeHtml(record.date)}</span>
-                            <span class="history-status">${record.status === 'O' ? 'Present' : record.status === 'X' ? 'Absent' : record.status === '/' ? 'Partial' : 'N/A'}</span>
-                        </div>
-                    `).join('') : '<p class="info-text">No attendance records found</p>'}
-                </div>
-            </div>
-        `);
-    } catch (error) {
-        console.error('Error loading student detail:', error);
-        Toast.error('Failed to load student details');
-    }
+    // Use the new enhanced student summary view
+    await viewStudentAttendanceSummary(studentId);
 }
 
 async function toggleAttendance(cell) {
@@ -1655,6 +2519,15 @@ async function toggleAttendance(cell) {
     const selectedClass = classes.find(c => c.id == classId);
     const teacherId = selectedClass ? selectedClass.teacher_id : null;
 
+    // Get student name for undo toast
+    const row = cell.closest('tr');
+    const nameCell = row ? row.querySelector('.student-name') : null;
+    const studentName = nameCell ? nameCell.textContent.replace(/✏️/g, '').trim() : 'Student';
+
+    // Snapshot for undo (Part 4A)
+    const prevStatus   = currentStatus;
+    const prevClass    = cell.className;
+
     // Optimistic UI update - update immediately without waiting for server
     cell.textContent = newStatus;
     cell.className = 'attendance-cell';
@@ -1668,6 +2541,20 @@ async function toggleAttendance(cell) {
         
         // Add to save queue with debouncing, including teacher_id
         AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, time, teacherId);
+
+        // Part 4A: Show undo toast
+        const statusLabel = { 'O': 'Present', 'X': 'Absent', '/': 'Partial', '': 'Cleared' };
+        const dateLabel = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+        Toast.undo(`✓ Marked ${studentName} as ${statusLabel[newStatus] || newStatus}${dateLabel ? ' for ' + dateLabel : ''}`, () => {
+            // Undo: remove from queue and revert UI
+            const key = `${studentId}-${classId}-${normalizeToISO(date) || date}`;
+            AttendanceSaveQueue.queue.delete(key);
+            // Re-queue the previous status
+            AttendanceSaveQueue.add(studentId, classId, normalizeToISO(date) || date, prevStatus, time, teacherId);
+            // Revert UI
+            cell.textContent = prevStatus;
+            cell.className = prevClass;
+        });
         
     } catch (error) {
         console.error('Error updating attendance:', error);
@@ -1785,56 +2672,8 @@ function exportAttendance() {
 }
 
 async function exportAttendancePDF() {
-    const classId = document.getElementById('attendance-class-select').value;
-    const startDate = document.getElementById('attendance-start-date').value;
-    const endDate = document.getElementById('attendance-end-date').value;
-    
-    if (!classId) {
-        Toast.error('Please select a class first');
-        return;
-    }
-    
-    if (!startDate || !endDate) {
-        Toast.error('Please select both start and end dates');
-        return;
-    }
-    
-    try {
-        // Normalize dates to ISO format before sending to API
-        const normalizedStartDate = normalizeToISO(startDate);
-        const normalizedEndDate = normalizeToISO(endDate);
-        
-        if (!normalizedStartDate || !normalizedEndDate) {
-            Toast.error('Invalid date format');
-            return;
-        }
-        
-        Toast.info('Generating PDF...', 'Please wait');
-        
-        const response = await api(`/pdf/attendance-grid/${classId}`, {
-            method: 'POST',
-            body: JSON.stringify({ 
-                startDate: normalizedStartDate, 
-                endDate: normalizedEndDate 
-            })
-        });
-        
-        if (response.success && response.downloadUrl) {
-            Toast.success('PDF generated successfully!');
-            
-            // Open download URL in new tab
-            window.open(response.downloadUrl, '_blank');
-        } else {
-            Toast.error('Failed to generate PDF');
-        }
-    } catch (error) {
-        console.error('Error generating attendance PDF:', error);
-        if (error.message.includes('not configured')) {
-            Toast.error('PDF export requires Cloudflare R2 configuration. Please contact administrator.', 'Configuration Required');
-        } else {
-            Toast.error('Error generating PDF: ' + error.message);
-        }
-    }
+    // Part 4G: Show PDF preview modal instead of directly exporting
+    showPDFPreviewModal();
 }
 
 // Add a new date column to attendance sheet

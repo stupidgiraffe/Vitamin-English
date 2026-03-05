@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const dataHub = require('../database/DataHub');
-const { generateStudentAttendancePDF, generateClassAttendancePDF, generateAttendanceGridPDF, generateLessonReportPDF, generateMultiClassReportPDF } = require('../utils/pdfGenerator');
+const { generateStudentAttendancePDF, generateClassAttendancePDF, generateAttendanceGridPDF, generateEnhancedAttendanceGridPDF, generateStudentAttendanceReportPDF, generateClassSummaryPDF, generateLessonReportPDF, generateMultiClassReportPDF } = require('../utils/pdfGenerator');
 const { uploadPDF, getDownloadUrl, listPDFs, isConfigured } = require('../utils/r2Storage');
 const { normalizeToISO } = require('../utils/dateUtils');
 const { buildAttendanceMatrix } = require('../utils/attendanceDataBuilder');
@@ -465,6 +465,232 @@ router.post('/multi-class-reports', checkR2Config, async (req, res) => {
             error: 'Failed to generate PDF',
             message: error.message
         });
+    }
+});
+
+// ─── Part 3: New & enhanced PDF endpoints ─────────────────────────────────────
+
+// Enhanced attendance-grid PDF (schedule-aware, bilingual)
+// POST /api/pdf/attendance-grid-enhanced/:classId
+router.post('/attendance-grid-enhanced/:classId', checkR2Config, async (req, res) => {
+    try {
+        const classId = parseInt(req.params.classId);
+        const { startDate, endDate, includeStats = true, includeComments = true } = req.body;
+
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'startDate and endDate are required' });
+        }
+
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
+            return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD' });
+        }
+        if (startDate > endDate) {
+            return res.status(400).json({ error: 'Start date must be before or equal to end date' });
+        }
+
+        const matrixData = await buildAttendanceMatrix(dataHub.pool, classId, startDate, endDate);
+
+        // Get schedule dates for this range
+        let scheduleDates = [];
+        if (matrixData.classData.schedule) {
+            const sched = matrixData.classData.schedule.toLowerCase();
+            const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+            const dayAbbr  = ['sun','mon','tue','wed','thu','fri','sat'];
+            const scheduledDays = [];
+            dayNames.forEach((d, i) => { if (sched.includes(d) || sched.includes(dayAbbr[i])) scheduledDays.push(i); });
+            if (scheduledDays.length > 0) {
+                const start = new Date(startDate + 'T00:00:00');
+                const end   = new Date(endDate + 'T00:00:00');
+                const cur   = new Date(start);
+                while (cur <= end) {
+                    if (scheduledDays.includes(cur.getDay())) {
+                        scheduleDates.push(cur.toISOString().split('T')[0]);
+                    }
+                    cur.setDate(cur.getDate() + 1);
+                }
+            }
+        }
+
+        const pdfBuffer = await generateEnhancedAttendanceGridPDF(
+            matrixData.classData,
+            matrixData.students,
+            matrixData.dates,
+            matrixData.attendanceMap,
+            matrixData.startDate,
+            matrixData.endDate,
+            scheduleDates,
+            { includeStats, includeComments }
+        );
+
+        const sanitizedClassName = matrixData.classData.name.replace(/[^a-zA-Z0-9]/g, '_');
+        const fileName = `attendance_grid_enhanced_${sanitizedClassName}_${startDate}_to_${endDate}.pdf`;
+        const uploadResult = await uploadPDF(pdfBuffer, fileName, {
+            type: 'attendance_grid_enhanced',
+            classId: classId.toString(),
+            className: matrixData.classData.name,
+            startDate,
+            endDate
+        });
+
+        const pdf = await dataHub.pdfHistory.create({
+            filename: fileName,
+            type: 'attendance_grid_enhanced',
+            class_id: classId,
+            r2_key: uploadResult.key,
+            r2_url: uploadResult.url,
+            file_size: uploadResult.size,
+            created_by: req.session.userId
+        });
+
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
+        res.json({ success: true, pdfId: pdf.id, fileName, downloadUrl, size: uploadResult.size, message: 'Enhanced attendance grid PDF generated successfully' });
+    } catch (error) {
+        console.error('❌ Error generating enhanced attendance grid PDF:', error);
+        res.status(500).json({ error: 'Failed to generate PDF', message: error.message });
+    }
+});
+
+// Student attendance report PDF (across all classes)
+// POST /api/pdf/student-attendance-report/:studentId
+router.post('/student-attendance-report/:studentId', checkR2Config, async (req, res) => {
+    try {
+        const studentId = parseInt(req.params.studentId);
+        const { startDate, endDate } = req.body;
+
+        const normalizedStart = startDate ? normalizeToISO(startDate) : null;
+        const normalizedEnd   = endDate   ? normalizeToISO(endDate)   : null;
+
+        const studentResult = await dataHub.query('SELECT * FROM students WHERE id = $1', [studentId]);
+        if (studentResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        const student = studentResult.rows[0];
+
+        let q = `
+            SELECT a.date, a.status, a.class_id, c.name as class_name
+            FROM attendance a JOIN classes c ON a.class_id = c.id
+            WHERE a.student_id = $1
+        `;
+        const params = [studentId];
+        let idx = 2;
+        if (normalizedStart) { q += ` AND a.date >= $${idx++}`; params.push(normalizedStart); }
+        if (normalizedEnd)   { q += ` AND a.date <= $${idx++}`; params.push(normalizedEnd); }
+        q += ' ORDER BY a.date ASC';
+
+        const attResult = await dataHub.query(q, params);
+        const records = attResult.rows.map(r => ({
+            date: normalizeToISO(r.date) || r.date,
+            status: r.status,
+            class_id: r.class_id,
+            class_name: r.class_name
+        }));
+
+        const total   = records.length;
+        const present = records.filter(r => r.status === 'O').length;
+        const absent  = records.filter(r => r.status === 'X').length;
+        const partial = records.filter(r => r.status === '/').length;
+        const rate    = total > 0 ? Math.round((present / total) * 100) : 0;
+
+        let cStreak = 0, bStreak = 0, tempStreak = 0;
+        for (const r of records) {
+            if (r.status === 'O') { tempStreak++; if (tempStreak > bStreak) bStreak = tempStreak; }
+            else if (r.status !== '/') { tempStreak = 0; }
+        }
+        cStreak = tempStreak;
+
+        const pdfBuffer = await generateStudentAttendanceReportPDF(
+            student, records, { total, present, absent, partial, rate },
+            { current: cStreak, best: Math.max(bStreak, cStreak) }
+        );
+
+        const sanitizedName = student.name.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const fileName = `student_attendance_report_${sanitizedName}_${new Date().toISOString().split('T')[0]}.pdf`;
+        const uploadResult = await uploadPDF(pdfBuffer, fileName, { type: 'student_attendance_report', studentId: studentId.toString(), studentName: student.name });
+
+        const pdf = await dataHub.pdfHistory.create({
+            filename: fileName, type: 'student_attendance_report',
+            student_id: studentId, r2_key: uploadResult.key, r2_url: uploadResult.url,
+            file_size: uploadResult.size, created_by: req.session.userId
+        });
+
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
+        res.json({ success: true, pdfId: pdf.id, fileName, downloadUrl, size: uploadResult.size, message: 'Student attendance report PDF generated successfully' });
+    } catch (error) {
+        console.error('❌ Error generating student attendance report PDF:', error);
+        res.status(500).json({ error: 'Failed to generate PDF', message: error.message });
+    }
+});
+
+// Class attendance summary PDF
+// POST /api/pdf/class-summary/:classId
+router.post('/class-summary/:classId', checkR2Config, async (req, res) => {
+    try {
+        const classId = parseInt(req.params.classId);
+        const year = parseInt(req.body.year) || new Date().getFullYear();
+
+        const classResult = await dataHub.query(
+            'SELECT c.*, u.full_name as teacher_name FROM classes c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = $1',
+            [classId]
+        );
+        if (classResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Class not found' });
+        }
+        const classData = classResult.rows[0];
+
+        const studentsResult = await dataHub.query(
+            'SELECT id, name, student_type FROM students WHERE class_id = $1 AND active = true ORDER BY student_type, name',
+            [classId]
+        );
+        const students = studentsResult.rows;
+
+        const attResult = await dataHub.query(`
+            SELECT a.student_id, a.date, a.status
+            FROM attendance a
+            WHERE a.class_id = $1 AND EXTRACT(YEAR FROM a.date::date) = $2
+            ORDER BY a.date
+        `, [classId, year]);
+
+        const monthlyStats = {};
+        for (let m = 1; m <= 12; m++) monthlyStats[m] = { total: 0, present: 0, rate: null };
+        const studentMap = {};
+        students.forEach(s => { studentMap[s.id] = { ...s, total: 0, present: 0, rate: 0 }; });
+
+        attResult.rows.forEach(r => {
+            const month = parseInt((normalizeToISO(r.date) || r.date).split('-')[1]);
+            monthlyStats[month].total++;
+            if (r.status === 'O') monthlyStats[month].present++;
+            if (studentMap[r.student_id]) {
+                studentMap[r.student_id].total++;
+                if (r.status === 'O') studentMap[r.student_id].present++;
+            }
+        });
+        Object.keys(monthlyStats).forEach(m => {
+            const ms = monthlyStats[m];
+            ms.rate = ms.total > 0 ? Math.round((ms.present / ms.total) * 100) : null;
+        });
+        const studentStats = Object.values(studentMap).map(ss => ({
+            ...ss, rate: ss.total > 0 ? Math.round((ss.present / ss.total) * 100) : 0
+        }));
+        const lowestPerformers = [...studentStats].filter(s => s.total > 0).sort((a, b) => a.rate - b.rate).slice(0, 3);
+
+        const pdfBuffer = await generateClassSummaryPDF(classData, year, monthlyStats, studentStats, lowestPerformers);
+
+        const sanitizedClassName = classData.name.replace(/[^a-zA-Z0-9]/g, '_');
+        const fileName = `class_summary_${sanitizedClassName}_${year}.pdf`;
+        const uploadResult = await uploadPDF(pdfBuffer, fileName, { type: 'class_summary', classId: classId.toString(), className: classData.name, year: String(year) });
+
+        const pdf = await dataHub.pdfHistory.create({
+            filename: fileName, type: 'class_summary', class_id: classId,
+            r2_key: uploadResult.key, r2_url: uploadResult.url,
+            file_size: uploadResult.size, created_by: req.session.userId
+        });
+
+        const downloadUrl = await getDownloadUrl(uploadResult.key, 3600, fileName);
+        res.json({ success: true, pdfId: pdf.id, fileName, downloadUrl, size: uploadResult.size, message: 'Class summary PDF generated successfully' });
+    } catch (error) {
+        console.error('❌ Error generating class summary PDF:', error);
+        res.status(500).json({ error: 'Failed to generate PDF', message: error.message });
     }
 });
 

@@ -372,4 +372,296 @@ router.get('/schedule-dates', async (req, res) => {
     }
 });
 
+// ─── Part 5: New analytics endpoints ──────────────────────────────────────────
+
+// GET /api/attendance/student-summary/:studentId
+// Returns attendance data across ALL classes for a student, plus streak data
+router.get('/student-summary/:studentId', async (req, res) => {
+    try {
+        const studentId = parseInt(req.params.studentId);
+        const { startDate, endDate } = req.query;
+
+        const normalizedStart = startDate ? normalizeToISO(startDate) : null;
+        const normalizedEnd   = endDate   ? normalizeToISO(endDate)   : null;
+
+        // Fetch student info
+        const studentResult = await dataHub.query(
+            'SELECT * FROM students WHERE id = $1',
+            [studentId]
+        );
+        if (studentResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        const student = studentResult.rows[0];
+
+        // Fetch attendance records across all classes
+        let q = `
+            SELECT a.date, a.status, a.class_id, c.name as class_name
+            FROM attendance a
+            JOIN classes c ON a.class_id = c.id
+            WHERE a.student_id = $1
+        `;
+        const params = [studentId];
+        let idx = 2;
+        if (normalizedStart) { q += ` AND a.date >= $${idx++}`; params.push(normalizedStart); }
+        if (normalizedEnd)   { q += ` AND a.date <= $${idx++}`; params.push(normalizedEnd); }
+        q += ' ORDER BY a.date ASC';
+
+        const attResult = await dataHub.query(q, params);
+        const records = attResult.rows.map(r => ({
+            date: normalizeToISO(r.date) || r.date,
+            status: r.status,
+            class_id: r.class_id,
+            class_name: r.class_name
+        }));
+
+        // Calculate streaks (consecutive 'O' records; '/' doesn't break but doesn't count)
+        let currentStreak = 0, bestStreak = 0, runningStreak = 0;
+        for (let i = records.length - 1; i >= 0; i--) {
+            const s = records[i].status;
+            if (s === 'O') {
+                runningStreak++;
+                if (currentStreak === 0) currentStreak = runningStreak; // still computing from end
+            } else if (s === '/') {
+                // partial doesn't break streak but doesn't count
+            } else {
+                if (currentStreak === 0) currentStreak = runningStreak; // lock in current streak
+                runningStreak = 0;
+            }
+        }
+        // current streak is the streak at the most recent end of records
+        let cStreak = 0, bStreak = 0, tempStreak = 0;
+        for (const r of records) {
+            if (r.status === 'O') {
+                tempStreak++;
+                if (tempStreak > bStreak) bStreak = tempStreak;
+            } else if (r.status === '/') {
+                // doesn't count, doesn't break
+            } else {
+                tempStreak = 0;
+            }
+        }
+        cStreak = tempStreak; // streak at end of sorted records
+        bStreak = Math.max(bStreak, cStreak);
+
+        // Summary stats
+        const total = records.length;
+        const present = records.filter(r => r.status === 'O').length;
+        const absent  = records.filter(r => r.status === 'X').length;
+        const partial = records.filter(r => r.status === '/').length;
+        const rate = total > 0 ? Math.round((present / total) * 100) : 0;
+
+        // Heatmap data: group by date
+        const heatmap = {};
+        records.forEach(r => {
+            if (!heatmap[r.date]) {
+                heatmap[r.date] = { status: r.status, classes: [] };
+            }
+            heatmap[r.date].classes.push({ class_id: r.class_id, class_name: r.class_name, status: r.status });
+            // Summarise: O > / > X > ''
+            const rank = { 'O': 3, '/': 2, 'X': 1, '': 0 };
+            if ((rank[r.status] || 0) > (rank[heatmap[r.date].status] || 0)) {
+                heatmap[r.date].status = r.status;
+            }
+        });
+
+        res.json({
+            student,
+            records,
+            heatmap,
+            stats: { total, present, absent, partial, rate },
+            streaks: { current: cStreak, best: bStreak }
+        });
+    } catch (error) {
+        console.error('❌ Error fetching student summary:', error);
+        res.status(500).json({ error: 'Failed to fetch student summary' });
+    }
+});
+
+// GET /api/attendance/class-summary/:classId?year=YYYY
+// Returns monthly attendance rates, per-student rates, lowest performers
+router.get('/class-summary/:classId', async (req, res) => {
+    try {
+        const classId = parseInt(req.params.classId);
+        const year = parseInt(req.query.year) || new Date().getFullYear();
+
+        // Validate classId
+        const classResult = await dataHub.query(
+            'SELECT c.*, u.full_name as teacher_name FROM classes c LEFT JOIN users u ON c.teacher_id = u.id WHERE c.id = $1',
+            [classId]
+        );
+        if (classResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Class not found' });
+        }
+        const classData = classResult.rows[0];
+
+        // Students
+        const studentsResult = await dataHub.query(
+            'SELECT id, name, student_type FROM students WHERE class_id = $1 AND active = true ORDER BY student_type, name',
+            [classId]
+        );
+        const students = studentsResult.rows;
+
+        // Attendance for the year
+        const attResult = await dataHub.query(`
+            SELECT a.student_id, a.date, a.status
+            FROM attendance a
+            WHERE a.class_id = $1 AND EXTRACT(YEAR FROM a.date::date) = $2
+            ORDER BY a.date
+        `, [classId, year]);
+
+        // Build monthly stats
+        const monthlyStats = {};
+        for (let m = 1; m <= 12; m++) {
+            monthlyStats[m] = { total: 0, present: 0, rate: null };
+        }
+
+        // Per-student stats
+        const studentStats = {};
+        students.forEach(s => {
+            studentStats[s.id] = { id: s.id, name: s.name, student_type: s.student_type, total: 0, present: 0, rate: 0 };
+        });
+
+        attResult.rows.forEach(r => {
+            const date = normalizeToISO(r.date) || r.date;
+            const month = parseInt(date.split('-')[1]);
+            if (!monthlyStats[month]) monthlyStats[month] = { total: 0, present: 0, rate: null };
+            monthlyStats[month].total++;
+            if (r.status === 'O') monthlyStats[month].present++;
+
+            if (studentStats[r.student_id]) {
+                studentStats[r.student_id].total++;
+                if (r.status === 'O') studentStats[r.student_id].present++;
+            }
+        });
+
+        // Compute rates
+        Object.keys(monthlyStats).forEach(m => {
+            const ms = monthlyStats[m];
+            ms.rate = ms.total > 0 ? Math.round((ms.present / ms.total) * 100) : null;
+        });
+        Object.keys(studentStats).forEach(id => {
+            const ss = studentStats[id];
+            ss.rate = ss.total > 0 ? Math.round((ss.present / ss.total) * 100) : 0;
+        });
+
+        // Lowest performers (bottom 3 by rate, must have at least 1 record)
+        const sortedStudents = Object.values(studentStats)
+            .filter(s => s.total > 0)
+            .sort((a, b) => a.rate - b.rate);
+        const lowestPerformers = sortedStudents.slice(0, 3);
+
+        // Overall rate for the year
+        const totalAll = attResult.rows.length;
+        const presentAll = attResult.rows.filter(r => r.status === 'O').length;
+        const overallRate = totalAll > 0 ? Math.round((presentAll / totalAll) * 100) : null;
+
+        res.json({
+            class: classData,
+            year,
+            monthlyStats,
+            studentStats: Object.values(studentStats),
+            lowestPerformers,
+            overallRate
+        });
+    } catch (error) {
+        console.error('❌ Error fetching class summary:', error);
+        res.status(500).json({ error: 'Failed to fetch class summary' });
+    }
+});
+
+// GET /api/attendance/teacher-dashboard
+// Returns all classes for the current teacher with current-month attendance rates
+router.get('/teacher-dashboard', async (req, res) => {
+    if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    try {
+        const userId = req.session.userId;
+        const userRole = req.session.role;
+
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const monthEnd = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+        // Get classes (all for admin, teacher's own for teachers)
+        let classQuery = `
+            SELECT c.*, u.full_name as teacher_name
+            FROM classes c
+            LEFT JOIN users u ON c.teacher_id = u.id
+        `;
+        const classParams = [];
+        if (userRole !== 'admin') {
+            classQuery += ' WHERE c.teacher_id = $1';
+            classParams.push(userId);
+        }
+        classQuery += ' ORDER BY c.name';
+
+        const classResult = await dataHub.query(classQuery, classParams);
+        const classes = classResult.rows;
+
+        // For each class, get attendance stats for current month
+        const classesWithStats = await Promise.all(classes.map(async (cls) => {
+            const attResult = await dataHub.query(`
+                SELECT a.student_id, a.status
+                FROM attendance a
+                WHERE a.class_id = $1 AND a.date >= $2 AND a.date <= $3
+            `, [cls.id, monthStart, monthEnd]);
+
+            const total = attResult.rows.length;
+            const present = attResult.rows.filter(r => r.status === 'O').length;
+            const rate = total > 0 ? Math.round((present / total) * 100) : null;
+
+            // Students with low attendance this month
+            const studentMap = {};
+            attResult.rows.forEach(r => {
+                if (!studentMap[r.student_id]) studentMap[r.student_id] = { total: 0, present: 0 };
+                studentMap[r.student_id].total++;
+                if (r.status === 'O') studentMap[r.student_id].present++;
+            });
+
+            // Get student names for flagged students
+            const flaggedIds = Object.keys(studentMap).filter(id => {
+                const s = studentMap[id];
+                return s.total > 0 && Math.round((s.present / s.total) * 100) < 75;
+            });
+
+            let flaggedStudents = [];
+            if (flaggedIds.length > 0) {
+                const namesResult = await dataHub.query(
+                    `SELECT id, name FROM students WHERE id = ANY($1::int[])`,
+                    [flaggedIds.map(Number)]
+                );
+                flaggedStudents = namesResult.rows.map(s => ({
+                    id: s.id,
+                    name: s.name,
+                    rate: Math.round((studentMap[s.id].present / studentMap[s.id].total) * 100)
+                }));
+            }
+
+            return {
+                ...cls,
+                monthlyRate: rate,
+                monthlyTotal: total,
+                monthlyPresent: present,
+                flaggedStudents
+            };
+        }));
+
+        res.json({
+            month,
+            year,
+            monthLabel: new Date(year, month - 1).toLocaleString('en-US', { month: 'long', year: 'numeric' }),
+            classes: classesWithStats
+        });
+    } catch (error) {
+        console.error('❌ Error fetching teacher dashboard:', error);
+        res.status(500).json({ error: 'Failed to fetch teacher dashboard data' });
+    }
+});
+
 module.exports = router;

@@ -3033,3 +3033,386 @@ body {
     margin-bottom: 8px;
     border-radius: 4px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ATTENDANCE SYSTEM OVERHAUL — NEW STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Screen-reader only utility ────────────────────────────────────────────── */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ── CSS custom properties for new features ────────────────────────────────── */
+:root {
+    --heatmap-present: #28a745;
+    --heatmap-absent: #dc3545;
+    --heatmap-partial: #ffc107;
+    --heatmap-noclass: #e9ecef;
+    --rate-green: #28a745;
+    --rate-yellow: #ffc107;
+    --rate-red: #dc3545;
+    --rate-green-bg: #d4edda;
+    --rate-yellow-bg: #fff3cd;
+    --rate-red-bg: #f8d7da;
+}
+
+/* ── Offline Banner (Part 4F) ──────────────────────────────────────────────── */
+.offline-banner {
+    background: linear-gradient(135deg, #495057, #343a40);
+    color: #fff;
+    text-align: center;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-sm);
+    animation: slideDown 0.3s ease;
+}
+.offline-banner.synced {
+    background: linear-gradient(135deg, var(--success-color), #20c997);
+}
+@keyframes slideDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Month Navigation Bar (Part 1A) ────────────────────────────────────────── */
+.month-nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, #667eea15, #764ba215);
+    border: 1px solid #e1e8ed;
+    border-radius: var(--radius-md);
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+    position: relative;
+}
+.month-nav-btn {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+}
+.month-display {
+    flex: 1;
+    min-width: 160px;
+    text-align: center;
+    background: linear-gradient(135deg, var(--primary-color), #764ba2);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 16px;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.03em;
+    transition: opacity var(--transition-fast);
+}
+.month-display:hover { opacity: 0.9; }
+.month-picker-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: 12px;
+    min-width: 260px;
+}
+.month-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+.month-picker-year-label {
+    font-weight: 700;
+    font-size: 1rem;
+}
+.month-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+}
+.month-picker-btn {
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+    text-align: center;
+}
+.month-picker-btn:hover { background: var(--primary-color); color: #fff; }
+.month-picker-btn.active { background: var(--primary-color); color: #fff; font-weight: 700; }
+
+/* ── Schedule toggle ────────────────────────────────────────────────────────── */
+.schedule-toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.schedule-toggle-label input[type=checkbox] {
+    cursor: pointer;
+}
+
+/* ── Summary row & column (Part 1D) ────────────────────────────────────────── */
+.attendance-summary-row td {
+    background: #e8eaf6;
+    font-weight: 700;
+    font-size: 0.78rem;
+    text-align: center;
+    border-top: 2px solid #4472C4;
+    color: #2B5797;
+    padding: 4px 2px;
+}
+.attendance-summary-row td.summary-label-cell {
+    text-align: left;
+    padding-left: 8px;
+}
+.attendance-rate-cell {
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-align: center;
+    min-width: 70px;
+    padding: 3px 4px !important;
+}
+.attendance-rate-cell.rate-green  { background: var(--rate-green-bg);  color: #155724; }
+.attendance-rate-cell.rate-yellow { background: var(--rate-yellow-bg); color: #856404; }
+.attendance-rate-cell.rate-red    { background: var(--rate-red-bg);    color: #721c24; }
+.attendance-table th.makeup-date-header {
+    background: #7B68EE;
+    color: #fff;
+    position: relative;
+}
+.makeup-star { font-size: 0.7em; vertical-align: super; }
+
+/* ── Keyboard focus indicator for attendance cells (Part 4C) ──────────────── */
+.attendance-cell:focus,
+.attendance-cell[data-focused="true"] {
+    outline: 3px solid var(--primary-color);
+    outline-offset: -2px;
+    z-index: 2;
+    position: relative;
+}
+
+/* ── Undo toast (Part 4A) ───────────────────────────────────────────────────── */
+.toast.undo-toast .toast-undo-btn {
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    border-radius: var(--radius-sm);
+    padding: 3px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    margin-left: 8px;
+    transition: background var(--transition-fast);
+}
+.toast.undo-toast .toast-undo-btn:hover {
+    background: rgba(255,255,255,0.35);
+}
+
+/* ── Student heatmap (Part 2A) ──────────────────────────────────────────────── */
+.heatmap-container {
+    overflow-x: auto;
+    margin: 10px 0;
+}
+.heatmap-svg {
+    display: block;
+    max-width: 100%;
+}
+.heatmap-cell {
+    rx: 2;
+    ry: 2;
+}
+.heatmap-cell:focus {
+    outline: 2px solid var(--primary-color);
+}
+.streak-display {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 10px 0;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+.streak-badge {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+.streak-milestones {
+    font-size: 1.3rem;
+    letter-spacing: 2px;
+}
+.absent-list {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 0.85rem;
+}
+.absent-list-item {
+    padding: 3px 0;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* ── Class summary view (Part 2B) ───────────────────────────────────────────── */
+.class-summary-monthly {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+.monthly-rate-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+}
+.monthly-rate-chip.rate-green  { background: var(--rate-green-bg);  color: #155724; border-color: #c3e6cb; }
+.monthly-rate-chip.rate-yellow { background: var(--rate-yellow-bg); color: #856404; border-color: #ffeeba; }
+.monthly-rate-chip.rate-red    { background: var(--rate-red-bg);    color: #721c24; border-color: #f5c6cb; }
+.lowest-performers-list {
+    list-style: none;
+    padding: 0;
+}
+.lowest-performers-list li {
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    background: var(--rate-red-bg);
+    color: #721c24;
+}
+
+/* ── Dashboard attendance overview (Part 2C) ────────────────────────────────── */
+.dashboard-card-wide {
+    grid-column: 1 / -1;
+}
+.attendance-overview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 10px;
+    margin-top: 8px;
+}
+.attendance-overview-class-card {
+    background: var(--bg-hover);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: box-shadow var(--transition-fast), transform var(--transition-fast);
+}
+.attendance-overview-class-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+.attendance-overview-class-name {
+    font-weight: 700;
+    font-size: 0.92rem;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+.attendance-overview-rate {
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+.attendance-overview-flagged {
+    font-size: 0.78rem;
+    color: #721c24;
+}
+.attendance-overview-no-data {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* ── PDF preview modal (Part 4G) ────────────────────────────────────────────── */
+.pdf-preview-modal-body {
+    padding: 4px 0;
+}
+.pdf-option-group {
+    margin-bottom: 14px;
+}
+.pdf-option-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+}
+.pdf-option-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.pdf-option-row label {
+    font-weight: normal;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+    font-size: 0.88rem;
+}
+
+/* ── Responsive adjustments ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .month-nav-bar {
+        gap: 6px;
+        padding: 8px 10px;
+    }
+    .month-display {
+        font-size: 0.9rem;
+        min-width: 120px;
+    }
+    .attendance-overview-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+    .dashboard-card-wide {
+        grid-column: 1 / -1;
+    }
+    .schedule-toggle-label {
+        font-size: 0.8rem;
+    }
+}
+@media (max-width: 480px) {
+    .attendance-overview-grid {
+        grid-template-columns: 1fr;
+    }
+    .month-picker-dropdown {
+        left: 0;
+        transform: none;
+        min-width: 240px;
+    }
+}
