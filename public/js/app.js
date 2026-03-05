@@ -1660,7 +1660,7 @@ function detectAttendancePatterns(records, studentName) {
                 if (diff >= 6 && diff <= 8) consecutive++;
                 else consecutive = 1;
                 if (consecutive >= 3) {
-                    patterns.push(`⚠️ ${escapeHtml(studentName)} has been absent every ${dayNames[day]} for the last ${consecutive} weeks`);
+                    patterns.push(`⚠️ ${escapeHtml(studentName)} has been absent every ${dayNames[day]} for the last ${consecutive} ${consecutive === 1 ? 'week' : 'weeks'}`);
                     break;
                 }
             }
@@ -1789,7 +1789,7 @@ function buildHeatmapSVG(heatmap, startDateStr, endDateStr) {
     const cur = new Date(startSunday);
     let col = 0;
 
-    while (cur <= end || col % 1 !== 0) {
+    while (cur <= end) {
         for (let row = 0; row < 7; row++) {
             const iso = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
             const isInRange = cur >= start && cur <= end;
@@ -1802,12 +1802,13 @@ function buildHeatmapSVG(heatmap, startDateStr, endDateStr) {
                 const tooltip = isInRange && hd
                     ? `${iso}: ${hd.status === 'O' ? 'Present' : hd.status === 'X' ? 'Absent' : hd.status === '/' ? 'Partial' : 'No record'} — ${(hd.classes || []).map(c => escapeHtml(c.class_name)).join(', ')}`
                     : `${iso}: No class`;
-                cells.push(`<rect class="heatmap-cell" x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="${color}" rx="2" ry="2" aria-label="${escapeHtml(tooltip)}" tabindex="0"><title>${escapeHtml(tooltip)}</title></rect>`);
+                cells.push(`<rect class="heatmap-cell" x="${x}" y="${y}" width="${CELL}" height="${CELL}" fill="${color}" rx="2" ry="2" aria-label="${escapeHtml(tooltip)}"><title>${escapeHtml(tooltip)}</title></rect>`);
             }
             cur.setDate(cur.getDate() + 1);
-            if (cur > end && row === 6) { col++; break; }
+            if (cur > end) break;
         }
         if (cur.getDay() === 0) col++;
+        else col++;
         if (cur > end) break;
     }
 

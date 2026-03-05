@@ -416,20 +416,7 @@ router.get('/student-summary/:studentId', async (req, res) => {
         }));
 
         // Calculate streaks (consecutive 'O' records; '/' doesn't break but doesn't count)
-        let currentStreak = 0, bestStreak = 0, runningStreak = 0;
-        for (let i = records.length - 1; i >= 0; i--) {
-            const s = records[i].status;
-            if (s === 'O') {
-                runningStreak++;
-                if (currentStreak === 0) currentStreak = runningStreak; // still computing from end
-            } else if (s === '/') {
-                // partial doesn't break streak but doesn't count
-            } else {
-                if (currentStreak === 0) currentStreak = runningStreak; // lock in current streak
-                runningStreak = 0;
-            }
-        }
-        // current streak is the streak at the most recent end of records
+        // Records are sorted ASC by date, so tempStreak at end = current streak
         let cStreak = 0, bStreak = 0, tempStreak = 0;
         for (const r of records) {
             if (r.status === 'O') {

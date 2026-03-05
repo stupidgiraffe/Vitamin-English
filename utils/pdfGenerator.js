@@ -1254,7 +1254,12 @@ function registerNotoFonts(doc) {
     try {
         doc.registerFont('NotoJP', NOTO_REG_PATH);
         doc.registerFont('NotoJP-Bold', NOTO_BOLD_PATH);
-    } catch (_) { /* fonts may already be registered */ }
+    } catch (err) {
+        // Fonts may already be registered on this document instance
+        if (process.env.NODE_ENV === 'development') {
+            console.debug('[PDF] Font registration skipped:', err.message);
+        }
+    }
 }
 
 /**
