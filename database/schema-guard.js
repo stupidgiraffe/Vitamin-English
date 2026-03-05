@@ -32,6 +32,9 @@ async function ensureSchemaColumns() {
             // Ensure monthly_reports has start_date and end_date columns (added in migration 005)
             await ensureMonthlyReportsColumns(client);
             
+            // Ensure teacher_comment_sheets has phrases and others columns (added in migration 011)
+            await ensureTeacherCommentSheetColumns(client);
+            
             console.log('✅ Schema guard completed successfully');
             
         } finally {
@@ -122,6 +125,28 @@ async function ensureClassColumns(client) {
     }
 }
 
+async function ensureTeacherCommentSheetColumns(client) {
+    // Check if teacher_comment_sheets table exists first
+    const tableCheck = await client.query(`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'teacher_comment_sheets'
+    `);
+    
+    if (tableCheck.rows.length === 0) {
+        console.log('ℹ️  teacher_comment_sheets table does not exist yet, skipping column check');
+        return;
+    }
+    
+    const requiredColumns = [
+        { name: 'phrases', type: 'TEXT', default: null },
+        { name: 'others', type: 'TEXT', default: null }
+    ];
+
+    for (const column of requiredColumns) {
+        await ensureColumnExists(client, 'teacher_comment_sheets', column.name, column.type, column.default);
+    }
+}
+
 async function ensureMonthlyReportsColumns(client) {
     // Check if monthly_reports table exists first
     const tableCheck = await client.query(`
@@ -147,11 +172,12 @@ async function ensureMonthlyReportsColumns(client) {
 async function ensureColumnExists(client, tableName, columnName, columnType, defaultValue) {
     try {
         // Validate table and column names against allowlist to prevent SQL injection
-        const allowedTables = ['students', 'classes', 'monthly_reports'];
+        const allowedTables = ['students', 'classes', 'monthly_reports', 'teacher_comment_sheets'];
         const allowedColumns = {
             students: ['parent_phone', 'color_code', 'email', 'phone', 'parent_name', 'parent_email', 'enrollment_date'],
             classes: ['color'],
-            monthly_reports: ['start_date', 'end_date']
+            monthly_reports: ['start_date', 'end_date'],
+            teacher_comment_sheets: ['phrases', 'others']
         };
         
         if (!allowedTables.includes(tableName)) {
