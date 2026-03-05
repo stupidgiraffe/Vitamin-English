@@ -1,6 +1,12 @@
 const PDFDocument = require('pdfkit');
+const path = require('path');
 const { Readable } = require('stream');
-const { formatShortDate } = require('./dateUtils');
+
+// Month abbreviations for date formatting
+const MONTH_ABBR = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'June', 'July', 'Aug.', 'Sept.', 'Oct.', 'Nov.', 'Dec.'];
+
+// Regex matching CJK (Japanese/Chinese/Korean) characters
+const CJK_REGEX = /[\u3000-\u9FFF\uF900-\uFAFF]/;
 
 // Theme constants for consistent styling across PDFs
 const THEME = {
@@ -763,11 +769,24 @@ async function generateAttendanceGridPDF(classData, students, dates, attendanceM
  */
 function formatPDFDate(dateStr) {
     if (!dateStr) return '';
-    const shortDate = formatShortDate(dateStr);
-    if (!shortDate) return dateStr;
-    const d = new Date(String(dateStr).split('T')[0] + 'T00:00:00');
-    const jpDate = new Date(d.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
-    return `${shortDate}, ${jpDate.getFullYear()}`;
+    try {
+        // Handle YYYY-MM-DD format directly
+        const s = String(dateStr);
+        const match = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+            const year = parseInt(match[1]);
+            const month = parseInt(match[2]) - 1;
+            const day = parseInt(match[3]);
+            return `${MONTH_ABBR[month]} ${day}, ${year}`;
+        }
+        // Fallback: try parsing as date
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return String(dateStr);
+        const jpDate = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }));
+        return `${MONTH_ABBR[jpDate.getMonth()]} ${jpDate.getDate()}, ${jpDate.getFullYear()}`;
+    } catch {
+        return String(dateStr);
+    }
 }
 
 /**
@@ -789,6 +808,9 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                 resolve(pdfBuffer);
             });
             doc.on('error', reject);
+
+            // Register Japanese font
+            doc.registerFont('NotoJP', path.join(__dirname, '..', 'fonts', 'NotoSansJP-Regular.ttf'));
             
             // Professional Header with Branding
             doc.rect(0, 0, doc.page.width, 100)
@@ -904,9 +926,11 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                     doc.y = 50;
                 }
                 
+                // Use NotoJP for labels containing Japanese characters
+                const hasJapanese = CJK_REGEX.test(label);
                 const fieldY = doc.y;
                 doc.fontSize(11)
-                   .font('Helvetica-Bold')
+                   .font(hasJapanese ? 'NotoJP' : 'Helvetica-Bold')
                    .fillColor(THEME.colors.primaryBlue)
                    .text(label, 60, fieldY);
                 
