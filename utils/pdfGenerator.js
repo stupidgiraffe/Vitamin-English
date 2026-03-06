@@ -1365,15 +1365,6 @@ async function generateEnhancedAttendanceGridPDF(classData, students, dates, att
                    .text('出席率 / Rate', rateX + 2, y + 5, { width: RATE_COL - 4, align: 'center' });
                 y += ROW_H;
 
-                // ── Draw one section ──────────────────────────────────
-                const drawSection = (sectionStudents, title) => {
-                    if (sectionStudents.length === 0) return;
-                    doc.rect(MARGIN_SIDE, y - 1, tableW, ROW_H).fillAndStroke('#8FAADC', '#4472C4');
-                    doc.fillColor('#1F3A5F').font('NotoJP-Bold').fontSize(8)
-                       .text(title, MARGIN_SIDE + 4, y + 4, { width: tableW - 8 });
-                    // y is closure var – we need it mutable, use outer y
-                };
-
                 // Helper to draw both sections (captures y from outer scope via ref trick)
                 const drawStudentRows = (sectionStudents, sectionTitle) => {
                     if (sectionStudents.length === 0) return;
@@ -1515,10 +1506,12 @@ async function generateStudentAttendanceReportPDF(student, records, stats, strea
             const rateBg = rate >= 85 ? '#d4edda' : rate >= 65 ? '#fff3cd' : '#f8d7da';
             const rateColor = rate >= 85 ? '#155724' : rate >= 65 ? '#856404' : '#721c24';
 
-            doc.rect(MARGIN, doc.y, CONTENT_W, 30).fill(rateBg).fillColor('black');
+            const rateBoxY = doc.y;
+            doc.rect(MARGIN, rateBoxY, CONTENT_W, 30).fill(rateBg).fillColor('black');
             doc.font('NotoJP-Bold').fontSize(11).fillColor(rateColor)
-               .text(`出席率 / Attendance Rate: ${rate}%   (${present}/${total} classes)`, MARGIN + 8, doc.y - 25, { width: CONTENT_W - 16 });
-            doc.moveDown(1.5);
+               .text(`出席率 / Attendance Rate: ${rate}%   (${present}/${total} classes)`, MARGIN + 8, rateBoxY + 8, { width: CONTENT_W - 16 });
+            doc.y = rateBoxY + 30;
+            doc.moveDown(0.5);
 
             // Streaks
             const milestones = [

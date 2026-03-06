@@ -3416,3 +3416,69 @@ body {
         min-width: 240px;
     }
 }
+
+/* ── Attendance Analytics (Database page) ───────────────────────────────────── */
+.analytics-class-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.analytics-class-card {
+    background: var(--card-background, #fff);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 8px;
+    padding: 12px;
+    transition: box-shadow 0.15s;
+}
+.analytics-class-card:hover {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.analytics-class-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 2px;
+}
+.analytics-class-teacher {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #6c757d);
+    margin-bottom: 6px;
+}
+.analytics-class-rate {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+.analytics-class-rate.rate-green { color: #155724; }
+.analytics-class-rate.rate-yellow { color: #856404; }
+.analytics-class-rate.rate-red { color: #721c24; }
+.analytics-class-flagged {
+    font-size: 0.78rem;
+    color: #856404;
+    margin-top: 4px;
+}
+.analytics-monthly-row {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+.analytics-month-cell {
+    padding: 6px 8px;
+    border-radius: 4px;
+    min-width: 48px;
+    text-align: center;
+}
+.analytics-month-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #555;
+}
+.analytics-month-rate {
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+.analytics-month-cell.month-rate-none   { background: #eee; }
+.analytics-month-cell.month-rate-green  { background: var(--rate-green-bg, #d4edda); }
+.analytics-month-cell.month-rate-yellow { background: var(--rate-yellow-bg, #fff3cd); }
+.analytics-month-cell.month-rate-red    { background: var(--rate-red-bg, #f8d7da); }
