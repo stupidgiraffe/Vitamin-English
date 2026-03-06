@@ -35,7 +35,13 @@ async function buildAttendanceMatrix(pool, classId, startDate, endDate) {
         WHERE class_id = $1 AND active = true
         ORDER BY student_type, name
     `, [classId]);
-    const students = studentsResult.rows;
+    // Deduplicate by student id in case of any unexpected duplicates
+    const seenIds = new Set();
+    const students = studentsResult.rows.filter(s => {
+        if (seenIds.has(s.id)) return false;
+        seenIds.add(s.id);
+        return true;
+    });
     
     // Generate date range - always include all dates in range (including empty days)
     let dates = [];

@@ -1605,7 +1605,7 @@ function setAttendanceStatus(cell, newStatus) {
     // Get student name for announcement
     const row = cell.closest('tr');
     const nameCell = row ? row.querySelector('.student-name') : null;
-    const studentName = nameCell ? nameCell.textContent.trim().replace(/✏️/g, '').trim() : 'Student';
+    const studentName = nameCell ? nameCell.textContent.trim().replace(/[✏️📊]/g, '').trim() : 'Student';
 
     cell.textContent = newStatus;
     cell.className = 'attendance-cell';
@@ -1807,12 +1807,11 @@ function buildHeatmapSVG(heatmap, startDateStr, endDateStr) {
             cur.setDate(cur.getDate() + 1);
             if (cur > end) break;
         }
-        if (cur.getDay() === 0) col++;
-        else col++;
+        col++;
         if (cur > end) break;
     }
 
-    const svgWidth  = LABEL_W + (col + 1) * STEP + 10;
+    const svgWidth  = Math.max(300, LABEL_W + (col + 1) * STEP + 10);
     const svgHeight = TOP_PAD + 7 * STEP + 20;
 
     // Day labels
@@ -1826,7 +1825,7 @@ function buildHeatmapSVG(heatmap, startDateStr, endDateStr) {
          <text x="${LABEL_W + i * 70 + CELL + 3}" y="${svgHeight - 6}" font-size="9" fill="#666">${escapeHtml(l)}</text>`
     ).join('');
 
-    return `<svg class="heatmap-svg" viewBox="0 0 ${svgWidth} ${svgHeight + 20}" role="img" aria-label="Attendance heatmap">
+    return `<svg class="heatmap-svg" width="${svgWidth}" height="${svgHeight + 20}" viewBox="0 0 ${svgWidth} ${svgHeight + 20}" role="img" aria-label="Attendance heatmap">
         <title>Attendance heatmap</title>
         ${dayLabels}
         ${cells.join('')}
@@ -2361,7 +2360,29 @@ function renderAttendanceTable(data, classId) {
 // Render attendance data in a compact grid view optimized for multi-date display
 function renderAttendanceGridView(data, classId) {
     const container = document.getElementById('attendance-container');
-    const { students, dates, attendance } = data;
+    const { students, dates: allDates, attendance } = data;
+
+    // ── Schedule-filtered dates (mirrors renderAttendanceTable Part 1C) ─────────
+    const selectedClass = classes.find(c => c.id == classId);
+    let scheduleDatesSet = new Set();
+    if (selectedClass && selectedClass.schedule) {
+        const sched = selectedClass.schedule.toLowerCase();
+        const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+        const dayAbbr  = ['sun','mon','tue','wed','thu','fri','sat'];
+        const scheduledDays = [];
+        dayNames.forEach((d, i) => { if (sched.includes(d) || sched.includes(dayAbbr[i])) scheduledDays.push(i); });
+        allDates.forEach(date => {
+            const d = new Date(date + 'T00:00:00').getDay();
+            if (scheduledDays.includes(d)) scheduleDatesSet.add(date);
+        });
+    }
+
+    let dates;
+    if (showScheduleDatesOnly && scheduleDatesSet.size > 0) {
+        dates = allDates.filter(d => scheduleDatesSet.has(d));
+    } else {
+        dates = allDates;
+    }
 
     // Separate regular and trial students
     const regularStudents = students.filter(s => s.student_type === 'regular');
@@ -2523,7 +2544,7 @@ async function toggleAttendance(cell) {
     // Get student name for undo toast
     const row = cell.closest('tr');
     const nameCell = row ? row.querySelector('.student-name') : null;
-    const studentName = nameCell ? nameCell.textContent.replace(/✏️/g, '').trim() : 'Student';
+    const studentName = nameCell ? nameCell.textContent.replace(/[✏️📊]/g, '').trim() : 'Student';
 
     // Snapshot for undo (Part 4A)
     const prevStatus   = currentStatus;
@@ -4012,10 +4033,107 @@ document.querySelectorAll('.filter-pill').forEach(pill => {
         // Update hidden type field
         const type = this.getAttribute('data-type');
         document.getElementById('db-search-type').value = type;
-        // Trigger search
-        searchDatabase();
+        // Analytics tab has its own loader
+        if (type === 'analytics') {
+            loadAttendanceAnalytics();
+        } else {
+            searchDatabase();
+        }
     });
 });
+
+// Attendance Analytics dashboard for the Database page
+async function loadAttendanceAnalytics() {
+    const container = document.getElementById('db-viewer-container');
+    container.innerHTML = '<p class="info-text">Loading analytics...</p>';
+    try {
+        const dashboard = await api('/attendance/teacher-dashboard');
+        const classRows = dashboard.classes || [];
+
+        if (classRows.length === 0) {
+            container.innerHTML = '<p class="info-text">No attendance data found.</p>';
+            return;
+        }
+
+        let html = '<div class="attendance-analytics">';
+        html += '<h3 style="margin-bottom:12px;">📊 Attendance Analytics</h3>';
+        html += '<div class="analytics-class-grid">';
+
+        classRows.forEach(cls => {
+            const rate = cls.monthlyRate;
+            const rateLabel = rate !== null ? `${rate}%` : '—';
+            const rateClass = rate === null ? '' : rate >= 85 ? 'rate-green' : rate >= 65 ? 'rate-yellow' : 'rate-red';
+            html += `
+                <div class="analytics-class-card" onclick="loadClassAnalyticsDetail(${cls.id})" style="cursor:pointer;">
+                    <div class="analytics-class-name">${escapeHtml(cls.name)}</div>
+                    <div class="analytics-class-teacher">${escapeHtml(cls.teacher_name || '')}</div>
+                    <div class="analytics-class-rate ${rateClass}">${rateLabel} <small>this month</small></div>
+                    ${cls.flaggedStudents && cls.flaggedStudents.length > 0 ? `<div class="analytics-class-flagged">⚠️ ${cls.flaggedStudents.length} low attendance</div>` : ''}
+                </div>`;
+        });
+
+        html += '</div>';
+        html += '<p class="info-text" style="margin-top:10px;">Click a class card to see per-student attendance rates.</p>';
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        container.innerHTML = `<p class="info-text error">Error loading analytics: ${error.message}</p>`;
+    }
+}
+
+async function loadClassAnalyticsDetail(classId) {
+    const container = document.getElementById('db-viewer-container');
+    container.innerHTML = '<p class="info-text">Loading class analytics...</p>';
+    try {
+        const year = new Date().getFullYear();
+        const data = await api(`/attendance/class-summary/${classId}?year=${year}`);
+        const cls = data.class || {};
+        const studentStats = data.studentStats || [];
+        const monthlyStats = data.monthlyStats || {};
+
+        let html = '<div class="attendance-analytics">';
+        html += `<button class="btn btn-secondary btn-small" onclick="loadAttendanceAnalytics()" style="margin-bottom:12px;">← Back to All Classes</button>`;
+        html += `<h3 style="margin-bottom:4px;">📊 ${escapeHtml(cls.name)} — ${year}</h3>`;
+        html += `<p style="color:#666;margin-bottom:12px;">Teacher: ${escapeHtml(cls.teacher_name || '—')} &nbsp;|&nbsp; Overall rate: <strong>${data.overallRate !== null ? data.overallRate + '%' : '—'}</strong></p>`;
+
+        // Monthly summary row
+        html += '<h4>Monthly Attendance Rates</h4>';
+        html += '<div class="analytics-monthly-row">';
+        for (let m = 1; m <= 12; m++) {
+            const ms = monthlyStats[m] || { rate: null, total: 0 };
+            const rateLabel = ms.rate !== null ? `${ms.rate}%` : '—';
+            const monthRateClass = ms.rate === null ? 'month-rate-none' : ms.rate >= 85 ? 'month-rate-green' : ms.rate >= 65 ? 'month-rate-yellow' : 'month-rate-red';
+            html += `<div class="analytics-month-cell ${monthRateClass}" title="${MONTH_ABBR[m-1]}: ${ms.present||0}/${ms.total} (${rateLabel})">
+                <div class="analytics-month-label">${MONTH_ABBR[m-1]}</div>
+                <div class="analytics-month-rate">${rateLabel}</div>
+            </div>`;
+        }
+        html += '</div>';
+
+        // Per-student table
+        if (studentStats.length > 0) {
+            html += '<h4 style="margin-top:14px;">Per-Student Attendance Rates</h4>';
+            html += '<table class="db-table-clean" style="width:100%"><thead><tr><th>Student</th><th>Type</th><th>Present</th><th>Total</th><th>Rate</th></tr></thead><tbody>';
+            // Sort descending by rate (best first); at-risk students shown with red class
+            studentStats.slice().sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0)).forEach(s => {
+                const rateClass = s.rate >= 85 ? 'rate-green' : s.rate >= 65 ? 'rate-yellow' : 'rate-red';
+                html += `<tr>
+                    <td>${escapeHtml(s.name)}</td>
+                    <td>${escapeHtml(s.student_type || 'regular')}</td>
+                    <td>${s.present}</td>
+                    <td>${s.total}</td>
+                    <td class="${rateClass}">${s.total > 0 ? s.rate + '%' : '—'}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+        }
+
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        container.innerHTML = `<p class="info-text error">Error: ${error.message}</p>`;
+    }
+}
 
 // Advanced options toggle
 document.getElementById('db-advanced-toggle')?.addEventListener('click', function() {
