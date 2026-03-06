@@ -129,6 +129,13 @@
                         <h3>📋 Recent Activity</h3>
                         <div id="recent-activity"></div>
                     </div>
+                    <!-- Attendance Overview Card (Part 2C) -->
+                    <div class="dashboard-card dashboard-card-wide">
+                        <h3>📊 Attendance Overview <small id="attendance-overview-month" style="font-weight:normal;font-size:0.85em;color:#888;"></small></h3>
+                        <div id="attendance-overview-container">
+                            <p class="info-text">Loading attendance overview...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -136,11 +143,37 @@
             <div id="attendance-page" class="page">
                 <h2>Attendance Management</h2>
                 
+                <!-- Offline Indicator -->
+                <div id="offline-banner" class="offline-banner" style="display:none;" role="alert" aria-live="polite">
+                    <span id="offline-banner-text">📴 Offline — changes saved locally</span>
+                </div>
+
+                <!-- Aria live region for keyboard navigation announcements -->
+                <div id="attendance-aria-live" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
                 <!-- New Attendance Sheet Button -->
                 <button id="new-attendance-btn" class="btn btn-primary" style="margin-bottom: 20px;">
                     ➕ New Attendance Sheet
                 </button>
                 
+                <!-- Month Navigation Bar (Part 1A) -->
+                <div class="month-nav-bar" id="month-nav-bar" role="navigation" aria-label="Month navigation">
+                    <button id="month-prev-btn" class="btn btn-secondary month-nav-btn" title="Previous month" aria-label="Previous month">◀ Prev</button>
+                    <button id="month-display-btn" class="month-display" aria-label="Current month (click to jump to month)" aria-haspopup="true">
+                        <span id="month-display-text">Select Month</span>
+                    </button>
+                    <button id="month-next-btn" class="btn btn-secondary month-nav-btn" title="Next month" aria-label="Next month">Next ▶</button>
+                    <button id="month-today-btn" class="btn btn-secondary month-nav-btn" title="Go to current month" aria-label="Go to current month">Today</button>
+                    <div id="month-picker-dropdown" class="month-picker-dropdown" style="display:none;" role="dialog" aria-label="Month picker">
+                        <div class="month-picker-header">
+                            <button id="month-picker-prev-year" class="btn btn-small btn-secondary">◀</button>
+                            <span id="month-picker-year" class="month-picker-year-label">2026</span>
+                            <button id="month-picker-next-year" class="btn btn-small btn-secondary">▶</button>
+                        </div>
+                        <div class="month-picker-grid" id="month-picker-grid"></div>
+                    </div>
+                </div>
+
                 <div class="controls">
                     <div class="control-group">
                         <label>Class:</label>
@@ -198,6 +231,12 @@
                         <button id="view-list-btn" class="view-toggle-btn active" title="Table View - Click cells to mark attendance" aria-label="Table View">📋 Table</button>
                         <button id="view-grid-btn" class="view-toggle-btn" title="Students View - Summary cards" aria-label="Students View">📊 Students</button>
                     </div>
+                    <!-- Schedule dates toggle (Part 1C) -->
+                    <label class="schedule-toggle-label" title="Toggle between schedule dates only and all dates">
+                        <input type="checkbox" id="show-schedule-only" checked> Schedule dates only
+                    </label>
+                    <!-- Quick Mark All Present (Part 4B) -->
+                    <button id="quick-mark-present-btn" class="btn btn-small btn-success" title="Mark all unmarked students as Present for the current date column" style="display:none;">✓ Mark All Present</button>
                     <button id="add-date-btn" class="add-date-btn">➕ Add Date</button>
                     <button id="move-attendance-btn" class="move-attendance-btn">📅 Move Attendance</button>
                     <div id="save-status-badge" class="save-status-badge" style="display: none;">
@@ -206,7 +245,7 @@
                     </div>
                 </div>
 
-                <div id="attendance-container" class="attendance-sheet">
+                <div id="attendance-container" class="attendance-sheet" role="grid" aria-label="Attendance table">
                     <p class="info-text">Select a class and date range to view attendance</p>
                 </div>
             </div>

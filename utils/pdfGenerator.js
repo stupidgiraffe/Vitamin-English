@@ -1240,10 +1240,468 @@ async function generateMultiClassReportPDF(classReportsData, startDate, endDate)
     });
 }
 
+// ─── New PDF generators (Part 3) ──────────────────────────────────────────────
+
+const path_module = require('path');
+const NOTO_REG_PATH = path_module.join(__dirname, '..', 'fonts', 'NotoSansJP-Regular.ttf');
+const NOTO_BOLD_PATH = path_module.join(__dirname, '..', 'fonts', 'NotoSansJP-Bold.ttf');
+const MONTH_JP = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+/**
+ * Register NotoJP fonts on a PDFKit document (idempotent-safe wrapper).
+ */
+function registerNotoFonts(doc) {
+    try {
+        doc.registerFont('NotoJP', NOTO_REG_PATH);
+        doc.registerFont('NotoJP-Bold', NOTO_BOLD_PATH);
+    } catch (err) {
+        // Fonts may already be registered on this document instance
+        if (process.env.NODE_ENV === 'development') {
+            console.debug('[PDF] Font registration skipped:', err.message);
+        }
+    }
+}
+
+/**
+ * Enhanced Attendance Grid PDF — schedule-aware, bilingual JP/EN, summary stats.
+ * Used by the upgraded POST /pdf/attendance-grid/:classId endpoint.
+ *
+ * @param {Object} classData      – class row including teacher_name, schedule
+ * @param {Array}  students       – student rows
+ * @param {Array}  dates          – array of ISO date strings to display
+ * @param {Object} attendanceMap  – "studentId-date" => status
+ * @param {String} startDate      – ISO start date
+ * @param {String} endDate        – ISO end date
+ * @param {Array}  scheduleDates  – dates that match the class schedule (for ★ detection)
+ * @param {Object} options        – { includeStats, includeComments, orientation }
+ * @returns {Promise<Buffer>}
+ */
+async function generateEnhancedAttendanceGridPDF(classData, students, dates, attendanceMap, startDate, endDate, scheduleDates = [], options = {}) {
+    return new Promise((resolve, reject) => {
+        try {
+            const { includeStats = true, includeComments = true } = options;
+            const scheduleSet = new Set(scheduleDates);
+
+            // Margins: 15mm top/bottom, 10mm sides (in points: 1mm ≈ 2.835pt)
+            const MARGIN_SIDE = 28; // ~10mm
+            const MARGIN_TOP  = 43; // ~15mm
+            const MARGIN_BOT  = 43;
+            const ROW_H = 20;
+            const NAME_COL = 130;
+
+            const doc = new PDFDocument({ margin: MARGIN_SIDE, size: 'A4', layout: 'landscape' });
+            registerNotoFonts(doc);
+
+            const buffers = [];
+            doc.on('data', c => buffers.push(c));
+            doc.on('end', () => resolve(Buffer.concat(buffers)));
+            doc.on('error', reject);
+
+            const PAGE_W = doc.page.width;
+            const PAGE_H = doc.page.height;
+            const CONTENT_W = PAGE_W - MARGIN_SIDE * 2;
+
+            // ── Date chunk calculation ──────────────────────────────────────
+            const MIN_DATE_COL = 32;
+            const maxPerPage = Math.floor((CONTENT_W - NAME_COL - 55) / MIN_DATE_COL); // 55 = rate col
+            const RATE_COL = 55;
+            const chunks = [];
+            for (let i = 0; i < dates.length; i += maxPerPage) chunks.push(dates.slice(i, i + maxPerPage));
+            if (chunks.length === 0) chunks.push([]);
+
+            const regularStudents = students.filter(s => s.student_type === 'regular');
+            const trialStudents   = students.filter(s => s.student_type !== 'regular');
+
+            // ── Month/year for bilingual header ────────────────────────────
+            const startObj = new Date((startDate || new Date().toISOString().split('T')[0]) + 'T00:00:00');
+            const monthLabel = MONTH_JP[startObj.getMonth()] + ' / ' + MONTH_ABBR[startObj.getMonth()];
+            const yearLabel  = startObj.getFullYear();
+
+            // ── Draw one chunk per page ────────────────────────────────────
+            chunks.forEach((chunk, chunkIdx) => {
+                if (chunkIdx > 0) doc.addPage();
+
+                const dateColW = chunk.length > 0 ? Math.min(45, Math.floor((CONTENT_W - NAME_COL - RATE_COL) / chunk.length)) : 40;
+                const tableW   = NAME_COL + dateColW * chunk.length + RATE_COL;
+
+                // ── Page header ─────────────────────────────────────────
+                let y = MARGIN_TOP;
+                doc.fontSize(16).font('NotoJP-Bold')
+                   .fillColor('#333333')
+                   .text('Vitamin English', MARGIN_SIDE, y, { align: 'center', width: CONTENT_W });
+                y += 22;
+                doc.fontSize(10).font('NotoJP')
+                   .fillColor('#555555')
+                   .text(`クラス / Class: ${sanitizeForPDF(classData.name)}   先生 / Teacher: ${sanitizeForPDF(classData.teacher_name || '')}   月 / Month: ${monthLabel} ${yearLabel}`,
+                         MARGIN_SIDE, y, { align: 'center', width: CONTENT_W });
+                y += 16;
+
+                if (chunks.length > 1) {
+                    doc.fontSize(8).font('NotoJP').fillColor('#888888')
+                       .text(`(${chunkIdx + 1} / ${chunks.length})`, MARGIN_SIDE, y, { align: 'right', width: CONTENT_W });
+                    y += 12;
+                }
+                y += 4; // separator gap
+
+                // ── Column header row ───────────────────────────────────
+                doc.rect(MARGIN_SIDE, y, NAME_COL, ROW_H).fillAndStroke('#4472C4', '#2B5797');
+                doc.fillColor('white').font('NotoJP-Bold').fontSize(8)
+                   .text('氏名 / Student', MARGIN_SIDE + 3, y + 5, { width: NAME_COL - 6 });
+
+                chunk.forEach((date, di) => {
+                    const x = MARGIN_SIDE + NAME_COL + di * dateColW;
+                    const isMakeup = date && !scheduleSet.has(date);
+                    doc.rect(x, y, dateColW, ROW_H).fillAndStroke(isMakeup ? '#7B68EE' : '#4472C4', '#2B5797');
+                    const d = new Date(date + 'T00:00:00');
+                    const label = `${d.getMonth()+1}/${d.getDate()}${isMakeup ? '★' : ''}`;
+                    doc.fillColor('white').font('NotoJP-Bold').fontSize(7)
+                       .text(label, x + 1, y + 5, { width: dateColW - 2, align: 'center' });
+                });
+
+                // Rate column header
+                const rateX = MARGIN_SIDE + NAME_COL + chunk.length * dateColW;
+                doc.rect(rateX, y, RATE_COL, ROW_H).fillAndStroke('#2B5797', '#1a3d6b');
+                doc.fillColor('white').font('NotoJP-Bold').fontSize(7)
+                   .text('出席率 / Rate', rateX + 2, y + 5, { width: RATE_COL - 4, align: 'center' });
+                y += ROW_H;
+
+                // ── Draw one section ──────────────────────────────────
+                const drawSection = (sectionStudents, title) => {
+                    if (sectionStudents.length === 0) return;
+                    doc.rect(MARGIN_SIDE, y - 1, tableW, ROW_H).fillAndStroke('#8FAADC', '#4472C4');
+                    doc.fillColor('#1F3A5F').font('NotoJP-Bold').fontSize(8)
+                       .text(title, MARGIN_SIDE + 4, y + 4, { width: tableW - 8 });
+                    // y is closure var – we need it mutable, use outer y
+                };
+
+                // Helper to draw both sections (captures y from outer scope via ref trick)
+                const drawStudentRows = (sectionStudents, sectionTitle) => {
+                    if (sectionStudents.length === 0) return;
+
+                    // Section header
+                    doc.rect(MARGIN_SIDE, y, tableW, ROW_H).fillAndStroke('#8FAADC', '#4472C4');
+                    doc.fillColor('#1F3A5F').font('NotoJP-Bold').fontSize(8)
+                       .text(sectionTitle, MARGIN_SIDE + 4, y + 5, { width: tableW - 8, height: ROW_H });
+                    y += ROW_H;
+                    doc.fillColor('black');
+
+                    sectionStudents.forEach((student, rowIdx) => {
+                        if (y + ROW_H > PAGE_H - MARGIN_BOT - (includeStats ? 30 : 0)) {
+                            doc.addPage();
+                            y = MARGIN_TOP;
+                        }
+
+                        const bgColor = rowIdx % 2 === 0 ? '#FFFFFF' : '#F8F8FA';
+                        doc.rect(MARGIN_SIDE, y, tableW, ROW_H).fill(bgColor).fillColor('black');
+
+                        // Name
+                        doc.rect(MARGIN_SIDE, y, NAME_COL, ROW_H).lineWidth(0.5).stroke('#CCCCCC');
+                        const sName = sanitizeForPDF(student.name);
+                        doc.font('NotoJP').fontSize(8).fillColor('#333333')
+                           .text(sName.length > 20 ? sName.substring(0, 20) + '…' : sName, MARGIN_SIDE + 3, y + 5, { width: NAME_COL - 6 });
+
+                        // Attendance cells
+                        let sPresent = 0, sTotal = chunk.length;
+                        chunk.forEach((date, di) => {
+                            const x = MARGIN_SIDE + NAME_COL + di * dateColW;
+                            const key = `${student.id}-${date}`;
+                            const status = attendanceMap[key] || '';
+                            const bgMap = { 'O': '#E8F5E9', 'X': '#FFE6E6', '/': '#FFF9E6' };
+                            const colMap = { 'O': '#28A745', 'X': '#DC3545', '/': '#FFC107' };
+                            if (bgMap[status]) doc.rect(x, y, dateColW, ROW_H).fill(bgMap[status]).fillColor('black');
+                            doc.rect(x, y, dateColW, ROW_H).lineWidth(0.5).stroke('#CCCCCC');
+                            if (status) {
+                                doc.font('NotoJP-Bold').fontSize(10).fillColor(colMap[status] || '#333')
+                                   .text(status, x + 1, y + 4, { width: dateColW - 2, align: 'center' });
+                                doc.fillColor('black');
+                            }
+                            if (status === 'O') sPresent++;
+                        });
+
+                        // Rate cell
+                        const rateXr = MARGIN_SIDE + NAME_COL + chunk.length * dateColW;
+                        const rate = sTotal > 0 ? Math.round((sPresent / sTotal) * 100) : null;
+                        const rateBg = rate === null ? '#eeeeee' : rate >= 85 ? '#d4edda' : rate >= 65 ? '#fff3cd' : '#f8d7da';
+                        doc.rect(rateXr, y, RATE_COL, ROW_H).fill(rateBg).fillColor('black');
+                        doc.rect(rateXr, y, RATE_COL, ROW_H).lineWidth(0.5).stroke('#AAAAAA');
+                        doc.font('NotoJP-Bold').fontSize(8).fillColor('#333333')
+                           .text(rate !== null ? `${sPresent}/${sTotal} = ${rate}%` : '—', rateXr + 2, y + 5, { width: RATE_COL - 4, align: 'center' });
+                        y += ROW_H;
+                    });
+
+                    y += 6; // gap after section
+                };
+
+                drawStudentRows(regularStudents, 'Regular Students / レギュラー生徒');
+                if (trialStudents.length > 0) drawStudentRows(trialStudents, 'Make-up / Trial / 補講・体験');
+
+                // ── Summary row: present count per column ──────────────
+                if (includeStats && chunk.length > 0) {
+                    if (y + ROW_H > PAGE_H - MARGIN_BOT) { doc.addPage(); y = MARGIN_TOP; }
+                    doc.rect(MARGIN_SIDE, y, tableW, ROW_H).fill('#E8EAF6').fillColor('black');
+                    doc.lineWidth(1).rect(MARGIN_SIDE, y, tableW, ROW_H).stroke('#4472C4');
+                    doc.font('NotoJP-Bold').fontSize(8).fillColor('#333333')
+                       .text('出席数 / Present', MARGIN_SIDE + 3, y + 5, { width: NAME_COL - 6 });
+                    chunk.forEach((date, di) => {
+                        const x = MARGIN_SIDE + NAME_COL + di * dateColW;
+                        const presentCount = students.filter(s => (attendanceMap[`${s.id}-${date}`] || '') === 'O').length;
+                        const totalCount = students.length;
+                        doc.rect(x, y, dateColW, ROW_H).lineWidth(0.5).stroke('#4472C4');
+                        doc.font('NotoJP-Bold').fontSize(8).fillColor('#2B5797')
+                           .text(`${presentCount}/${totalCount}`, x + 1, y + 5, { width: dateColW - 2, align: 'center' });
+                    });
+                    y += ROW_H + 8;
+                }
+
+                // ── Teacher comment section ────────────────────────────
+                if (includeComments && chunkIdx === chunks.length - 1) {
+                    if (y + 50 > PAGE_H - MARGIN_BOT) { doc.addPage(); y = MARGIN_TOP; }
+                    doc.rect(MARGIN_SIDE, y, CONTENT_W, 50).lineWidth(0.5).stroke('#AAAAAA');
+                    doc.font('NotoJP').fontSize(9).fillColor('#555555')
+                       .text('教員コメント / Teacher\'s Comments:', MARGIN_SIDE + 5, y + 6);
+                    y += 55;
+                }
+
+                // ── Footer ────────────────────────────────────────────
+                doc.fontSize(7).font('NotoJP').fillColor('#888888')
+                   .text(`Generated: ${new Date().toLocaleDateString()}   |   Vitamin English`,
+                         MARGIN_SIDE, PAGE_H - 25, { align: 'center', width: CONTENT_W });
+            });
+
+            doc.end();
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+/**
+ * Student Attendance Report PDF — individual student across all classes.
+ * Portrait A4, bilingual headers.
+ */
+async function generateStudentAttendanceReportPDF(student, records, stats, streaks) {
+    return new Promise((resolve, reject) => {
+        try {
+            const MARGIN = 40;
+            const doc = new PDFDocument({ margin: MARGIN, size: 'A4' });
+            registerNotoFonts(doc);
+
+            const buffers = [];
+            doc.on('data', c => buffers.push(c));
+            doc.on('end', () => resolve(Buffer.concat(buffers)));
+            doc.on('error', reject);
+
+            const PAGE_W = doc.page.width;
+            const CONTENT_W = PAGE_W - MARGIN * 2;
+
+            // Header
+            doc.fontSize(18).font('NotoJP-Bold').fillColor('#333333')
+               .text('Vitamin English', MARGIN, MARGIN, { align: 'center', width: CONTENT_W });
+            doc.fontSize(12).font('NotoJP').fillColor('#555555')
+               .text('出席レポート / Attendance Report', MARGIN, MARGIN + 26, { align: 'center', width: CONTENT_W });
+            doc.moveDown(0.5);
+            doc.lineWidth(1).moveTo(MARGIN, doc.y).lineTo(PAGE_W - MARGIN, doc.y).stroke('#4472C4');
+            doc.moveDown(0.5);
+
+            // Student info
+            doc.fontSize(11).font('NotoJP-Bold').fillColor('#333333')
+               .text(`氏名 / Name: ${sanitizeForPDF(student.name)}`, { continued: true });
+            doc.font('NotoJP').fillColor('#666666')
+               .text(`   タイプ / Type: ${sanitizeForPDF(student.student_type || 'regular')}`);
+            doc.moveDown(0.5);
+
+            // Summary stats
+            const { total, present, absent, partial, rate } = stats;
+            const rateBg = rate >= 85 ? '#d4edda' : rate >= 65 ? '#fff3cd' : '#f8d7da';
+            const rateColor = rate >= 85 ? '#155724' : rate >= 65 ? '#856404' : '#721c24';
+
+            doc.rect(MARGIN, doc.y, CONTENT_W, 30).fill(rateBg).fillColor('black');
+            doc.font('NotoJP-Bold').fontSize(11).fillColor(rateColor)
+               .text(`出席率 / Attendance Rate: ${rate}%   (${present}/${total} classes)`, MARGIN + 8, doc.y - 25, { width: CONTENT_W - 16 });
+            doc.moveDown(1.5);
+
+            // Streaks
+            const milestones = [
+                { n: 5, badge: '🌟' }, { n: 10, badge: '⭐' },
+                { n: 20, badge: '🏆' }, { n: 30, badge: '👑' }, { n: 50, badge: '💎' }
+            ];
+            const earned = milestones.filter(m => streaks.best >= m.n).map(m => m.badge).join(' ');
+            doc.font('NotoJP').fontSize(10).fillColor('#333333')
+               .text(`🔥 現在の連続出席 / Current Streak: ${streaks.current}  🏆 最長連続 / Best Streak: ${streaks.best}  ${earned}`, MARGIN, doc.y);
+            doc.moveDown(0.8);
+
+            // Attendance history table
+            doc.font('NotoJP-Bold').fontSize(10).fillColor('#333333')
+               .text('出席履歴 / Attendance History', MARGIN, doc.y);
+            doc.moveDown(0.3);
+
+            const ROW_H = 18;
+            const COL_DATE = 90, COL_STATUS = 55, COL_CLASS = CONTENT_W - COL_DATE - COL_STATUS;
+
+            // Table header
+            let y = doc.y;
+            [['日付 / Date', COL_DATE, '#4472C4'], ['状態 / Status', COL_STATUS, '#4472C4'], ['クラス / Class', COL_CLASS, '#4472C4']]
+                .reduce((x, [label, w, bg]) => {
+                    doc.rect(MARGIN + x, y, w, ROW_H).fill(bg).fillColor('white')
+                       .font('NotoJP-Bold').fontSize(8)
+                       .text(label, MARGIN + x + 2, y + 4, { width: w - 4 });
+                    return x + w;
+                }, 0);
+            y += ROW_H;
+
+            const statusLabel = { 'O': 'Present / 出席', 'X': 'Absent / 欠席', '/': 'Partial / 遅刻', '': 'N/A' };
+            const statusColor = { 'O': '#28A745', 'X': '#DC3545', '/': '#FFC107', '': '#888' };
+            const statusBg    = { 'O': '#E8F5E9', 'X': '#FFE6E6', '/': '#FFF9E6', '': '#f5f5f5' };
+
+            records.slice().reverse().forEach((rec, idx) => {
+                if (y + ROW_H > doc.page.height - 60) { doc.addPage(); y = MARGIN; }
+                const bg = idx % 2 === 0 ? '#FFFFFF' : '#F8F8FA';
+                doc.rect(MARGIN, y, CONTENT_W, ROW_H).fill(bg);
+                let x = 0;
+                const cells = [
+                    [rec.date, COL_DATE, '#333333', bg],
+                    [statusLabel[rec.status] || rec.status, COL_STATUS, statusColor[rec.status] || '#333', statusBg[rec.status] || bg],
+                    [sanitizeForPDF(rec.class_name || ''), COL_CLASS, '#333333', bg]
+                ];
+                cells.forEach(([text, w, color, cbg]) => {
+                    doc.rect(MARGIN + x, y, w, ROW_H).lineWidth(0.5).stroke('#CCCCCC');
+                    doc.font('NotoJP').fontSize(8).fillColor(color)
+                       .text(text, MARGIN + x + 2, y + 4, { width: w - 4 });
+                    x += w;
+                });
+                y += ROW_H;
+                doc.y = y; // keep doc.y in sync
+            });
+
+            doc.moveDown(1);
+            doc.fontSize(7).font('NotoJP').fillColor('#888')
+               .text(`Generated: ${new Date().toLocaleDateString()}`, MARGIN, doc.page.height - 30, { align: 'center', width: CONTENT_W });
+            doc.end();
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+/**
+ * Class Attendance Summary PDF — monthly trends, per-student rates, flagged students.
+ * Portrait A4.
+ */
+async function generateClassSummaryPDF(classData, year, monthlyStats, studentStats, lowestPerformers) {
+    return new Promise((resolve, reject) => {
+        try {
+            const MARGIN = 40;
+            const doc = new PDFDocument({ margin: MARGIN, size: 'A4' });
+            registerNotoFonts(doc);
+
+            const buffers = [];
+            doc.on('data', c => buffers.push(c));
+            doc.on('end', () => resolve(Buffer.concat(buffers)));
+            doc.on('error', reject);
+
+            const PAGE_W = doc.page.width;
+            const CONTENT_W = PAGE_W - MARGIN * 2;
+
+            // Header
+            doc.fontSize(18).font('NotoJP-Bold').fillColor('#333333')
+               .text('Vitamin English', MARGIN, MARGIN, { align: 'center', width: CONTENT_W });
+            doc.fontSize(12).font('NotoJP').fillColor('#555555')
+               .text('クラス出席サマリー / Class Attendance Summary', MARGIN, MARGIN + 26, { align: 'center', width: CONTENT_W });
+            doc.moveDown(0.5);
+            doc.lineWidth(1).moveTo(MARGIN, doc.y).lineTo(PAGE_W - MARGIN, doc.y).stroke('#4472C4');
+            doc.moveDown(0.5);
+
+            doc.font('NotoJP-Bold').fontSize(11).fillColor('#333333')
+               .text(`クラス / Class: ${sanitizeForPDF(classData.name)}   先生 / Teacher: ${sanitizeForPDF(classData.teacher_name || '')}   年 / Year: ${year}`);
+            doc.moveDown(0.8);
+
+            // Monthly stats bar chart (text-based)
+            doc.font('NotoJP-Bold').fontSize(10).fillColor('#333333').text('月別出席率 / Monthly Attendance Rates');
+            doc.moveDown(0.3);
+
+            const ROW_H = 18;
+            let y = doc.y;
+            const BAR_MAX_W = CONTENT_W - 120;
+            for (let m = 1; m <= 12; m++) {
+                const ms = monthlyStats[m];
+                if (!ms || ms.rate === null) continue;
+                if (y + ROW_H > doc.page.height - 60) { doc.addPage(); y = MARGIN; }
+                const barColor = ms.rate >= 85 ? '#28A745' : ms.rate >= 65 ? '#FFC107' : '#DC3545';
+                const barW = Math.round((ms.rate / 100) * BAR_MAX_W);
+                doc.font('NotoJP').fontSize(9).fillColor('#333').text(`${MONTH_JP[m-1]} ${MONTH_ABBR[m-1]}`, MARGIN, y + 3, { width: 60 });
+                doc.rect(MARGIN + 65, y, barW, ROW_H - 4).fill(barColor).fillColor('black');
+                doc.font('NotoJP-Bold').fontSize(9).fillColor('#333')
+                   .text(`${ms.rate}%`, MARGIN + 70 + barW, y + 3);
+                y += ROW_H + 2;
+            }
+
+            doc.moveDown(0.8);
+
+            // Per-student rates table
+            doc.font('NotoJP-Bold').fontSize(10).fillColor('#333333').text('生徒別出席率 / Per-Student Rates', MARGIN, doc.y);
+            doc.moveDown(0.3);
+            y = doc.y;
+
+            const COL_NAME = 160, COL_RATE = 80, COL_COUNT = CONTENT_W - COL_NAME - COL_RATE;
+            // header
+            [['氏名 / Name', COL_NAME], ['出席率 / Rate', COL_RATE], ['記録 / Records', COL_COUNT]]
+                .reduce((x, [label, w]) => {
+                    doc.rect(MARGIN + x, y, w, ROW_H).fill('#4472C4').fillColor('white')
+                       .font('NotoJP-Bold').fontSize(8)
+                       .text(label, MARGIN + x + 2, y + 4, { width: w - 4 });
+                    return x + w;
+                }, 0);
+            y += ROW_H;
+
+            studentStats.sort((a, b) => b.rate - a.rate).forEach((ss, idx) => {
+                if (y + ROW_H > doc.page.height - 60) { doc.addPage(); y = MARGIN; }
+                const bg = idx % 2 === 0 ? '#FFFFFF' : '#F8F8FA';
+                const rateBg = ss.rate >= 85 ? '#d4edda' : ss.rate >= 65 ? '#fff3cd' : '#f8d7da';
+                const rateCol = ss.rate >= 85 ? '#155724' : ss.rate >= 65 ? '#856404' : '#721c24';
+                doc.rect(MARGIN, y, CONTENT_W, ROW_H).fill(bg);
+                let x = 0;
+                [[sanitizeForPDF(ss.name), COL_NAME, '#333', bg],
+                 [`${ss.rate}%${ss.rate < 75 ? ' ⚠️' : ''}`, COL_RATE, rateCol, rateBg],
+                 [`${ss.present} / ${ss.total}`, COL_COUNT, '#555', bg]
+                ].forEach(([text, w, color, cbg]) => {
+                    doc.rect(MARGIN + x, y, w, ROW_H).lineWidth(0.5).stroke('#CCCCCC');
+                    doc.font('NotoJP').fontSize(8).fillColor(color)
+                       .text(text, MARGIN + x + 2, y + 4, { width: w - 4 });
+                    x += w;
+                });
+                y += ROW_H;
+            });
+
+            // Flagged students section
+            if (lowestPerformers.length > 0) {
+                if (y + 60 > doc.page.height - 60) { doc.addPage(); y = MARGIN; }
+                y += 10;
+                doc.font('NotoJP-Bold').fontSize(10).fillColor('#DC3545')
+                   .text('⚠️ 要注意生徒 / Students Below 75%:', MARGIN, y);
+                y += 18;
+                lowestPerformers.forEach(lp => {
+                    doc.font('NotoJP').fontSize(9).fillColor('#721c24')
+                       .text(`  • ${sanitizeForPDF(lp.name)} — ${lp.rate}%`, MARGIN, y);
+                    y += 15;
+                });
+            }
+
+            doc.fontSize(7).font('NotoJP').fillColor('#888')
+               .text(`Generated: ${new Date().toLocaleDateString()}`, MARGIN, doc.page.height - 30, { align: 'center', width: CONTENT_W });
+            doc.end();
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
 module.exports = {
     generateStudentAttendancePDF,
     generateClassAttendancePDF,
     generateAttendanceGridPDF,
+    generateEnhancedAttendanceGridPDF,
+    generateStudentAttendanceReportPDF,
+    generateClassSummaryPDF,
     generateLessonReportPDF,
     generateMultiClassReportPDF
 };
