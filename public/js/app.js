@@ -210,6 +210,9 @@ const Toast = {
     // Part 4A: Undo toast
     undo(message, undoCallback, duration = 5000) {
         this.init();
+        // Dismiss any existing undo toasts before showing a new one
+        const existingUndos = this.container.querySelectorAll('.undo-toast');
+        existingUndos.forEach(t => { t.classList.add('hiding'); setTimeout(() => t.remove(), 150); });
         const toast = document.createElement('div');
         toast.className = 'toast success undo-toast';
         toast.innerHTML = `
@@ -1072,7 +1075,6 @@ document.getElementById('export-attendance-pdf-btn').addEventListener('click', e
 document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
 document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
-document.getElementById('use-schedule-btn')?.addEventListener('click', useScheduleForDates);
 
 // Daily Navigation Buttons
 document.getElementById('prev-day-btn')?.addEventListener('click', () => loadDailyAttendance(-1));
@@ -1170,45 +1172,6 @@ document.getElementById('view-grid-btn')?.addEventListener('click', () => {
         }
     }
 });
-
-// Use class schedule to auto-fill dates
-async function useScheduleForDates() {
-    const classId = document.getElementById('attendance-class-select').value;
-    
-    if (!classId) {
-        Toast.error('Please select a class first');
-        return;
-    }
-    
-    try {
-        const startDateInput = document.getElementById('attendance-start-date');
-        const endDateInput = document.getElementById('attendance-end-date');
-        
-        // Get current date range or use defaults
-        const { startDate: defaultStart, endDate: defaultEnd } = getDefaultAttendanceDateRange();
-        const startDate = startDateInput.value || defaultStart;
-        const endDate = endDateInput.value || defaultEnd;
-        
-        // Fetch schedule-based dates
-        const result = await api(`/attendance/schedule-dates?classId=${classId}&startDate=${startDate}&endDate=${endDate}`);
-        
-        if (result.dates && result.dates.length > 0) {
-            Toast.success(`Found ${result.dates.length} dates based on schedule: ${result.schedule || 'N/A'}`);
-            
-            // Update date range inputs
-            startDateInput.value = result.startDate;
-            endDateInput.value = result.endDate;
-            
-            // Reload attendance with the schedule-based dates
-            await loadAttendance();
-        } else {
-            Toast.info(`No schedule found for this class. Using custom date range instead.`);
-        }
-    } catch (error) {
-        console.error('Error using schedule:', error);
-        Toast.error('Failed to load schedule-based dates');
-    }
-}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PART 1: MONTH NAVIGATION (1A, 1B)
@@ -1347,13 +1310,6 @@ function showPDFPreviewModal() {
                 <label>Date range: <strong>${escapeHtml(startDate)}</strong> → <strong>${escapeHtml(endDate)}</strong></label>
             </div>
             <div class="pdf-option-group">
-                <label>PDF Type:</label>
-                <div class="pdf-option-row">
-                    <label><input type="radio" name="pdf-type" value="standard" checked> Standard</label>
-                    <label><input type="radio" name="pdf-type" value="enhanced"> Enhanced (Bilingual JP/EN)</label>
-                </div>
-            </div>
-            <div class="pdf-option-group">
                 <label>Include Statistics:</label>
                 <div class="pdf-option-row">
                     <label><input type="radio" name="pdf-stats" value="yes" checked> Yes</label>
@@ -1375,7 +1331,6 @@ function showPDFPreviewModal() {
     `);
 
     document.getElementById('pdf-generate-btn')?.addEventListener('click', async () => {
-        const pdfType    = document.querySelector('input[name="pdf-type"]:checked')?.value;
         const inclStats  = document.querySelector('input[name="pdf-stats"]:checked')?.value !== 'no';
         const inclComments = document.querySelector('input[name="pdf-comments"]:checked')?.value !== 'no';
         closeModal();
@@ -1386,14 +1341,8 @@ function showPDFPreviewModal() {
 
         Toast.info('Generating PDF...', 'Please wait');
         try {
-            let endpoint, body;
-            if (pdfType === 'enhanced') {
-                endpoint = `/pdf/attendance-grid-enhanced/${classId}`;
-                body = JSON.stringify({ startDate: normalizedStart, endDate: normalizedEnd, includeStats: inclStats, includeComments: inclComments });
-            } else {
-                endpoint = `/pdf/attendance-grid/${classId}`;
-                body = JSON.stringify({ startDate: normalizedStart, endDate: normalizedEnd });
-            }
+            const endpoint = `/pdf/attendance-grid/${classId}`;
+            const body = JSON.stringify({ startDate: normalizedStart, endDate: normalizedEnd });
             const response = await api(endpoint, { method: 'POST', body });
             if (response.success && response.downloadUrl) {
                 Toast.success('PDF generated successfully!');
@@ -2540,7 +2489,7 @@ function renderAttendanceGridView(data, classId) {
                         ${dates.length > 10 ? `<span class="more-dates">+${dates.length - 10}</span>` : ''}
                     </div>
                     <div class="student-card-actions">
-                        <button class="btn btn-small btn-secondary" onclick="viewStudentDetail(${student.id}, '${classId}')" title="View details">📊</button>
+                        <button class="btn btn-small btn-secondary" onclick="navigateToStudentProfile(${student.id})" title="View student profile">📊</button>
                         <button class="btn btn-small btn-secondary" onclick="editStudentFromAttendance(${student.id})" title="Edit student">✏️</button>
                     </div>
                 </div>
@@ -2590,6 +2539,13 @@ function renderAttendanceGridView(data, classId) {
 async function viewStudentDetail(studentId, classId) {
     // Use the new enhanced student summary view
     await viewStudentAttendanceSummary(studentId);
+}
+
+// Navigate to the Students Profile page and auto-select the given student
+function navigateToStudentProfile(studentId) {
+    navigateToPage('students-profile');
+    // Show student detail immediately; the page activation is synchronous
+    showStudentDetail(studentId);
 }
 
 async function toggleAttendance(cell) {
@@ -4131,6 +4087,49 @@ document.querySelectorAll('.filter-pill').forEach(pill => {
 });
 
 // Attendance Analytics dashboard for the Database page
+// Render per-class attendance view for the Data Hub search results
+function renderAttendanceClassView(results) {
+    const records = results.attendance || [];
+    if (records.length === 0) return '';
+
+    // Group records by class_id (fall back to class_name only for display)
+    const classMap = new Map();
+    records.forEach(r => {
+        const key = r.class_id != null ? r.class_id : `name:${r.class_name}`;
+        if (!classMap.has(key)) {
+            classMap.set(key, { id: r.class_id, name: r.class_name, teacher_name: r.teacher_name, records: [] });
+        }
+        classMap.get(key).records.push(r);
+    });
+
+    let html = `<h3>Attendance by Class (${classMap.size} class${classMap.size !== 1 ? 'es' : ''}, ${records.length} records)</h3>`;
+    html += '<div class="analytics-class-grid">';
+
+    classMap.forEach((cls) => {
+        const present = cls.records.filter(r => r.status === 'O').length;
+        const total = cls.records.length;
+        const rate = total > 0 ? Math.round((present / total) * 100) : null;
+        const rateLabel = rate !== null ? `${rate}%` : '—';
+        const rateClass = rate === null ? '' : rate >= 85 ? 'rate-green' : rate >= 65 ? 'rate-yellow' : 'rate-red';
+        const studentCount = new Set(cls.records.map(r => r.student_id).filter(id => id != null)).size;
+
+        html += `
+            <div class="analytics-class-card">
+                <div class="analytics-class-name">${escapeHtml(cls.name || '—')}</div>
+                <div class="analytics-class-teacher">${escapeHtml(cls.teacher_name || '')}</div>
+                <div class="analytics-class-rate ${rateClass}">${rateLabel} <small>attendance rate</small></div>
+                <div style="font-size:0.82em;color:#666;margin-top:2px;">${studentCount} student${studentCount !== 1 ? 's' : ''} · ${total} records</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+                    <button class="btn btn-small btn-primary" onclick="quickAttendanceLink(${cls.id})" title="View attendance">📋 View</button>
+                    <button class="btn btn-small btn-secondary" onclick="dbExportAttendanceGridPDF(${cls.id})" title="Export PDF">📄 PDF</button>
+                </div>
+            </div>`;
+    });
+
+    html += '</div><br>';
+    return html;
+}
+
 async function loadAttendanceAnalytics() {
     const container = document.getElementById('db-viewer-container');
     container.innerHTML = '<p class="info-text">Loading analytics...</p>';
@@ -4539,9 +4538,7 @@ async function searchDatabase() {
         
         if (results.attendance && results.attendance.length > 0) {
             totalResults += results.attendance.length;
-            html += `<h3>Attendance (${results.attendance.length})</h3>`;
-            html += renderCleanTable(results.attendance, 'attendance');
-            html += '<br>';
+            html += renderAttendanceClassView(results);
         }
         
         if (results.teacherCommentSheets && results.teacherCommentSheets.length > 0) {
