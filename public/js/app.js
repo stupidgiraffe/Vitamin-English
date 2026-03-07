@@ -1489,15 +1489,27 @@ async function quickMarkAllPresent() {
         const date      = cell.dataset.date;
         const selectedClass = classes.find(c => c.id == classId);
         const teacherId = selectedClass ? selectedClass.teacher_id : null;
-        AttendanceSaveQueue.add(studentId, classId, date, 'O', null, teacherId);
+        const normalizedDate = normalizeToISO(date) || date;
+        AttendanceSaveQueue.add(studentId, classId, normalizedDate, 'O', null, teacherId);
+        // Keep in-memory data in sync so getStudentRate() sees the latest status
+        if (lastAttendanceData && lastAttendanceData.attendance) {
+            lastAttendanceData.attendance[`${studentId}-${normalizedDate}`] = 'O';
+        }
     });
 
     Toast.undo(`Marked ${emptyCells.length} student${emptyCells.length !== 1 ? 's' : ''} present`, () => {
         // Undo: revert all cells and remove from queue
         snapshot.forEach(({ cell, prev }) => {
-            AttendanceSaveQueue.queue.delete(`${cell.dataset.student}-${cell.dataset.class}-${cell.dataset.date}`);
+            const studentId = cell.dataset.student;
+            const date      = cell.dataset.date;
+            const normalizedDate = normalizeToISO(date) || date;
+            AttendanceSaveQueue.queue.delete(`${studentId}-${cell.dataset.class}-${normalizedDate}`);
             cell.textContent = prev;
             cell.className = 'attendance-cell';
+            // Revert in-memory data
+            if (lastAttendanceData && lastAttendanceData.attendance) {
+                lastAttendanceData.attendance[`${studentId}-${normalizedDate}`] = prev;
+            }
         });
         Toast.info('Quick mark undone');
     });
@@ -1954,6 +1966,73 @@ async function exportClassSummaryPDF(classId) {
         } else {
             Toast.error('Error generating PDF: ' + (error.message || ''));
         }
+    }
+}
+
+// Database viewer PDF export helpers (Bug 8 — analytics detail view)
+async function dbExportClassSummaryPDF(classId) {
+    try {
+        const year = new Date().getFullYear();
+        Toast.info('Generating PDF...', 'Please wait');
+        const response = await api(`/pdf/class-summary/${classId}`, {
+            method: 'POST',
+            body: JSON.stringify({ year })
+        });
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated!');
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error exporting class summary PDF:', error);
+        Toast.error('Error generating PDF: ' + (error.message || ''));
+    }
+}
+
+async function dbExportAttendanceGridPDF(classId) {
+    try {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth() + 1;
+        const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${year}-${String(month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+        Toast.info('Generating PDF...', 'Please wait');
+        const response = await api(`/pdf/attendance-grid-enhanced/${classId}`, {
+            method: 'POST',
+            body: JSON.stringify({ startDate, endDate })
+        });
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated!');
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error exporting attendance grid PDF:', error);
+        Toast.error('Error generating PDF: ' + (error.message || ''));
+    }
+}
+
+async function dbExportStudentAttendancePDF(studentId, year) {
+    try {
+        const startDate = `${year}-01-01`;
+        const endDate   = `${year}-12-31`;
+        Toast.info('Generating PDF...', 'Please wait');
+        const response = await api(`/pdf/student-attendance-report/${studentId}`, {
+            method: 'POST',
+            body: JSON.stringify({ startDate, endDate })
+        });
+        if (response.success && response.downloadUrl) {
+            Toast.success('PDF generated!');
+            window.open(response.downloadUrl, '_blank');
+        } else {
+            Toast.error('Failed to generate PDF');
+        }
+    } catch (error) {
+        console.error('Error exporting student attendance PDF:', error);
+        Toast.error('Error generating PDF: ' + (error.message || ''));
     }
 }
 
@@ -2560,7 +2639,12 @@ async function toggleAttendance(cell) {
     try {
         // Normalize date to ISO format before queueing
         const normalizedDate = normalizeToISO(date) || date;
-        
+
+        // Keep in-memory data in sync so getStudentRate() sees the latest status
+        if (lastAttendanceData && lastAttendanceData.attendance) {
+            lastAttendanceData.attendance[`${studentId}-${normalizedDate}`] = newStatus;
+        }
+
         // Add to save queue with debouncing, including teacher_id
         AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, time, teacherId);
 
@@ -2573,6 +2657,10 @@ async function toggleAttendance(cell) {
             AttendanceSaveQueue.queue.delete(key);
             // Re-queue the previous status
             AttendanceSaveQueue.add(studentId, classId, normalizeToISO(date) || date, prevStatus, time, teacherId);
+            // Revert in-memory data
+            if (lastAttendanceData && lastAttendanceData.attendance) {
+                lastAttendanceData.attendance[`${studentId}-${normalizeToISO(date) || date}`] = prevStatus;
+            }
             // Revert UI
             cell.textContent = prevStatus;
             cell.className = prevClass;
@@ -4094,18 +4182,30 @@ async function loadClassAnalyticsDetail(classId) {
         let html = '<div class="attendance-analytics">';
         html += `<button class="btn btn-secondary btn-small" onclick="loadAttendanceAnalytics()" style="margin-bottom:12px;">← Back to All Classes</button>`;
         html += `<h3 style="margin-bottom:4px;">📊 ${escapeHtml(cls.name)} — ${year}</h3>`;
-        html += `<p style="color:#666;margin-bottom:12px;">Teacher: ${escapeHtml(cls.teacher_name || '—')} &nbsp;|&nbsp; Overall rate: <strong>${data.overallRate !== null ? data.overallRate + '%' : '—'}</strong></p>`;
+        html += `<p style="color:#666;margin-bottom:8px;">Teacher: ${escapeHtml(cls.teacher_name || '—')} &nbsp;|&nbsp; Overall rate: <strong>${data.overallRate !== null ? data.overallRate + '%' : '—'}</strong></p>`;
 
-        // Monthly summary row
+        // PDF export buttons
+        html += `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+            <button class="btn btn-small btn-primary" onclick="dbExportClassSummaryPDF(${classId})">📄 Class Summary PDF</button>
+            <button class="btn btn-small btn-secondary" onclick="dbExportAttendanceGridPDF(${classId})">📋 Attendance Grid PDF</button>
+        </div>`;
+
+        // Monthly summary row with trend arrows
         html += '<h4>Monthly Attendance Rates</h4>';
         html += '<div class="analytics-monthly-row">';
         for (let m = 1; m <= 12; m++) {
             const ms = monthlyStats[m] || { rate: null, total: 0 };
+            const prevMs = monthlyStats[m - 1] || { rate: null };
             const rateLabel = ms.rate !== null ? `${ms.rate}%` : '—';
             const monthRateClass = ms.rate === null ? 'month-rate-none' : ms.rate >= 85 ? 'month-rate-green' : ms.rate >= 65 ? 'month-rate-yellow' : 'month-rate-red';
+            let trend = '';
+            if (ms.rate !== null && prevMs.rate !== null) {
+                if (ms.rate > prevMs.rate) trend = '<span style="color:#28a745;font-size:10px;">▲</span>';
+                else if (ms.rate < prevMs.rate) trend = '<span style="color:#dc3545;font-size:10px;">▼</span>';
+            }
             html += `<div class="analytics-month-cell ${monthRateClass}" title="${MONTH_ABBR[m-1]}: ${ms.present||0}/${ms.total} (${rateLabel})">
                 <div class="analytics-month-label">${MONTH_ABBR[m-1]}</div>
-                <div class="analytics-month-rate">${rateLabel}</div>
+                <div class="analytics-month-rate">${rateLabel}${trend}</div>
             </div>`;
         }
         html += '</div>';
@@ -4113,7 +4213,7 @@ async function loadClassAnalyticsDetail(classId) {
         // Per-student table
         if (studentStats.length > 0) {
             html += '<h4 style="margin-top:14px;">Per-Student Attendance Rates</h4>';
-            html += '<table class="db-table-clean" style="width:100%"><thead><tr><th>Student</th><th>Type</th><th>Present</th><th>Total</th><th>Rate</th></tr></thead><tbody>';
+            html += '<table class="db-table-clean" style="width:100%"><thead><tr><th>Student</th><th>Type</th><th>Present</th><th>Total</th><th>Rate</th><th>Report</th></tr></thead><tbody>';
             // Sort descending by rate (best first); at-risk students shown with red class
             studentStats.slice().sort((a, b) => (b.rate ?? 0) - (a.rate ?? 0)).forEach(s => {
                 const rateClass = s.rate >= 85 ? 'rate-green' : s.rate >= 65 ? 'rate-yellow' : 'rate-red';
@@ -4123,6 +4223,7 @@ async function loadClassAnalyticsDetail(classId) {
                     <td>${s.present}</td>
                     <td>${s.total}</td>
                     <td class="${rateClass}">${s.total > 0 ? s.rate + '%' : '—'}</td>
+                    <td><button class="btn btn-small btn-secondary" onclick="dbExportStudentAttendancePDF(${s.id}, ${year})" title="Export PDF report for ${escapeHtml(s.name)}">📄</button></td>
                 </tr>`;
             });
             html += '</tbody></table>';

@@ -184,14 +184,34 @@ router.post('/attendance-grid/:classId', checkR2Config, async (req, res) => {
         
         // Use shared data builder to ensure UI and PDF have identical data
         const matrixData = await buildAttendanceMatrix(dataHub.pool, classId, startDate, endDate);
-        
+
+        // Apply schedule-date filtering so the PDF only shows class days (matching the UI)
+        let filteredDates = matrixData.dates;
+        if (matrixData.classData.schedule) {
+            const sched = matrixData.classData.schedule.toLowerCase();
+            const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+            const dayAbbr  = ['sun','mon','tue','wed','thu','fri','sat'];
+            const scheduledDays = [];
+            dayNames.forEach((d, i) => { if (sched.includes(d) || sched.includes(dayAbbr[i])) scheduledDays.push(i); });
+            if (scheduledDays.length > 0) {
+                const scheduleSet = new Set(
+                    matrixData.dates.filter(d => scheduledDays.includes(new Date(d + 'T00:00:00').getDay()))
+                );
+                // Always include dates that have actual attendance records even if off-schedule
+                filteredDates = matrixData.dates.filter(d => {
+                    if (scheduleSet.has(d)) return true;
+                    return matrixData.students.some(s => matrixData.attendanceMap[`${s.id}-${d}`]);
+                });
+            }
+        }
+
         // Generate PDF using the same data structure as the UI
         const pdfBuffer = await generateAttendanceGridPDF(
-            matrixData.classData, 
-            matrixData.students, 
-            matrixData.dates, 
-            matrixData.attendanceMap, 
-            matrixData.startDate, 
+            matrixData.classData,
+            matrixData.students,
+            filteredDates,
+            matrixData.attendanceMap,
+            matrixData.startDate,
             matrixData.endDate
         );
         

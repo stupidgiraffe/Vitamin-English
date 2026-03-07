@@ -1350,7 +1350,7 @@ async function generateEnhancedAttendanceGridPDF(classData, students, dates, att
 
                 chunk.forEach((date, di) => {
                     const x = MARGIN_SIDE + NAME_COL + di * dateColW;
-                    const isMakeup = date && !scheduleSet.has(date);
+                    const isMakeup = date && scheduleSet.size > 0 && !scheduleSet.has(date);
                     doc.rect(x, y, dateColW, ROW_H).fillAndStroke(isMakeup ? '#7B68EE' : '#4472C4', '#2B5797');
                     const d = new Date(date + 'T00:00:00');
                     const label = `${d.getMonth()+1}/${d.getDate()}${isMakeup ? '★' : ''}`;
@@ -1392,7 +1392,7 @@ async function generateEnhancedAttendanceGridPDF(classData, students, dates, att
                            .text(sName.length > 20 ? sName.substring(0, 20) + '…' : sName, MARGIN_SIDE + 3, y + 5, { width: NAME_COL - 6 });
 
                         // Attendance cells
-                        let sPresent = 0, sTotal = chunk.length;
+                        let sPresent = 0, sTotal = 0;
                         chunk.forEach((date, di) => {
                             const x = MARGIN_SIDE + NAME_COL + di * dateColW;
                             const key = `${student.id}-${date}`;
@@ -1406,7 +1406,7 @@ async function generateEnhancedAttendanceGridPDF(classData, students, dates, att
                                    .text(status, x + 1, y + 4, { width: dateColW - 2, align: 'center' });
                                 doc.fillColor('black');
                             }
-                            if (status === 'O') sPresent++;
+                            if (status) { sTotal++; if (status === 'O') sPresent++; }
                         });
 
                         // Rate cell
@@ -1511,6 +1511,7 @@ async function generateStudentAttendanceReportPDF(student, records, stats, strea
             doc.font('NotoJP-Bold').fontSize(11).fillColor(rateColor)
                .text(`出席率 / Attendance Rate: ${rate}%   (${present}/${total} classes)`, MARGIN + 8, rateBoxY + 8, { width: CONTENT_W - 16 });
             doc.y = rateBoxY + 30;
+            doc.x = MARGIN;
             doc.moveDown(0.5);
 
             // Streaks
