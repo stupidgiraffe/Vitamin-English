@@ -1046,12 +1046,14 @@ body {
 .attendance-metadata {
     background: #E7F2FF;
     border: 2px solid #4472C4;
+    border-left-width: 6px;
     border-radius: 8px;
     padding: 1rem;
     margin-bottom: 1rem;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 1rem;
+    transition: border-left-color 0.3s ease;
 }
 
 .metadata-item {
@@ -3417,6 +3419,120 @@ body {
         transform: none;
         min-width: 240px;
     }
+}
+
+/* ── Data Hub Attendance Class Cards ────────────────────────────────────────── */
+.datahub-class-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    margin-bottom: 14px;
+}
+.datahub-class-card {
+    background: var(--card-background, #fff);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 8px;
+    padding: 0;
+    transition: box-shadow 0.15s;
+    overflow: hidden;
+}
+.datahub-class-card:hover {
+    box-shadow: 0 3px 10px rgba(0,0,0,0.12);
+}
+.datahub-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 14px 8px;
+    cursor: pointer;
+    gap: 10px;
+}
+.datahub-card-header:hover {
+    background: var(--bg-hover, #f8f9fa);
+}
+.datahub-card-name {
+    font-weight: 700;
+    font-size: 0.98rem;
+    margin-bottom: 2px;
+    color: var(--text-primary);
+}
+.datahub-card-teacher {
+    font-size: 0.8rem;
+    color: var(--text-secondary, #6c757d);
+}
+.datahub-card-schedule {
+    font-size: 0.78rem;
+    color: var(--text-secondary, #6c757d);
+    margin-top: 2px;
+}
+.datahub-card-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    flex-shrink: 0;
+}
+.datahub-card-rate {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+.datahub-card-rate.rate-green { color: #155724; }
+.datahub-card-rate.rate-yellow { color: #856404; }
+.datahub-card-rate.rate-red { color: #721c24; }
+.datahub-card-student-count {
+    font-size: 0.78rem;
+    color: var(--text-secondary, #6c757d);
+}
+.datahub-card-flagged {
+    font-size: 0.76rem;
+    color: #856404;
+}
+.datahub-card-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding: 0 14px 12px;
+}
+.datahub-card-expanded {
+    border-top: 1px solid var(--border-color, #dee2e6);
+    padding: 10px 14px;
+    background: var(--bg-hover, #f8f9fa);
+}
+.datahub-student-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+.datahub-student-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    font-size: 0.85rem;
+    border-bottom: 1px solid var(--border-color, #eee);
+}
+.datahub-student-row:last-child { border-bottom: none; }
+.datahub-student-name {
+    flex: 1;
+    color: var(--text-primary);
+}
+.datahub-student-rate {
+    font-weight: 700;
+    margin-left: 8px;
+    min-width: 38px;
+    text-align: right;
+}
+.datahub-student-rate.rate-green { color: #155724; }
+.datahub-student-rate.rate-yellow { color: #856404; }
+.datahub-student-rate.rate-red { color: #721c24; }
+.datahub-student-detail {
+    font-size: 0.78rem;
+    color: var(--text-secondary, #6c757d);
+    margin-left: 6px;
+    min-width: 40px;
+    text-align: right;
 }
 
 /* ── Attendance Analytics (Database page) ───────────────────────────────────── */
