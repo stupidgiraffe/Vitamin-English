@@ -167,6 +167,45 @@ router.put('/:id', async (req, res) => {
     }
 });
 
+// Bulk delete attendance records for a class within a date range
+// DELETE /api/attendance/bulk-delete
+// Body: { classId, startDate, endDate, confirm: true }
+router.delete('/bulk-delete', async (req, res) => {
+    if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+    try {
+        const { classId, startDate, endDate, confirm } = req.body;
+
+        if (!classId || !startDate || !endDate) {
+            return res.status(400).json({ error: 'classId, startDate, and endDate are required' });
+        }
+        if (!confirm) {
+            return res.status(400).json({ error: 'confirm: true is required to perform bulk delete' });
+        }
+
+        const normalizedStart = normalizeToISO(startDate);
+        const normalizedEnd   = normalizeToISO(endDate);
+
+        if (!normalizedStart || !normalizedEnd) {
+            return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
+        }
+
+        const result = await dataHub.query(
+            `DELETE FROM attendance WHERE class_id = $1 AND date >= $2 AND date <= $3`,
+            [classId, normalizedStart, normalizedEnd]
+        );
+
+        res.json({
+            message: 'Attendance records deleted successfully',
+            deletedCount: result.rowCount
+        });
+    } catch (error) {
+        console.error('❌ Error bulk deleting attendance:', error);
+        res.status(500).json({ error: 'Failed to delete attendance records' });
+    }
+});
+
 // Delete attendance record
 router.delete('/:id', async (req, res) => {
     try {

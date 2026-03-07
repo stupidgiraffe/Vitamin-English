@@ -1282,6 +1282,15 @@ async function generateEnhancedAttendanceGridPDF(classData, students, dates, att
             const { includeStats = true, includeComments = true } = options;
             const scheduleSet = new Set(scheduleDates);
 
+            // ── Filter dates to only those matching the class schedule ─────────
+            // This eliminates irrelevant columns and avoids blank pages
+            let filteredDates = dates;
+            if (scheduleDates.length > 0) {
+                filteredDates = dates.filter(d => scheduleSet.has(d));
+                // Fallback: if schedule filtering removes all dates, use original list
+                if (filteredDates.length === 0) filteredDates = dates;
+            }
+
             // Margins: 15mm top/bottom, 10mm sides (in points: 1mm ≈ 2.835pt)
             const MARGIN_SIDE = 28; // ~10mm
             const MARGIN_TOP  = 43; // ~15mm
@@ -1306,7 +1315,7 @@ async function generateEnhancedAttendanceGridPDF(classData, students, dates, att
             const maxPerPage = Math.floor((CONTENT_W - NAME_COL - 55) / MIN_DATE_COL); // 55 = rate col
             const RATE_COL = 55;
             const chunks = [];
-            for (let i = 0; i < dates.length; i += maxPerPage) chunks.push(dates.slice(i, i + maxPerPage));
+            for (let i = 0; i < filteredDates.length; i += maxPerPage) chunks.push(filteredDates.slice(i, i + maxPerPage));
             if (chunks.length === 0) chunks.push([]);
 
             const regularStudents = students.filter(s => s.student_type === 'regular');

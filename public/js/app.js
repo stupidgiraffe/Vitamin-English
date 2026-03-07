@@ -1069,12 +1069,25 @@ function quickNewReport(classId, date) {
 }
 
 // Attendance Management
-document.getElementById('load-attendance-btn').addEventListener('click', loadAttendance);
 document.getElementById('export-attendance-btn').addEventListener('click', exportAttendance);
 document.getElementById('export-attendance-pdf-btn').addEventListener('click', exportAttendancePDF);
 document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
 document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
+
+// Debounced auto-load when date inputs change (Part 6)
+let attendanceDateChangeTimer = null;
+function debouncedAttendanceLoad() {
+    const classId = document.getElementById('attendance-class-select').value;
+    if (!classId) return;
+    if (attendanceDateChangeTimer) clearTimeout(attendanceDateChangeTimer);
+    attendanceDateChangeTimer = setTimeout(() => {
+        attendanceDateChangeTimer = null;
+        loadAttendance();
+    }, 500);
+}
+document.getElementById('attendance-start-date')?.addEventListener('change', debouncedAttendanceLoad);
+document.getElementById('attendance-end-date')?.addEventListener('change', debouncedAttendanceLoad);
 
 // Daily Navigation Buttons
 document.getElementById('prev-day-btn')?.addEventListener('click', () => loadDailyAttendance(-1));
@@ -1147,6 +1160,23 @@ let showScheduleDatesOnly = true; // Part 1C toggle
 
 // ── Part 4A: Undo stack ────────────────────────────────────────────────────────
 const undoStack = []; // max 10 entries
+
+// ── Toast batching state for rapid attendance marking ─────────────────────────
+let attendanceToastBatch = [];
+let attendanceToastTimer = null;
+const TOAST_BATCH_WINDOW = 2000; // 2 seconds
+
+function flushAttendanceToastBatch() {
+    if (attendanceToastBatch.length === 0) return;
+    const batch = attendanceToastBatch.splice(0);
+    if (batch.length === 1) {
+        Toast.undo(batch[0].message, batch[0].undoCallback);
+    } else {
+        Toast.undo(`✓ Updated ${batch.length} attendance records`, () => {
+            batch.forEach(item => item.undoCallback());
+        });
+    }
+}
 
 // ── Part 4C: Keyboard navigation state ────────────────────────────────────────
 let focusedCell = null; // currently focused attendance cell element
@@ -1574,12 +1604,10 @@ function setAttendanceStatus(cell, newStatus) {
     else if (newStatus === 'X') cell.classList.add('absent');
     else if (newStatus === '/') cell.classList.add('partial');
 
-    const timeInput = document.getElementById('attendance-time');
-    const time = timeInput ? timeInput.value.trim() : null;
     const selectedClass = classes.find(c => c.id == cell.dataset.class);
     const teacherId = selectedClass ? selectedClass.teacher_id : null;
     const normalizedDate = normalizeToISO(cell.dataset.date) || cell.dataset.date;
-    AttendanceSaveQueue.add(cell.dataset.student, cell.dataset.class, normalizedDate, newStatus, time, teacherId);
+    AttendanceSaveQueue.add(cell.dataset.student, cell.dataset.class, normalizedDate, newStatus, null, teacherId);
 
     const statusLabel = { 'O': 'Present', 'X': 'Absent', '/': 'Partial', '': 'Cleared' };
     const dateLabel = cell.dataset.date ? new Date(cell.dataset.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
@@ -2003,7 +2031,7 @@ async function loadAttendanceOverview() {
         const rateClass = (r) => r >= 85 ? 'rate-green' : r >= 65 ? 'rate-yellow' : 'rate-red';
         container.innerHTML = `<div class="attendance-overview-grid">
             ${data.classes.map(cls => `
-                <div class="attendance-overview-class-card" onclick="quickAttendanceLink(${cls.id})" title="Click to view attendance for ${escapeHtml(cls.name)}">
+                <div class="attendance-overview-class-card" onclick="quickAttendanceLink(${cls.id})" title="Click to view attendance for ${escapeHtml(cls.name)}" style="border-left: 4px solid ${escapeHtml(cls.color || '#667eea')}">
                     <div class="attendance-overview-class-name" style="color:${cls.color || '#667eea'}">${escapeHtml(cls.name)}</div>
                     ${cls.monthlyRate !== null
                         ? `<div class="attendance-overview-rate attendance-rate-cell ${rateClass(cls.monthlyRate)}" style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:1rem;">${cls.monthlyRate}%</div>`
@@ -2209,11 +2237,9 @@ async function loadAttendance() {
         const selectedClass = classes.find(c => c.id == classId);
         if (selectedClass) {
             document.getElementById('metadata-class-name').textContent = selectedClass.name;
-            // Set the teacher dropdown value to the teacher_id
-            const teacherSelect = document.getElementById('metadata-teacher');
-            if (teacherSelect) {
-                teacherSelect.value = selectedClass.teacher_id || '';
-            }
+            // Apply class color accent to metadata section (Part 4)
+            const accentColor = selectedClass.color || '#4472C4';
+            metadataDiv.style.borderLeftColor = accentColor;
         }
         
         const dateRangeText = normalizedStartDate && normalizedEndDate 
@@ -2559,19 +2585,6 @@ async function toggleAttendance(cell) {
     const currentIndex = statusCycle.indexOf(currentStatus);
     const newStatus = statusCycle[(currentIndex + 1) % statusCycle.length];
 
-    // Get time from metadata field if available
-    const timeInput = document.getElementById('attendance-time');
-    let time = timeInput ? timeInput.value.trim() : null;
-    
-    // Validate time format if provided (HH:MM or H:MM)
-    if (time) {
-        const timePattern = /^([0-1]?[0-9]|2[0-3]):([0-5][0-9])$/;
-        if (!timePattern.test(time)) {
-            Toast.error('Invalid time format. Please use HH:MM format (e.g., 14:00)');
-            return;
-        }
-    }
-
     // Get teacher_id from the selected class
     const selectedClass = classes.find(c => c.id == classId);
     const teacherId = selectedClass ? selectedClass.teacher_id : null;
@@ -2602,17 +2615,17 @@ async function toggleAttendance(cell) {
         }
 
         // Add to save queue with debouncing, including teacher_id
-        AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, time, teacherId);
+        AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, null, teacherId);
 
-        // Part 4A: Show undo toast
+        // Batch undo toasts to avoid spam when marking rapidly
         const statusLabel = { 'O': 'Present', 'X': 'Absent', '/': 'Partial', '': 'Cleared' };
         const dateLabel = date ? new Date(date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-        Toast.undo(`✓ Marked ${studentName} as ${statusLabel[newStatus] || newStatus}${dateLabel ? ' for ' + dateLabel : ''}`, () => {
+        const undoCallback = () => {
             // Undo: remove from queue and revert UI
             const key = `${studentId}-${classId}-${normalizeToISO(date) || date}`;
             AttendanceSaveQueue.queue.delete(key);
             // Re-queue the previous status
-            AttendanceSaveQueue.add(studentId, classId, normalizeToISO(date) || date, prevStatus, time, teacherId);
+            AttendanceSaveQueue.add(studentId, classId, normalizeToISO(date) || date, prevStatus, null, teacherId);
             // Revert in-memory data
             if (lastAttendanceData && lastAttendanceData.attendance) {
                 lastAttendanceData.attendance[`${studentId}-${normalizeToISO(date) || date}`] = prevStatus;
@@ -2620,7 +2633,16 @@ async function toggleAttendance(cell) {
             // Revert UI
             cell.textContent = prevStatus;
             cell.className = prevClass;
+        };
+        attendanceToastBatch.push({
+            message: `✓ Marked ${studentName} as ${statusLabel[newStatus] || newStatus}${dateLabel ? ' for ' + dateLabel : ''}`,
+            undoCallback
         });
+        if (attendanceToastTimer) clearTimeout(attendanceToastTimer);
+        attendanceToastTimer = setTimeout(() => {
+            attendanceToastTimer = null;
+            flushAttendanceToastBatch();
+        }, TOAST_BATCH_WINDOW);
         
     } catch (error) {
         console.error('Error updating attendance:', error);
@@ -4103,7 +4125,7 @@ function renderAttendanceClassView(results) {
     });
 
     let html = `<h3>Attendance by Class (${classMap.size} class${classMap.size !== 1 ? 'es' : ''}, ${records.length} records)</h3>`;
-    html += '<div class="analytics-class-grid">';
+    html += '<div class="datahub-class-card-grid">';
 
     classMap.forEach((cls) => {
         const present = cls.records.filter(r => r.status === 'O').length;
@@ -4111,23 +4133,146 @@ function renderAttendanceClassView(results) {
         const rate = total > 0 ? Math.round((present / total) * 100) : null;
         const rateLabel = rate !== null ? `${rate}%` : '—';
         const rateClass = rate === null ? '' : rate >= 85 ? 'rate-green' : rate >= 65 ? 'rate-yellow' : 'rate-red';
-        const studentCount = new Set(cls.records.map(r => r.student_id).filter(id => id != null)).size;
+
+        // Get class metadata (color, schedule) from global classes array
+        const classInfo = classes.find(c => c.id === cls.id) || {};
+        const accentColor = classInfo.color || '#667eea';
+        const schedule = classInfo.schedule || '';
+        const scheduleDisplay = schedule ? schedule : '';
+
+        // Per-student attendance rates for flagged students (<75%)
+        const studentMap = new Map();
+        cls.records.forEach(r => {
+            if (r.student_id == null) return;
+            if (!studentMap.has(r.student_id)) studentMap.set(r.student_id, { name: r.student_name || '', present: 0, total: 0 });
+            const s = studentMap.get(r.student_id);
+            s.total++;
+            if (r.status === 'O') s.present++;
+        });
+        const studentCount = studentMap.size;
+        const flagged = [...studentMap.values()].filter(s => s.total > 0 && Math.round((s.present / s.total) * 100) < 75);
 
         html += `
-            <div class="analytics-class-card">
-                <div class="analytics-class-name">${escapeHtml(cls.name || '—')}</div>
-                <div class="analytics-class-teacher">${escapeHtml(cls.teacher_name || '')}</div>
-                <div class="analytics-class-rate ${rateClass}">${rateLabel} <small>attendance rate</small></div>
-                <div style="font-size:0.82em;color:#666;margin-top:2px;">${studentCount} student${studentCount !== 1 ? 's' : ''} · ${total} records</div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-                    <button class="btn btn-small btn-primary" onclick="quickAttendanceLink(${cls.id})" title="View attendance">📋 View</button>
-                    <button class="btn btn-small btn-secondary" onclick="dbExportAttendanceGridPDF(${cls.id})" title="Export PDF">📄 PDF</button>
+            <div class="datahub-class-card" style="border-left: 4px solid ${escapeHtml(accentColor)};" data-class-id="${cls.id}">
+                <div class="datahub-card-header" onclick="toggleDataHubClassExpand(${cls.id}, this)">
+                    <div>
+                        <div class="datahub-card-name">${escapeHtml(cls.name || '—')}</div>
+                        <div class="datahub-card-teacher">${escapeHtml(cls.teacher_name || classInfo.teacher_name || '')}</div>
+                        ${scheduleDisplay ? `<div class="datahub-card-schedule">${escapeHtml(scheduleDisplay)}</div>` : ''}
+                    </div>
+                    <div class="datahub-card-stats">
+                        <span class="datahub-card-rate ${rateClass}">${rateLabel}</span>
+                        <span class="datahub-card-student-count">${studentCount} student${studentCount !== 1 ? 's' : ''}</span>
+                        ${flagged.length > 0 ? `<span class="datahub-card-flagged">⚠️ ${flagged.length} low attendance</span>` : ''}
+                    </div>
+                </div>
+                <div class="datahub-card-actions">
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation();quickAttendanceLink(${cls.id})" title="View/Edit attendance">📊 View</button>
+                    <button class="btn btn-small btn-secondary" onclick="event.stopPropagation();dbDataHubPDFMonthPicker(${cls.id}, this)" title="Export PDF">📄 PDF</button>
+                    <button class="btn btn-small btn-secondary" onclick="event.stopPropagation();quickAttendanceLink(${cls.id})" title="Edit attendance">✏️ Edit</button>
+                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation();dbBulkDeleteAttendance(${cls.id})" title="Delete attendance records">🗑️ Delete</button>
+                </div>
+                <div class="datahub-card-expanded" id="datahub-expand-${cls.id}" style="display:none;">
+                    <div class="datahub-student-list">
+                        ${[...studentMap.entries()].sort((a, b) => {
+                            const ra = a[1].total > 0 ? Math.round((a[1].present / a[1].total) * 100) : 0;
+                            const rb = b[1].total > 0 ? Math.round((b[1].present / b[1].total) * 100) : 0;
+                            return ra - rb;
+                        }).map(([sid, s]) => {
+                            const sRate = s.total > 0 ? Math.round((s.present / s.total) * 100) : null;
+                            const sCls = sRate === null ? '' : sRate >= 85 ? 'rate-green' : sRate >= 65 ? 'rate-yellow' : 'rate-red';
+                            return `<div class="datahub-student-row">
+                                <span class="datahub-student-name">${escapeHtml(s.name)}</span>
+                                <span class="datahub-student-rate ${sCls}">${sRate !== null ? sRate + '%' : '—'}</span>
+                                <span class="datahub-student-detail">${s.present}/${s.total}</span>
+                            </div>`;
+                        }).join('')}
+                    </div>
                 </div>
             </div>`;
     });
 
     html += '</div><br>';
     return html;
+}
+
+function toggleDataHubClassExpand(classId, headerEl) {
+    const expandEl = document.getElementById(`datahub-expand-${classId}`);
+    if (!expandEl) return;
+    const isOpen = expandEl.style.display !== 'none';
+    expandEl.style.display = isOpen ? 'none' : 'block';
+    const card = expandEl.closest('.datahub-class-card');
+    if (card) card.classList.toggle('expanded', !isOpen);
+}
+
+function dbDataHubPDFMonthPicker(classId, btn) {
+    // Toggle an inline month/year select for PDF generation
+    const existing = btn.parentNode.querySelector('.datahub-pdf-month-select');
+    if (existing) { existing.remove(); return; }
+    const now = new Date();
+    const select = document.createElement('select');
+    select.className = 'form-control datahub-pdf-month-select';
+    select.style.cssText = 'width:145px;display:inline-block;margin-left:4px;';
+    select.setAttribute('title', 'Select month for PDF');
+    for (let i = 0; i < 12; i++) {
+        const d = new Date(now.getFullYear(), i, 1);
+        const opt = document.createElement('option');
+        opt.value = `${d.getFullYear()}-${String(i + 1).padStart(2, '0')}`;
+        opt.textContent = d.toLocaleString('default', { month: 'long', year: 'numeric' });
+        if (i === now.getMonth()) opt.selected = true;
+        select.appendChild(opt);
+    }
+    select.addEventListener('change', async () => {
+        const [yr, mo] = select.value.split('-');
+        const startDate = `${yr}-${mo}-01`;
+        const lastDay = new Date(parseInt(yr), parseInt(mo), 0).getDate();
+        const endDate = `${yr}-${mo}-${String(lastDay).padStart(2, '0')}`;
+        select.remove();
+        try {
+            Toast.info('Generating PDF...', 'Please wait');
+            const response = await api(`/pdf/attendance-grid-enhanced/${classId}`, {
+                method: 'POST',
+                body: JSON.stringify({ startDate, endDate })
+            });
+            if (response.success && response.downloadUrl) {
+                Toast.success('PDF generated!');
+                window.open(response.downloadUrl, '_blank');
+            } else {
+                Toast.error('Failed to generate PDF');
+            }
+        } catch (error) {
+            Toast.error('Error generating PDF: ' + (error.message || ''));
+        }
+    });
+    btn.parentNode.insertBefore(select, btn.nextSibling);
+    select.focus();
+}
+
+async function dbBulkDeleteAttendance(classId) {
+    const classInfo = classes.find(c => c.id === classId) || {};
+    const className = classInfo.name || `Class ${classId}`;
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+    const monthName = now.toLocaleString('default', { month: 'long' });
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    if (!confirm(`Delete all attendance records for "${className}" in ${monthName} ${year}? This cannot be undone.`)) return;
+
+    try {
+        Toast.info('Deleting...', 'Please wait');
+        const response = await api('/attendance/bulk-delete', {
+            method: 'DELETE',
+            body: JSON.stringify({ classId, startDate, endDate, confirm: true })
+        });
+        Toast.success(`Deleted ${response.deletedCount} record${response.deletedCount !== 1 ? 's' : ''} for ${className}`);
+        searchDatabase();
+    } catch (error) {
+        console.error('Error bulk deleting attendance:', error);
+        Toast.error('Failed to delete records: ' + (error.message || ''));
+    }
 }
 
 async function loadAttendanceAnalytics() {
@@ -4847,10 +4992,7 @@ function openAttendanceGrid(classId, date) {
         
         // Wait for next frame to ensure change event has processed
         requestAnimationFrame(() => {
-            const loadBtn = document.getElementById('load-attendance-btn');
-            if (loadBtn) {
-                loadBtn.click();
-            }
+            loadAttendance();
         });
     });
 }
