@@ -44,8 +44,20 @@
     <!-- Skip to main content link for accessibility -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
     
+    <!-- Loading Splash (shown during session check to avoid login screen flash) -->
+    <div id="splash-screen" class="screen active" role="status" aria-live="polite" aria-label="Loading">
+        <div class="splash-container">
+            <div class="splash-box">
+                <div class="splash-logo">🍊</div>
+                <h2>Vitamin English</h2>
+                <div class="splash-spinner" aria-hidden="true"></div>
+                <span class="sr-only">Loading application, please wait…</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Login Screen -->
-    <div id="login-screen" class="screen active" role="main">
+    <div id="login-screen" class="screen" role="main">
         <div class="login-container">
             <div class="login-box" role="form" aria-label="Login form">
                 <h1>🍊 Vitamin English</h1>
