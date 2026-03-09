@@ -1476,6 +1476,10 @@ async function quickMarkAllPresent() {
         }
     });
 
+    // Update rate cells for all affected rows
+    const affectedRows = new Set(emptyCells.map(c => c.closest('tr')).filter(Boolean));
+    affectedRows.forEach(r => updateStudentRateCell(r));
+
     Toast.undo(`Marked ${emptyCells.length} student${emptyCells.length !== 1 ? 's' : ''} present`, () => {
         // Undo: revert all cells and remove from queue
         snapshot.forEach(({ cell, prev }) => {
@@ -1490,6 +1494,8 @@ async function quickMarkAllPresent() {
                 lastAttendanceData.attendance[`${studentId}-${normalizedDate}`] = prev;
             }
         });
+        // Update rate cells after undo
+        affectedRows.forEach(r => updateStudentRateCell(r));
         Toast.info('Quick mark undone');
     });
 }
@@ -2574,6 +2580,30 @@ function navigateToStudentProfile(studentId) {
     showStudentDetail(studentId);
 }
 
+// Recalculate and update the rate cell for the student row in the DOM.
+// Uses the visible attendance cells to determine the current date set,
+// and reads statuses from the in-memory lastAttendanceData.attendance map.
+function updateStudentRateCell(row) {
+    if (!row || !lastAttendanceData || !lastAttendanceData.attendance) return;
+    const firstCell = row.querySelector('.attendance-cell');
+    if (!firstCell) return;
+    const studentId = firstCell.dataset.student;
+    const cells = row.querySelectorAll('.attendance-cell');
+    let present = 0, total = 0;
+    cells.forEach(c => {
+        const date = c.dataset.date;
+        const status = lastAttendanceData.attendance[`${studentId}-${date}`] || '';
+        if (status) { total++; if (status === 'O') present++; }
+    });
+    const rate = total > 0 ? Math.round((present / total) * 100) : null;
+    const rateClass = rate === null ? '' : rate >= 85 ? 'rate-green' : rate >= 65 ? 'rate-yellow' : 'rate-red';
+    const rateCell = row.querySelector('.attendance-rate-cell');
+    if (!rateCell) return;
+    rateCell.className = `attendance-rate-cell ${rateClass}`;
+    rateCell.title = `${present} present out of ${total}`;
+    rateCell.innerHTML = rate !== null ? `${present}/${total}<br><small>${rate}%</small>` : '—';
+}
+
 async function toggleAttendance(cell) {
     const studentId = cell.dataset.student;
     const classId = cell.dataset.class;
@@ -2614,6 +2644,9 @@ async function toggleAttendance(cell) {
             lastAttendanceData.attendance[`${studentId}-${normalizedDate}`] = newStatus;
         }
 
+        // Update the rate cell in the DOM immediately
+        updateStudentRateCell(row);
+
         // Add to save queue with debouncing, including teacher_id
         AttendanceSaveQueue.add(studentId, classId, normalizedDate, newStatus, null, teacherId);
 
@@ -2633,6 +2666,8 @@ async function toggleAttendance(cell) {
             // Revert UI
             cell.textContent = prevStatus;
             cell.className = prevClass;
+            // Update rate cell after undo
+            updateStudentRateCell(row);
         };
         attendanceToastBatch.push({
             message: `✓ Marked ${studentName} as ${statusLabel[newStatus] || newStatus}${dateLabel ? ' for ' + dateLabel : ''}`,
@@ -4206,9 +4241,14 @@ function toggleDataHubClassExpand(classId, headerEl) {
 }
 
 function dbDataHubPDFMonthPicker(classId, btn) {
-    // Toggle an inline month/year select for PDF generation
+    // Toggle an inline month/year select + Go button for PDF generation
     const existing = btn.parentNode.querySelector('.datahub-pdf-month-select');
-    if (existing) { existing.remove(); return; }
+    if (existing) {
+        const existingGo = btn.parentNode.querySelector('.datahub-pdf-go-btn');
+        if (existingGo) existingGo.remove();
+        existing.remove();
+        return;
+    }
     const now = new Date();
     const select = document.createElement('select');
     select.className = 'form-control datahub-pdf-month-select';
@@ -4222,12 +4262,19 @@ function dbDataHubPDFMonthPicker(classId, btn) {
         if (i === now.getMonth()) opt.selected = true;
         select.appendChild(opt);
     }
-    select.addEventListener('change', async () => {
+
+    const goBtn = document.createElement('button');
+    goBtn.className = 'btn btn-small btn-primary datahub-pdf-go-btn';
+    goBtn.textContent = '📥 Go';
+    goBtn.title = 'Generate PDF for selected month';
+
+    const generatePdf = async () => {
         const [yr, mo] = select.value.split('-');
         const startDate = `${yr}-${mo}-01`;
         const lastDay = new Date(parseInt(yr), parseInt(mo), 0).getDate();
         const endDate = `${yr}-${mo}-${String(lastDay).padStart(2, '0')}`;
         select.remove();
+        goBtn.remove();
         try {
             Toast.info('Generating PDF...', 'Please wait');
             const response = await api(`/pdf/attendance-grid-enhanced/${classId}`, {
@@ -4243,8 +4290,12 @@ function dbDataHubPDFMonthPicker(classId, btn) {
         } catch (error) {
             Toast.error('Error generating PDF: ' + (error.message || ''));
         }
-    });
+    };
+
+    goBtn.addEventListener('click', generatePdf);
+
     btn.parentNode.insertBefore(select, btn.nextSibling);
+    btn.parentNode.insertBefore(goBtn, select.nextSibling);
     select.focus();
 }
 
@@ -6169,6 +6220,7 @@ async function restoreSessionIfAvailable() {
             const userData = await user.json();
             currentUser = userData;
             document.getElementById('user-name').textContent = userData.fullName;
+            document.getElementById('splash-screen').classList.remove('active');
             document.getElementById('login-screen').classList.remove('active');
             document.getElementById('app-screen').classList.add('active');
             try {
@@ -6180,10 +6232,16 @@ async function restoreSessionIfAvailable() {
                     Toast.error('Failed to load some data. Please try refreshing again.');
                 }
             }
+        } else {
+            // No valid session – hide splash and show login screen
+            document.getElementById('splash-screen').classList.remove('active');
+            document.getElementById('login-screen').classList.add('active');
         }
     } catch (error) {
-        // No valid session – stay on login screen (default state)
+        // Network error or no valid session – hide splash and show login screen
         console.log('No active session found, showing login screen.');
+        document.getElementById('splash-screen').classList.remove('active');
+        document.getElementById('login-screen').classList.add('active');
     } finally {
         sessionRestoreInProgress = false;
     }
