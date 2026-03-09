@@ -8,7 +8,7 @@ router.get('/', async (req, res) => {
         const { classId, teacherId, startDate, endDate } = req.query;
         
         let query = `
-            SELECT r.*, c.name as class_name, u.full_name as teacher_name
+            SELECT r.*, c.name as class_name, c.color as class_color, u.full_name as teacher_name
             FROM teacher_comment_sheets r
             JOIN classes c ON r.class_id = c.id
             JOIN users u ON r.teacher_id = u.id

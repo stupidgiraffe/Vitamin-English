@@ -155,7 +155,7 @@ class DataHub {
             // Search teacher comment sheets (if type is 'all' or 'teacher_comments' or 'teacher_comment_sheets')
             if (type === 'all' || type === 'teacher_comments' || type === 'teacher_comment_sheets') {
                 const qb = new QueryBuilder('teacher_comment_sheets tcs');
-                qb.select('tcs.*', 'c.name as class_name', 'u.full_name as teacher_name')
+                qb.select('tcs.*', 'c.name as class_name', 'c.color as class_color', 'u.full_name as teacher_name')
                   .join('classes c', 'tcs.class_id = c.id', 'LEFT')
                   .join('users u', 'tcs.teacher_id = u.id', 'LEFT');
 
@@ -200,7 +200,7 @@ class DataHub {
             // Search attendance (if type is 'all' or 'attendance')
             if (type === 'all' || type === 'attendance') {
                 const qb = new QueryBuilder('attendance a');
-                qb.select('a.*', 's.name as student_name', 'c.name as class_name')
+                qb.select('a.*', 's.name as student_name', 's.color_code', 'c.name as class_name', 'c.color as class_color')
                   .join('students s', 'a.student_id = s.id', 'LEFT')
                   .join('classes c', 'a.class_id = c.id', 'LEFT');
 

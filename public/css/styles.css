@@ -1914,6 +1914,25 @@ body {
     font-size: 13px;
 }
 
+/* Responsive actions cell — wrap buttons on small screens */
+@media (max-width: 768px) {
+    .actions-cell {
+        white-space: normal;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 6px 8px;
+    }
+
+    .actions-cell .btn {
+        margin-left: 0;
+        font-size: 12px;
+        padding: 4px 6px;
+    }
+}
+
 /* Export options modal */
 .export-options {
     display: flex;
