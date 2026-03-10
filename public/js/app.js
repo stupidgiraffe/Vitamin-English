@@ -3106,11 +3106,18 @@ async function loadReportsList() {
             return;
         }
 
-        container.innerHTML = reports.map(report => `
-            <div class="report-item">
+        container.innerHTML = reports.map(report => {
+            const classColorStyle = report.class_color 
+                ? `border-left: 4px solid ${escapeHtml(report.class_color)}; padding-left: 10px;` 
+                : '';
+            const classColorAttr = report.class_color 
+                ? ` style="color: ${escapeHtml(report.class_color)}; font-weight: 600;"` 
+                : '';
+            return `
+            <div class="report-item" style="${classColorStyle}">
                 <div class="report-header">
                     <span class="report-date">${formatDisplayDate(report.date)}</span>
-                    <span class="report-class">${escapeHtml(report.class_name)}</span>
+                    <span class="report-class"${classColorAttr}>${escapeHtml(report.class_name)}</span>
                 </div>
                 <div><strong>Teacher:</strong> ${escapeHtml(report.teacher_name)}</div>
                 <div><strong>Topic:</strong> ${escapeHtml(report.target_topic || 'N/A')}</div>
@@ -3120,7 +3127,7 @@ async function loadReportsList() {
                     <button class="btn btn-small btn-danger" onclick="deleteTeacherCommentSheetInline(${report.id})">🗑️ Delete</button>
                 </div>
             </div>
-        `).join('');
+        `}).join('');
     } catch (error) {
         console.error('Error loading reports:', error);
     }
@@ -4460,6 +4467,13 @@ function renderCleanTable(data, type, options = {}) {
             headers: ['Date', 'Student', 'Class', 'Status'],
             formatters: {
                 date: formatDisplayDate,
+                student_name: (val, row) => getStudentColorDot(row && row.color_code) + escapeHtml(val || ''),
+                class_name: (val, row) => {
+                    if (row && row.class_color) {
+                        return `<span style="color: ${escapeHtml(row.class_color)}; font-weight: 600;">${escapeHtml(val || '')}</span>`;
+                    }
+                    return escapeHtml(val || '');
+                },
                 status: (val) => {
                     const s = formatAttendanceStatus(val);
                     return `<span class="${s.class}">${s.icon} ${s.text}</span>`;
@@ -4469,7 +4483,9 @@ function renderCleanTable(data, type, options = {}) {
         students: {
             columns: ['name', 'class_name', 'student_type', 'email'],
             headers: ['Name', 'Class', 'Type', 'Email'],
-            formatters: {}
+            formatters: {
+                name: (val, row) => getStudentColorDot(row && row.color_code) + escapeHtml(val || '')
+            }
         },
         teachers: {
             columns: ['full_name', 'username', 'role', 'created_at'],
@@ -4489,7 +4505,13 @@ function renderCleanTable(data, type, options = {}) {
             columns: ['date', 'class_name', 'teacher_name', 'target_topic'],
             headers: ['Date', 'Class', 'Teacher', 'Topic'],
             formatters: {
-                date: formatDisplayDate
+                date: formatDisplayDate,
+                class_name: (val, row) => {
+                    if (row && row.class_color) {
+                        return `<span style="border-left: 3px solid ${escapeHtml(row.class_color)}; padding-left: 6px; font-weight: 600;">${escapeHtml(val || '')}</span>`;
+                    }
+                    return escapeHtml(val || '');
+                }
             }
         },
         monthly_reports: {
@@ -4575,7 +4597,7 @@ function renderCleanTable(data, type, options = {}) {
             
             // Apply formatter if exists
             if (config.formatters[col]) {
-                value = config.formatters[col](value);
+                value = config.formatters[col](value, row);
             } else {
                 // Default formatting
                 if (value === null || value === undefined) {
@@ -4597,46 +4619,38 @@ function renderCleanTable(data, type, options = {}) {
         
         // Add actions column - either original edit/delete or new view/pdf buttons
         if (includeActions) {
-            // Original behavior for teacher_comment_sheets table
+            // DataHub table view for teacher_comment_sheets - full action set
             if (!isNaN(sanitizedId)) {
                 html += `<td class="actions-cell">
-                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); editReportFromDatabase(${sanitizedId})">Edit</button>
-                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteReportFromDatabase(${sanitizedId})">Delete</button>
+                    <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewSearchResult('teacher_comment_sheets', ${sanitizedId})" title="View Details">👁️</button>
+                    <button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editReportFromDatabase(${sanitizedId})" title="Edit">✏️</button>
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); exportSinglePDF('teacher_comment_sheets', ${sanitizedId})" title="Export PDF">📄</button>
+                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteReportFromDatabase(${sanitizedId})" title="Delete">🗑️</button>
                 </td>`;
             } else {
                 html += '<td class="actions-cell">Invalid ID</td>';
             }
         } else if (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports') {
-            // New view/PDF buttons for search results
+            // View/PDF/Edit/Delete buttons for search results
             if (!isNaN(sanitizedId)) {
-                html += `<td class="actions-cell" style="white-space: nowrap;">
-                    <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewSearchResult('${type}', ${sanitizedId})" title="View Details">
-                        👁️
-                    </button>`;
+                html += `<td class="actions-cell">
+                    <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewSearchResult('${type}', ${sanitizedId})" title="View Details">👁️</button>`;
                 if (type === 'students' || type === 'teacher_comment_sheets') {
-                    html += `
-                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); exportSinglePDF('${type}', ${sanitizedId})" title="Export PDF">
-                        📄
-                    </button>`;
+                    html += `<button class="btn btn-small btn-primary" onclick="event.stopPropagation(); exportSinglePDF('${type}', ${sanitizedId})" title="Export PDF">📄</button>`;
+                }
+                if (type === 'teacher_comment_sheets') {
+                    html += `<button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editReportFromDatabase(${sanitizedId})" title="Edit">✏️</button>
+                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteReportFromDatabase(${sanitizedId})" title="Delete">🗑️</button>`;
                 }
                 if (type === 'monthly_reports') {
-                    html += `
-                    <button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editMonthlyReport(${sanitizedId})" title="Edit">
-                        ✏️
-                    </button>
+                    html += `<button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editMonthlyReport(${sanitizedId})" title="Edit">✏️</button>
                     <button class="btn btn-small btn-success" onclick="event.stopPropagation(); generateMonthlyReportPDF(${sanitizedId})" title="Generate PDF">
                         📄 ${row.pdf_url ? 'Regenerate' : 'Generate'} PDF
                     </button>`;
                     if (row.pdf_url) {
-                        html += `
-                    <button class="btn btn-small btn-info" onclick="event.stopPropagation(); downloadMonthlyReportPDF(${sanitizedId})" title="View PDF">
-                        📥 View PDF
-                    </button>`;
+                        html += `<button class="btn btn-small btn-info" onclick="event.stopPropagation(); downloadMonthlyReportPDF(${sanitizedId})" title="View PDF">📥 View PDF</button>`;
                     }
-                    html += `
-                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteMonthlyReport(${sanitizedId})" title="Delete">
-                        🗑️
-                    </button>`;
+                    html += `<button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteMonthlyReport(${sanitizedId})" title="Delete">🗑️</button>`;
                 }
                 html += `</td>`;
             } else {

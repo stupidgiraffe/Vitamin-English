@@ -982,8 +982,7 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             doc.fontSize(9)
                .font('Helvetica')
                .fillColor('#666666')
-               .text(`Report ID: ${reportData.id}`, 50, doc.page.height - 70, { align: 'left' })
-               .text(`Generated on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 
+               .text(`Vitamin English | Generated: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`, 
                      50, doc.page.height - 50, { align: 'center' });
             
             doc.end();

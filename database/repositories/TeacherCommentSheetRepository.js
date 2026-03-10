@@ -25,7 +25,7 @@ class TeacherCommentSheetRepository extends BaseRepository {
         } = options;
 
         const qb = new QueryBuilder('teacher_comment_sheets tcs');
-        qb.select('tcs.*', 'c.name as class_name', 'u.full_name as teacher_name')
+        qb.select('tcs.*', 'c.name as class_name', 'c.color as class_color', 'u.full_name as teacher_name')
           .join('classes c', 'tcs.class_id = c.id', 'LEFT')
           .join('users u', 'tcs.teacher_id = u.id', 'LEFT');
 
@@ -52,7 +52,7 @@ class TeacherCommentSheetRepository extends BaseRepository {
      */
     async getByClassAndDate(classId, date) {
         const result = await this.query(
-            `SELECT tcs.*, c.name as class_name, u.full_name as teacher_name
+            `SELECT tcs.*, c.name as class_name, c.color as class_color, u.full_name as teacher_name
              FROM teacher_comment_sheets tcs
              LEFT JOIN classes c ON tcs.class_id = c.id
              LEFT JOIN users u ON tcs.teacher_id = u.id
@@ -70,7 +70,7 @@ class TeacherCommentSheetRepository extends BaseRepository {
      */
     async getRecent(limit = 20, classId = null) {
         let query = `
-            SELECT tcs.*, c.name as class_name, u.full_name as teacher_name
+            SELECT tcs.*, c.name as class_name, c.color as class_color, u.full_name as teacher_name
             FROM teacher_comment_sheets tcs
             LEFT JOIN classes c ON tcs.class_id = c.id
             LEFT JOIN users u ON tcs.teacher_id = u.id
@@ -98,7 +98,7 @@ class TeacherCommentSheetRepository extends BaseRepository {
      */
     async getByDateRange(classId, startDate, endDate) {
         const result = await this.query(
-            `SELECT tcs.*, c.name as class_name, u.full_name as teacher_name
+            `SELECT tcs.*, c.name as class_name, c.color as class_color, u.full_name as teacher_name
              FROM teacher_comment_sheets tcs
              LEFT JOIN classes c ON tcs.class_id = c.id
              LEFT JOIN users u ON tcs.teacher_id = u.id
@@ -136,7 +136,7 @@ class TeacherCommentSheetRepository extends BaseRepository {
      */
     async findById(id) {
         const result = await this.query(
-            `SELECT tcs.*, c.name as class_name, u.full_name as teacher_name
+            `SELECT tcs.*, c.name as class_name, c.color as class_color, u.full_name as teacher_name
              FROM teacher_comment_sheets tcs
              LEFT JOIN classes c ON tcs.class_id = c.id
              LEFT JOIN users u ON tcs.teacher_id = u.id
