@@ -4533,10 +4533,14 @@ function renderCleanTable(data, type, options = {}) {
             }
         },
         makeup_lessons: {
-            columns: ['scheduled_date', 'student_name', 'class_name', 'status'],
-            headers: ['Date', 'Student', 'Class', 'Status'],
+            columns: ['scheduled_date', 'student_name', 'class_name', 'reason', 'status'],
+            headers: ['Date', 'Student', 'Class', 'Reason', 'Status'],
             formatters: {
-                scheduled_date: formatDisplayDate
+                scheduled_date: formatDisplayDate,
+                status: (val) => {
+                    const cls = val === 'completed' ? 'present' : val === 'cancelled' ? 'absent' : 'partial';
+                    return `<span class="status ${cls}">${escapeHtml(val || '')}</span>`;
+                }
             }
         },
         pdf_history: {
@@ -4572,7 +4576,7 @@ function renderCleanTable(data, type, options = {}) {
     });
     
     // Add Actions header for students and reports
-    if (includeActions || type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports') {
+    if (includeActions || type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'makeup_lessons') {
         html += '<th>Actions</th>';
     }
     
@@ -4580,8 +4584,8 @@ function renderCleanTable(data, type, options = {}) {
     
     data.forEach(row => {
         const sanitizedId = parseInt(row.id);
-        const rowClass = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance') ? 'clickable-row' : '';
-        const rowAttrs = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance') 
+        const rowClass = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons') ? 'clickable-row' : '';
+        const rowAttrs = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons') 
             ? `data-type="${type}" data-id="${sanitizedId}"` 
             : '';
         
@@ -4629,6 +4633,16 @@ function renderCleanTable(data, type, options = {}) {
                 </td>`;
             } else {
                 html += '<td class="actions-cell">Invalid ID</td>';
+            }
+        } else if (type === 'makeup_lessons') {
+            if (!isNaN(sanitizedId)) {
+                html += `<td class="actions-cell">
+                    <button class="btn btn-small btn-secondary" onclick="event.stopPropagation(); viewMakeupLessonDetail(${sanitizedId})" title="View Details">👁️</button>
+                    <button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editMakeupLesson(${sanitizedId})" title="Edit">✏️</button>
+                    <button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteMakeupLessonFromDatabase(${sanitizedId})" title="Delete">🗑️</button>
+                </td>`;
+            } else {
+                html += '<td class="actions-cell"></td>';
             }
         } else if (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports') {
             // View/PDF/Edit/Delete buttons for search results
@@ -4958,8 +4972,55 @@ async function viewSearchResult(type, id) {
         case 'attendance':
             await viewAttendanceDetail(id);
             break;
+        case 'makeup_lessons':
+            await viewMakeupLessonDetail(id);
+            break;
         default:
             Toast.info('Detail view not available for this type');
+    }
+}
+
+// View makeup lesson detail modal
+async function viewMakeupLessonDetail(id) {
+    const safeId = parseInt(id, 10);
+    if (isNaN(safeId)) {
+        Toast.error('Invalid makeup lesson ID');
+        return;
+    }
+    try {
+        const lesson = await api(`/makeup/${safeId}`);
+        const statusClass = lesson.status === 'completed' ? 'present' : lesson.status === 'cancelled' ? 'absent' : 'partial';
+        showModal(`Make-up Lesson - ${escapeHtml(lesson.student_name || '')}`, `
+            <div class="report-detail">
+                <p><strong>Student:</strong> ${escapeHtml(lesson.student_name || 'N/A')}</p>
+                <p><strong>Class:</strong> ${escapeHtml(lesson.class_name || 'N/A')}</p>
+                <p><strong>Date:</strong> ${formatDisplayDate(lesson.scheduled_date)}</p>
+                <p><strong>Status:</strong> <span class="status ${statusClass}">${escapeHtml(lesson.status || '')}</span></p>
+                ${lesson.reason ? `<p><strong>Reason:</strong> ${escapeHtml(lesson.reason)}</p>` : ''}
+                ${lesson.notes ? `<p><strong>Notes:</strong> ${escapeHtml(lesson.notes)}</p>` : ''}
+                <div class="modal-actions" style="margin-top: 20px;">
+                    <button class="btn btn-warning" onclick="closeModal(); editMakeupLesson(${safeId})">✏️ Edit</button>
+                    <button class="btn btn-danger" onclick="closeModal(); deleteMakeupLessonFromDatabase(${safeId})">🗑️ Delete</button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+                </div>
+            </div>
+        `);
+    } catch (error) {
+        Toast.error('Failed to load make-up lesson: ' + error.message);
+    }
+}
+
+// Delete makeup lesson from database viewer
+async function deleteMakeupLessonFromDatabase(id) {
+    if (!confirm('Are you sure you want to delete this make-up lesson? This action cannot be undone.')) {
+        return;
+    }
+    try {
+        await api(`/makeup/${id}`, { method: 'DELETE' });
+        Toast.success('Make-up lesson deleted successfully');
+        searchDatabase();
+    } catch (error) {
+        Toast.error('Failed to delete make-up lesson: ' + error.message);
     }
 }
 
@@ -5551,9 +5612,9 @@ document.getElementById('filter-makeup-btn')?.addEventListener('click', async ()
         let url = '/makeup';
         const params = new URLSearchParams();
         if (status) params.append('status', status);
-        if (studentId) params.append('student_id', studentId);
-        if (startDate) params.append('start_date', startDate);
-        if (endDate) params.append('end_date', endDate);
+        if (studentId) params.append('studentId', studentId);
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
         
         if (params.toString()) {
             url += '?' + params.toString();
@@ -5586,7 +5647,6 @@ function renderMakeupLessonsTable(lessons) {
                     <th>Student</th>
                     <th>Class</th>
                     <th>Date</th>
-                    <th>Time</th>
                     <th>Reason</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -5596,24 +5656,22 @@ function renderMakeupLessonsTable(lessons) {
     `;
     
     lessons.forEach(lesson => {
+        const lessonId = parseInt(lesson.id, 10);
         const statusClass = lesson.status === 'completed' ? 'present' : lesson.status === 'cancelled' ? 'absent' : 'partial';
         html += `
             <tr>
                 <td>${escapeHtml(lesson.student_name)}</td>
                 <td>${escapeHtml(lesson.class_name)}</td>
                 <td>${new Date(lesson.scheduled_date + 'T00:00:00').toLocaleDateString()}</td>
-                <td>${lesson.scheduled_time || 'N/A'}</td>
                 <td>${escapeHtml(lesson.reason) || '-'}</td>
                 <td><span class="status ${statusClass}">${lesson.status}</span></td>
                 <td class="action-buttons">
+                    <button class="btn btn-small btn-primary" onclick="editMakeupLesson(${lessonId})">Edit</button>
                     ${lesson.status === 'scheduled' ? `
-                        <button class="btn btn-small btn-primary" onclick="editMakeupLesson(${lesson.id})">Edit</button>
-                        <button class="btn btn-small btn-success" onclick="completeMakeupLesson(${lesson.id})">Complete</button>
-                        <button class="btn btn-small btn-danger" onclick="cancelMakeupLesson(${lesson.id})">Cancel</button>
-                    ` : `
-                        <button class="btn btn-small btn-primary" onclick="editMakeupLesson(${lesson.id})">Edit</button>
-                        <button class="btn btn-small btn-danger" onclick="deleteMakeupLesson(${lesson.id})">Delete</button>
-                    `}
+                        <button class="btn btn-small btn-success" onclick="completeMakeupLesson(${lessonId})">Complete</button>
+                        <button class="btn btn-small btn-warning" onclick="cancelMakeupLesson(${lessonId})">Cancel</button>
+                    ` : ''}
+                    <button class="btn btn-small btn-danger" onclick="deleteMakeupLesson(${lessonId})">Delete</button>
                 </td>
             </tr>
         `;
@@ -5646,10 +5704,6 @@ async function editMakeupLesson(id) {
                     <input type="date" id="edit-makeup-date" value="${lesson.scheduled_date}" required class="form-control">
                 </div>
                 <div class="form-group">
-                    <label>Scheduled Time</label>
-                    <input type="time" id="edit-makeup-time" value="${lesson.scheduled_time || ''}" class="form-control">
-                </div>
-                <div class="form-group">
                     <label>Reason</label>
                     <textarea id="edit-makeup-reason" rows="2" class="form-control">${escapeHtml(lesson.reason || '')}</textarea>
                 </div>
@@ -5678,7 +5732,6 @@ async function editMakeupLesson(id) {
                 student_id: document.getElementById('edit-makeup-student').value,
                 class_id: document.getElementById('edit-makeup-class').value,
                 scheduled_date: document.getElementById('edit-makeup-date').value,
-                scheduled_time: document.getElementById('edit-makeup-time').value,
                 reason: document.getElementById('edit-makeup-reason').value,
                 notes: document.getElementById('edit-makeup-notes').value,
                 status: document.getElementById('edit-makeup-status').value
@@ -5765,10 +5818,6 @@ async function showMakeupLessonForm() {
                 <input type="date" id="makeup-date" required class="form-control">
             </div>
             <div class="form-group">
-                <label>Scheduled Time</label>
-                <input type="time" id="makeup-time" class="form-control">
-            </div>
-            <div class="form-group">
                 <label>Reason</label>
                 <textarea id="makeup-reason" rows="2" class="form-control"></textarea>
             </div>
@@ -5807,7 +5856,6 @@ async function showMakeupLessonForm() {
             student_id: document.getElementById('makeup-student').value,
             class_id: document.getElementById('makeup-class').value,
             scheduled_date: document.getElementById('makeup-date').value,
-            scheduled_time: document.getElementById('makeup-time').value,
             reason: document.getElementById('makeup-reason').value,
             notes: document.getElementById('makeup-notes').value
         };
@@ -5820,6 +5868,12 @@ async function showMakeupLessonForm() {
             
             closeModal();
             loadMakeupLessons();
+            // Refresh the makeup page table if on that page
+            const makeupPage = document.getElementById('makeup-page');
+            if (makeupPage && makeupPage.classList.contains('active')) {
+                const filterBtn = document.getElementById('filter-makeup-btn');
+                if (filterBtn) filterBtn.click();
+            }
             Toast.success('Make-up lesson scheduled successfully!');
         } catch (error) {
             Toast.error('Error: ' + error.message);

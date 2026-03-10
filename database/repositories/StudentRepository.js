@@ -45,7 +45,13 @@ class StudentRepository extends BaseRepository {
 
         const query = qb.build();
         const result = await this.pool.query(query.text, query.values);
-        return result.rows;
+        // Deduplicate by student id in case of unexpected duplicate rows
+        const seenIds = new Set();
+        return result.rows.filter(row => {
+            if (seenIds.has(row.id)) return false;
+            seenIds.add(row.id);
+            return true;
+        });
     }
 
     /**
