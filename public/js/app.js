@@ -4982,8 +4982,13 @@ async function viewSearchResult(type, id) {
 
 // View makeup lesson detail modal
 async function viewMakeupLessonDetail(id) {
+    const safeId = parseInt(id, 10);
+    if (isNaN(safeId)) {
+        Toast.error('Invalid makeup lesson ID');
+        return;
+    }
     try {
-        const lesson = await api(`/makeup/${id}`);
+        const lesson = await api(`/makeup/${safeId}`);
         const statusClass = lesson.status === 'completed' ? 'present' : lesson.status === 'cancelled' ? 'absent' : 'partial';
         showModal(`Make-up Lesson - ${escapeHtml(lesson.student_name || '')}`, `
             <div class="report-detail">
@@ -4994,8 +4999,8 @@ async function viewMakeupLessonDetail(id) {
                 ${lesson.reason ? `<p><strong>Reason:</strong> ${escapeHtml(lesson.reason)}</p>` : ''}
                 ${lesson.notes ? `<p><strong>Notes:</strong> ${escapeHtml(lesson.notes)}</p>` : ''}
                 <div class="modal-actions" style="margin-top: 20px;">
-                    <button class="btn btn-warning" onclick="closeModal(); editMakeupLesson(${id})">✏️ Edit</button>
-                    <button class="btn btn-danger" onclick="closeModal(); deleteMakeupLessonFromDatabase(${id})">🗑️ Delete</button>
+                    <button class="btn btn-warning" onclick="closeModal(); editMakeupLesson(${safeId})">✏️ Edit</button>
+                    <button class="btn btn-danger" onclick="closeModal(); deleteMakeupLessonFromDatabase(${safeId})">🗑️ Delete</button>
                     <button class="btn btn-secondary" onclick="closeModal()">Close</button>
                 </div>
             </div>
@@ -5651,6 +5656,7 @@ function renderMakeupLessonsTable(lessons) {
     `;
     
     lessons.forEach(lesson => {
+        const lessonId = parseInt(lesson.id, 10);
         const statusClass = lesson.status === 'completed' ? 'present' : lesson.status === 'cancelled' ? 'absent' : 'partial';
         html += `
             <tr>
@@ -5660,12 +5666,12 @@ function renderMakeupLessonsTable(lessons) {
                 <td>${escapeHtml(lesson.reason) || '-'}</td>
                 <td><span class="status ${statusClass}">${lesson.status}</span></td>
                 <td class="action-buttons">
-                    <button class="btn btn-small btn-primary" onclick="editMakeupLesson(${lesson.id})">Edit</button>
+                    <button class="btn btn-small btn-primary" onclick="editMakeupLesson(${lessonId})">Edit</button>
                     ${lesson.status === 'scheduled' ? `
-                        <button class="btn btn-small btn-success" onclick="completeMakeupLesson(${lesson.id})">Complete</button>
-                        <button class="btn btn-small btn-warning" onclick="cancelMakeupLesson(${lesson.id})">Cancel</button>
+                        <button class="btn btn-small btn-success" onclick="completeMakeupLesson(${lessonId})">Complete</button>
+                        <button class="btn btn-small btn-warning" onclick="cancelMakeupLesson(${lessonId})">Cancel</button>
                     ` : ''}
-                    <button class="btn btn-small btn-danger" onclick="deleteMakeupLesson(${lesson.id})">Delete</button>
+                    <button class="btn btn-small btn-danger" onclick="deleteMakeupLesson(${lessonId})">Delete</button>
                 </td>
             </tr>
         `;

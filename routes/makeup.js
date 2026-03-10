@@ -15,7 +15,7 @@ function extractTimeFromSchedule(schedule) {
         let hours = parseInt(match[1], 10);
         const minutes = match[2];
         const meridiem = (match[3] || '').toLowerCase();
-        if (meridiem === 'pm' && hours < 12) hours += 12;
+        if (meridiem === 'pm' && hours !== 12) hours += 12;
         if (meridiem === 'am' && hours === 12) hours = 0;
         return `${String(hours).padStart(2, '0')}:${minutes}`;
     }
