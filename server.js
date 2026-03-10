@@ -1,3 +1,5 @@
+require('dotenv').config();
+require('express-async-errors');
 const express = require('express');
 const session = require('express-session');
 const bodyParser = require('body-parser');
@@ -6,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const morgan = require('morgan');
 const dataHub = require('./database/DataHub');
 const pool = require('./database/init');
 const { initializeDatabase, verifyDatabaseSchema } = require('./database/init-postgres');
@@ -98,11 +101,8 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
 app.use(sanitizeInput); // Input sanitization
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Request logging middleware
-app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-    next();
-});
+// Request logging
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Session configuration with PostgreSQL store for Vercel
 const pgSession = require('connect-pg-simple')(session);
@@ -386,6 +386,23 @@ if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
         console.log('  Teacher - username: sarah, password: teacher123');
     });
 }
+
+// Graceful shutdown
+const shutdown = async (signal) => {
+    console.log(`\n${signal} received – shutting down gracefully…`);
+    try {
+        if (pool && typeof pool.end === 'function') {
+            await pool.end();
+            console.log('✅ Database pool closed');
+        }
+    } catch (err) {
+        console.error('Error closing database pool:', err.message);
+    }
+    process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 // Export for Vercel serverless
 module.exports = app;
