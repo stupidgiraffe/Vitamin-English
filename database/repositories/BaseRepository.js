@@ -163,6 +163,15 @@ class BaseRepository {
     }
 
     /**
+     * Delete a record by ID (alias for hardDelete for convenience)
+     * @param {number} id - Record ID
+     * @returns {Promise<boolean>} True if deleted, false if not found
+     */
+    async delete(id) {
+        return this.hardDelete(id);
+    }
+
+    /**
      * Count records with optional WHERE conditions
      * @param {Object} where - WHERE conditions as key-value pairs
      * @returns {Promise<number>} Count of matching records
