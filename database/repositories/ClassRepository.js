@@ -33,7 +33,7 @@ class ClassRepository extends BaseRepository {
         // DISTINCT ON (c.id) prevents duplicate class rows that could appear if a
         // teacher user row is somehow duplicated or if the join produces extra rows.
         // PostgreSQL requires that the DISTINCT ON expression(s) appear first in ORDER BY.
-        qb.select('DISTINCT ON (c.id) c.*', 'u.full_name as teacher_name', 'u.username as teacher_username')
+        qb.select('DISTINCT ON (c.id) c.*', 'u.full_name as teacher_name', 'u.username as teacher_username', 'u.role as teacher_role')
           .join('users u', 'c.teacher_id = u.id', 'LEFT');
 
         if (active !== null) {
