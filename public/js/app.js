@@ -433,51 +433,8 @@ function getAttendanceIcons() {
 }
 
 // API Helper
-async function api(endpoint, options = {}) {
-    // Show loading spinner on button if applicable
-    const button = document.activeElement;
-    if (button && button.tagName === 'BUTTON') {
-        button.classList.add('loading');
-    }
-    
-    try {
-        const response = await fetch(`/api${endpoint}`, {
-            ...options,
-            credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-
-        if (!response.ok) {
-            const defaultError = `Request failed: ${response.status} ${response.statusText}`;
-            const error = await response.json().catch(() => ({ error: defaultError }));
-            
-            // Show user-friendly error message with hint if available
-            const errorMessage = error.hint || error.error || defaultError;
-            Toast.error(errorMessage);
-            
-            throw new Error(error.error || defaultError);
-        }
-
-        return response.json();
-    } catch (error) {
-        // Network error or other issues
-        if (!navigator.onLine) {
-            Toast.error('No internet connection', 'Offline');
-        } else if (!error.message.includes('Request failed')) {
-            // Only show toast if we haven't already shown one above
-            Toast.error(error.message);
-        }
-        throw error;
-    } finally {
-        // Remove loading spinner
-        if (button && button.tagName === 'BUTTON') {
-            button.classList.remove('loading');
-        }
-    }
-}
+// `api()` is defined in /js/api.js which is loaded before this script.
+// See that file for full documentation of the fetch wrapper.
 
 // Authentication
 document.getElementById('login-form').addEventListener('submit', async (e) => {

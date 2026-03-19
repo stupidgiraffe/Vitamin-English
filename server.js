@@ -52,22 +52,37 @@ app.use((req, res, next) => {
 });
 
 // Rate limiting configuration
+//
+// School networks often share a single public IP address, so strict IP-based
+// limiting can accidentally lock out all teachers at once. To mitigate this:
+//  • The general limiter skips already-authenticated sessions entirely, so
+//    teachers actively using the app never hit the cap.
+//  • The window and max values are set generously for unauthenticated requests
+//    (e.g. the login page load) while still protecting against abuse.
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 500, // Limit each IP to 500 requests per windowMs
+    max: 1000, // Increased from 500 – accommodates whole-school shared IPs
     message: { error: 'Too many requests, please try again later.' },
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    // Skip rate limiting for requests that already carry a valid session so
+    // authenticated teachers are never inadvertently locked out.
+    skip: (req) => !!(req.session && req.session.userId)
 });
 
-// Stricter rate limit for authentication endpoints
+// Stricter rate limit for authentication endpoints to deter brute-force attacks.
+// Authenticated requests (e.g. password-change via a logged-in session) are
+// also skipped so that legitimate teacher workflows are not disrupted.
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Limit each IP to 10 login attempts per windowMs
+    max: 20, // Increased from 10 – allows a few retry attempts before lockout
     message: { error: 'Too many login attempts, please try again after 15 minutes.' },
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: true // Don't count successful logins
+    skipSuccessfulRequests: true, // Don't count successful logins against the limit
+    // Allow already-authenticated sessions to call auth endpoints (e.g. change-password)
+    // without being blocked by the brute-force limiter.
+    skip: (req) => !!(req.session && req.session.userId)
 });
 
 // Apply general rate limiting to all requests

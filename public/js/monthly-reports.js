@@ -8,6 +8,79 @@ function toLocalDateString(d) {
     return `${y}-${m}-${day}`;
 }
 
+// ── QoL: Auto-save draft for Monthly Report creation form ──────────────────
+// Mirrors the comment-sheet draft system already in app.js.
+// Fields cached: class selection, date range, theme, status.
+// Lesson rows are not cached because they are added dynamically and can be
+// regenerated via the auto-generate feature.
+const MR_DRAFT_KEY = 'vitamin_draft_monthly_report';
+let mrDraftTimer = null;
+
+/** Persist the current state of the new-monthly-report form to localStorage. */
+function saveMRDraft() {
+    const draft = {
+        class_id: document.getElementById('mr-class')?.value || '',
+        start_date: document.getElementById('mr-start-date')?.value || '',
+        end_date: document.getElementById('mr-end-date')?.value || '',
+        theme: document.getElementById('mr-theme')?.value || '',
+        status: document.getElementById('mr-status')?.value || 'draft',
+        savedAt: Date.now()
+    };
+    localStorage.setItem(MR_DRAFT_KEY, JSON.stringify(draft));
+}
+
+/** Remove the monthly-report draft from localStorage (called on successful submit). */
+function clearMRDraft() {
+    localStorage.removeItem(MR_DRAFT_KEY);
+}
+
+/** Debounced trigger – saves the draft 2 s after the user stops typing. */
+function scheduleMRDraftSave() {
+    clearTimeout(mrDraftTimer);
+    mrDraftTimer = setTimeout(saveMRDraft, 2000);
+}
+
+/**
+ * If a draft exists in localStorage, prompt the user and restore the fields.
+ * Should be called once after the new-report modal HTML has been injected.
+ */
+function restoreMRDraftIfAvailable() {
+    const raw = localStorage.getItem(MR_DRAFT_KEY);
+    if (!raw) return;
+    try {
+        const draft = JSON.parse(raw);
+        if (!draft.savedAt) return;
+        const ageMin = Math.round((Date.now() - draft.savedAt) / 60000);
+        const minuteLabel = ageMin === 1 ? '1 minute' : `${ageMin} minutes`;
+        Toast.prompt(`Restore unsaved monthly report draft from ${minuteLabel} ago?`, () => {
+            if (draft.class_id) {
+                const sel = document.getElementById('mr-class');
+                if (sel) sel.value = draft.class_id;
+            }
+            if (draft.start_date) document.getElementById('mr-start-date').value = draft.start_date;
+            if (draft.end_date)   document.getElementById('mr-end-date').value   = draft.end_date;
+            if (draft.theme)      document.getElementById('mr-theme').value      = draft.theme;
+            if (draft.status) {
+                const sel = document.getElementById('mr-status');
+                if (sel) sel.value = draft.status;
+            }
+        }, () => {
+            clearMRDraft();
+        });
+    } catch (_) { /* ignore corrupted draft */ }
+}
+
+/** Attach draft-save listeners to the form fields after the modal is shown. */
+function attachMRDraftListeners() {
+    const ids = ['mr-class', 'mr-start-date', 'mr-end-date', 'mr-theme', 'mr-status'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', scheduleMRDraftSave);
+        if (el) el.addEventListener('change', scheduleMRDraftSave);
+    });
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 // Show new monthly report modal
 async function showNewMonthlyReportModal() {
     const now = new Date();
@@ -67,7 +140,14 @@ async function showNewMonthlyReportModal() {
 
     document.getElementById('monthly-report-form').addEventListener('submit', handleCreateMonthlyReport);
     document.getElementById('mr-add-week-btn').addEventListener('click', addWeekRow);
-    document.getElementById('mr-cancel-btn').addEventListener('click', closeModal);
+    document.getElementById('mr-cancel-btn').addEventListener('click', () => {
+        clearMRDraft();
+        closeModal();
+    });
+
+    // Attach auto-save listeners and prompt to restore any saved draft
+    attachMRDraftListeners();
+    restoreMRDraftIfAvailable();
 }
 
 // (period type selector removed - using direct date pickers now)
@@ -325,6 +405,7 @@ async function handleCreateMonthlyReport(e) {
         });
 
         Toast.success('Monthly report created successfully!');
+        clearMRDraft(); // Clear draft cache after successful save
         closeModal();
         loadMonthlyReports();
     } catch (error) {

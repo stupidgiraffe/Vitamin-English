@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const dataHub = require('../database/DataHub');
+const { toTitleCase, normalizeDate } = require('../middleware/sanitize');
 
 // Get all students
 router.get('/', async (req, res) => {
@@ -105,16 +106,16 @@ router.post('/', async (req, res) => {
         console.log('✅ Validation passed, attempting to insert...');
         
         const student = await dataHub.students.create({
-            name: name.trim(),
+            name: toTitleCase(name),
             class_id: class_id || null,
             student_type: student_type || 'regular',
             color_code: color_code?.trim() || null,
             email: email?.trim() || null,
             phone: phone?.trim() || null,
-            parent_name: parent_name?.trim() || null,
+            parent_name: parent_name ? toTitleCase(parent_name) : null,
             parent_phone: parent_phone?.trim() || null,
             parent_email: parent_email?.trim() || null,
-            enrollment_date: enrollment_date?.trim() || null,
+            enrollment_date: normalizeDate(enrollment_date) || null,
             notes: notes?.trim() || null,
             active: true
         });
@@ -165,7 +166,7 @@ router.put('/:id', async (req, res) => {
         }
         
         const student = await dataHub.students.update(req.params.id, {
-            name: name.trim(),
+            name: toTitleCase(name),
             class_id: class_id || null,
             student_type: student_type || 'regular',
             color_code: color_code?.trim() || null,
@@ -173,10 +174,10 @@ router.put('/:id', async (req, res) => {
             active: active !== undefined ? active : true,
             email: email?.trim() || null,
             phone: phone?.trim() || null,
-            parent_name: parent_name?.trim() || null,
+            parent_name: parent_name ? toTitleCase(parent_name) : null,
             parent_phone: parent_phone?.trim() || null,
             parent_email: parent_email?.trim() || null,
-            enrollment_date: enrollment_date?.trim() || null
+            enrollment_date: normalizeDate(enrollment_date) || null
         });
         
         if (!student) {
