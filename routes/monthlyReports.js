@@ -129,8 +129,17 @@ router.post('/preview-generate', async (req, res) => {
         
         // Calculate date range based on inputs
         let startDate, endDate;
+
+        // Regex to validate YYYY-MM-DD format (used for both user-supplied and computed dates)
+        const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
         if (start_date && end_date) {
-            // Custom range
+            // Validate format before use
+            if (!ISO_DATE_RE.test(start_date) || !ISO_DATE_RE.test(end_date)) {
+                return res.status(400).json({
+                    error: 'start_date and end_date must be in YYYY-MM-DD format'
+                });
+            }
             startDate = start_date;
             endDate = end_date;
         } else if (year && month) {
@@ -147,21 +156,23 @@ router.post('/preview-generate', async (req, res) => {
         }
         
         // Query lesson reports - try teacher_comment_sheets first, fallback to lesson_reports
-        // Use CAST(date AS DATE) for reliable comparison regardless of stored string format
+        // Use LEFT(date, 10) to extract just the YYYY-MM-DD portion from the stored VARCHAR.
+        // This safely handles dates stored with any time/timezone suffix (e.g. "2026-03-19T08:30:00Z")
+        // and avoids CAST timezone-related mismatches on servers running non-UTC timezones.
         let lessonsResult;
         try {
             lessonsResult = await dataHub.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                ORDER BY CAST(date AS DATE)
+                WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
+                ORDER BY LEFT(date, 10)
             `, [class_id, startDate, endDate]);
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 lessonsResult = await dataHub.query(`
                     SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                    ORDER BY CAST(date AS DATE)
+                    WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
+                    ORDER BY LEFT(date, 10)
                 `, [class_id, startDate, endDate]);
             } else {
                 throw tableError;
@@ -223,8 +234,17 @@ router.post('/auto-generate', async (req, res) => {
         // Calculate date range based on inputs
         // Precedence: start_date/end_date takes priority over year/month if both are provided
         let startDate, endDate, reportYear, reportMonth;
+
+        // Regex to validate YYYY-MM-DD format (used for both user-supplied and computed dates)
+        const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
         if (start_date && end_date) {
-            // Custom range
+            // Validate format before use
+            if (!ISO_DATE_RE.test(start_date) || !ISO_DATE_RE.test(end_date)) {
+                return res.status(400).json({
+                    error: 'start_date and end_date must be in YYYY-MM-DD format'
+                });
+            }
             startDate = start_date;
             endDate = end_date;
             // Extract year and month from start_date by parsing the string directly (avoid timezone issues)
@@ -247,21 +267,23 @@ router.post('/auto-generate', async (req, res) => {
         await client.query('BEGIN');
         
         // Get teacher comment sheets for this date range - try teacher_comment_sheets first
-        // Use CAST(date AS DATE) for reliable comparison regardless of stored string format
+        // Use LEFT(date, 10) to extract just the YYYY-MM-DD portion from the stored VARCHAR.
+        // This safely handles dates stored with any time/timezone suffix (e.g. "2026-03-19T08:30:00Z")
+        // and avoids CAST timezone-related mismatches on servers running non-UTC timezones.
         let lessonsResult;
         try {
             lessonsResult = await client.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                ORDER BY CAST(date AS DATE)
+                WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
+                ORDER BY LEFT(date, 10)
             `, [class_id, startDate, endDate]);
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 lessonsResult = await client.query(`
                     SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                    ORDER BY CAST(date AS DATE)
+                    WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
+                    ORDER BY LEFT(date, 10)
                 `, [class_id, startDate, endDate]);
             } else {
                 throw tableError;
@@ -430,8 +452,8 @@ router.get('/available-months/:classId', async (req, res) => {
         try {
             result = await pool.query(`
                 SELECT DISTINCT 
-                    EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
-                    EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
+                    EXTRACT(YEAR FROM CAST(LEFT(date, 10) AS DATE)) as year,
+                    EXTRACT(MONTH FROM CAST(LEFT(date, 10) AS DATE)) as month,
                     COUNT(*) as lesson_count
                 FROM teacher_comment_sheets
                 WHERE class_id = $1
@@ -443,8 +465,8 @@ router.get('/available-months/:classId', async (req, res) => {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 result = await pool.query(`
                     SELECT DISTINCT 
-                        EXTRACT(YEAR FROM CAST(date AS DATE)) as year,
-                        EXTRACT(MONTH FROM CAST(date AS DATE)) as month,
+                        EXTRACT(YEAR FROM CAST(LEFT(date, 10) AS DATE)) as year,
+                        EXTRACT(MONTH FROM CAST(LEFT(date, 10) AS DATE)) as month,
                         COUNT(*) as lesson_count
                     FROM lesson_reports
                     WHERE class_id = $1
