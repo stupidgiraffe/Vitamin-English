@@ -341,6 +341,57 @@ function getContrastTextColor(hexColor) {
     return brightness > 128 ? '#000' : '#fff';
 }
 
+/**
+ * Mount an iro.js inline color wheel into `containerId` with the given initial
+ * hex color.  Returns a getter function that always returns the current hex
+ * value so the form submit can read it.
+ *
+ * @param {string} containerId  - id of the empty <div> to mount the wheel into
+ * @param {string} initialColor - starting hex color (e.g. "#4285f4")
+ * @param {function} onChange   - called with the new hex string whenever the
+ *                                user moves the picker
+ * @returns {function} getColor – call to get the currently selected hex string
+ */
+function initClassColorWheel(containerId, initialColor, onChange) {
+    const container = document.getElementById(containerId);
+    if (!container) return () => initialColor;
+
+    // Ensure the color is a safe hex string (prevents XSS when inserted into DOM/HTML)
+    const safeInitialColor = /^#[0-9A-Fa-f]{3,8}$/.test(initialColor) ? initialColor : '#4285f4';
+
+    // iro.js may not be loaded yet (CDN deferred) – fall back to a plain
+    // color input so the form is never broken.
+    if (typeof iro === 'undefined') {
+        const inp = document.createElement('input');
+        inp.type = 'color';
+        inp.value = safeInitialColor;
+        inp.style.cssText = 'width:100%;height:48px;cursor:pointer;border:2px solid #ddd;border-radius:4px;';
+        container.appendChild(inp);
+        inp.addEventListener('input', e => onChange && onChange(e.target.value));
+        return () => inp.value;
+    }
+
+    let currentColor = safeInitialColor;
+
+    const picker = new iro.ColorPicker(`#${containerId}`, {
+        width: 220,
+        color: safeInitialColor,
+        borderWidth: 1,
+        borderColor: '#ddd',
+        layout: [
+            { component: iro.ui.Box },    // saturation/brightness gradient box
+            { component: iro.ui.Slider, options: { sliderType: 'hue' } }  // hue strip
+        ]
+    });
+
+    picker.on('color:change', color => {
+        currentColor = color.hexString;
+        onChange && onChange(currentColor);
+    });
+
+    return () => currentColor;
+}
+
 // Build a rich display label for a class: "Name (Teacher • Schedule)"
 // Falls back gracefully when teacher or schedule are missing.
 function getClassDisplayName(cls) {
@@ -647,7 +698,8 @@ async function loadInitialData() {
             teachersData = Array.from(teacherMap.values());
         }
         
-        classes = classesData;
+        // Deduplicate by id in case the server returns duplicates (defense in depth)
+        classes = Array.from(new Map(classesData.map(c => [c.id, c])).values());
         students = studentsData;
         teachers = teachersData;
 
@@ -3804,23 +3856,23 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
             </div>
             <div class="form-group">
                 <label>Color (Optional)</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="color" id="class-color" value="#4285f4" class="form-control" 
-                           style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
-                    <span id="color-preview" style="padding: 8px 16px; border-radius: 4px; background: #4285f4; color: white; font-size: 12px;">Preview</span>
+                <div id="class-color-wheel" style="margin-bottom:8px;"></div>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+                    <span id="color-preview" style="padding:8px 16px;border-radius:4px;background:#4285f4;color:white;font-size:12px;">Preview</span>
                 </div>
-                <small class="form-hint">Pick any color or leave default</small>
+                <small class="form-hint">Drag the wheel or slider to pick any color</small>
             </div>
             <button type="submit" class="btn btn-primary">Add Class</button>
         </form>
     `);
 
-    // Add color picker preview update
-    document.getElementById('class-color').addEventListener('input', (e) => {
-        const color = e.target.value;
+    // Mount the always-visible color wheel
+    const getAddColor = initClassColorWheel('class-color-wheel', '#4285f4', (hex) => {
         const preview = document.getElementById('color-preview');
-        preview.style.background = color;
-        preview.style.color = getContrastTextColor(color);
+        if (preview) {
+            preview.style.background = hex;
+            preview.style.color = getContrastTextColor(hex);
+        }
     });
 
     document.getElementById('class-form').addEventListener('submit', async (e) => {
@@ -3834,7 +3886,7 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
                     name: document.getElementById('class-name').value,
                     teacher_id: document.getElementById('class-teacher').value || null,
                     schedule: schedule,
-                    color: document.getElementById('class-color').value
+                    color: getAddColor()
                 })
             });
 
@@ -3880,28 +3932,29 @@ async function editClass(id) {
                 </div>
                 <div class="form-group">
                     <label>Color</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="color" id="edit-class-color" value="${escapeHtml(cls.color || '#4285f4')}" class="form-control"
-                               style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
-                        <span id="edit-color-preview" style="padding: 8px 16px; border-radius: 4px; background: ${escapeHtml(cls.color || '#4285f4')}; color: white; font-size: 12px;">Preview</span>
+                    <div id="edit-class-color-wheel" style="margin-bottom:8px;"></div>
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+                        <span id="edit-color-preview" style="padding:8px 16px;border-radius:4px;background:${escapeHtml(cls.color || '#4285f4')};color:white;font-size:12px;">Preview</span>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Update Class</button>
             </form>
         `);
 
-        // Add color picker preview update for edit form
-        const editColorInput = document.getElementById('edit-class-color');
-        const editPreview = document.getElementById('edit-color-preview');
-        
-        // Set initial text color based on brightness
-        editPreview.style.color = getContrastTextColor(editColorInput.value);
-        
-        editColorInput.addEventListener('input', (e) => {
-            const color = e.target.value;
-            editPreview.style.background = color;
-            editPreview.style.color = getContrastTextColor(color);
+        const initialEditColor = cls.color || '#4285f4';
+
+        // Mount the always-visible color wheel with the class's current color
+        const getEditColor = initClassColorWheel('edit-class-color-wheel', initialEditColor, (hex) => {
+            const prev = document.getElementById('edit-color-preview');
+            if (prev) {
+                prev.style.background = hex;
+                prev.style.color = getContrastTextColor(hex);
+            }
         });
+
+        // Set initial preview text color
+        const editPreview = document.getElementById('edit-color-preview');
+        if (editPreview) editPreview.style.color = getContrastTextColor(initialEditColor);
 
         document.getElementById('edit-class-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -3914,7 +3967,7 @@ async function editClass(id) {
                         name: document.getElementById('edit-class-name').value,
                         teacher_id: document.getElementById('edit-class-teacher').value || null,
                         schedule: schedule,
-                        color: document.getElementById('edit-class-color').value,
+                        color: getEditColor(),
                         active: 1
                     })
                 });

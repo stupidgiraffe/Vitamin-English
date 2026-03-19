@@ -24,15 +24,27 @@ class ClassRepository extends BaseRepository {
             active = true
         } = options;
 
+        // Whitelist allowed column names to prevent SQL injection through orderBy
+        const ALLOWED_ORDER_COLUMNS = new Set(['id', 'name', 'schedule', 'created_at', 'updated_at']);
+        const safeOrderBy = ALLOWED_ORDER_COLUMNS.has(orderBy) ? orderBy : 'name';
+        const safeOrderDirection = orderDirection === 'DESC' ? 'DESC' : 'ASC';
+
         const qb = new QueryBuilder('classes c');
-        qb.select('c.*', 'u.full_name as teacher_name', 'u.username as teacher_username')
+        // DISTINCT ON (c.id) prevents duplicate class rows that could appear if a
+        // teacher user row is somehow duplicated or if the join produces extra rows.
+        // PostgreSQL requires that the DISTINCT ON expression(s) appear first in ORDER BY.
+        qb.select('DISTINCT ON (c.id) c.*', 'u.full_name as teacher_name', 'u.username as teacher_username')
           .join('users u', 'c.teacher_id = u.id', 'LEFT');
 
         if (active !== null) {
             qb.where('c.active', '=', active);
         }
 
-        qb.orderBy(`c.${orderBy}`, orderDirection);
+        // c.id must come first to satisfy the DISTINCT ON (c.id) requirement.
+        qb.orderBy('c.id', 'ASC');
+        if (safeOrderBy !== 'id') {
+            qb.orderBy(`c.${safeOrderBy}`, safeOrderDirection);
+        }
         
         if (perPage > 0) {
             qb.paginate(page, perPage);
