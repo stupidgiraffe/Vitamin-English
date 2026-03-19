@@ -270,14 +270,20 @@ router.post('/auto-generate', async (req, res) => {
         // Use LEFT(date, 10) to extract just the YYYY-MM-DD portion from the stored VARCHAR.
         // This safely handles dates stored with any time/timezone suffix (e.g. "2026-03-19T08:30:00Z")
         // and avoids CAST timezone-related mismatches on servers running non-UTC timezones.
+        //
+        // IMPORTANT: Use a SAVEPOINT so that if the first query fails (e.g. table does not exist)
+        // the transaction is NOT left in the 25P02 "aborted" state before we try the fallback query.
         let lessonsResult;
+        await client.query('SAVEPOINT before_teacher_comment_sheets_query');
         try {
             lessonsResult = await client.query(`
                 SELECT * FROM teacher_comment_sheets
                 WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
                 ORDER BY LEFT(date, 10)
             `, [class_id, startDate, endDate]);
+            await client.query('RELEASE SAVEPOINT before_teacher_comment_sheets_query');
         } catch (tableError) {
+            await client.query('ROLLBACK TO SAVEPOINT before_teacher_comment_sheets_query');
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 lessonsResult = await client.query(`
@@ -302,14 +308,19 @@ router.post('/auto-generate', async (req, res) => {
         
         if (lessons.length === 0) {
             // No teacher comment sheets found - create report with manually provided weeks (if any)
+            // Use a SAVEPOINT so a failed INSERT (e.g. missing columns) does not leave the
+            // transaction in the 25P02 aborted state before we attempt the fallback.
             let reportResult;
+            await client.query('SAVEPOINT before_monthly_report_insert');
             try {
                 reportResult = await client.query(`
                     INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                     RETURNING id
                 `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session?.userId || null]);
+                await client.query('RELEASE SAVEPOINT before_monthly_report_insert');
             } catch (insertErr) {
+                await client.query('ROLLBACK TO SAVEPOINT before_monthly_report_insert');
                 if (insertErr.code === '42703' || (insertErr.message && (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')))) {
                     reportResult = await client.query(`
                         INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
@@ -364,14 +375,18 @@ router.post('/auto-generate', async (req, res) => {
         }
         
         // Create monthly report - try with start_date/end_date first, fall back without them
+        // Use a SAVEPOINT so a failed INSERT does not abort the whole transaction (25P02).
         let reportResult;
+        await client.query('SAVEPOINT before_monthly_report_with_dates');
         try {
             reportResult = await client.query(`
                 INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING id
             `, [class_id, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', req.session?.userId || null]);
+            await client.query('RELEASE SAVEPOINT before_monthly_report_with_dates');
         } catch (insertErr) {
+            await client.query('ROLLBACK TO SAVEPOINT before_monthly_report_with_dates');
             if (insertErr.code === '42703' || (insertErr.message && (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')))) {
                 // start_date/end_date columns don't exist yet, fall back to basic insert
                 console.warn('monthly_reports missing start_date/end_date columns, using fallback INSERT');

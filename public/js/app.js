@@ -394,10 +394,12 @@ function initClassColorWheel(containerId, initialColor, onChange) {
 
 // Build a rich display label for a class: "Name (Teacher • Schedule)"
 // Falls back gracefully when teacher or schedule are missing.
+// Admin users are intentionally excluded from the teacher display.
 function getClassDisplayName(cls) {
     if (!cls) return '';
     const name = cls.name || '';
-    const teacher = cls.teacher_name && cls.teacher_name.trim() ? cls.teacher_name.trim() : '';
+    const teacher = (cls.teacher_name && cls.teacher_name.trim() && cls.teacher_role !== 'admin')
+        ? cls.teacher_name.trim() : '';
     const schedule = cls.schedule && cls.schedule.trim() ? cls.schedule.trim() : '';
     if (teacher && schedule) return `${name} (${teacher} \u2022 ${schedule})`;
     if (teacher) return `${name} (${teacher})`;
@@ -515,15 +517,35 @@ function getStudentColorInputValue(inputId) {
     return el.value;
 }
 
-// Initialize a student color picker: set initial state and attach event listeners
+// Initialize a student color picker using the iro.js inline color wheel (same UI as class color picker).
+// `inputId`   – id of a hidden <input> that stores the current hex value (read by getStudentColorInputValue).
+// `previewId` – id of the preview <span>.
+// `clearBtnId`– id of the "Clear" button.
+// `initialColorCode` – existing color_code value (may be legacy named color or hex).
+// The iro.js wheel container is expected to have id = inputId + '-wheel'.
 function initStudentColorPicker(inputId, previewId, clearBtnId, initialColorCode) {
-    const input = document.getElementById(inputId);
+    const hiddenInput = document.getElementById(inputId);
     const preview = document.getElementById(previewId);
     const clearBtn = document.getElementById(clearBtnId);
-    if (!input || !preview || !clearBtn) return;
+    if (!hiddenInput || !preview || !clearBtn) return;
+
     const state = normalizeStudentColor(initialColorCode);
-    input.value = state.value;
-    input.dataset.cleared = String(state.cleared);
+    hiddenInput.value = state.value;
+    hiddenInput.dataset.cleared = String(state.cleared);
+
+    // If the color is cleared/none we still need a valid starting color for the wheel.
+    const wheelStartColor = state.cleared ? '#4285f4' : state.value;
+
+    // Mount the always-visible iro.js color wheel (same layout as class color picker).
+    initClassColorWheel(inputId + '-wheel', wheelStartColor, (hex) => {
+        hiddenInput.value = hex;
+        hiddenInput.dataset.cleared = 'false';
+        preview.style.background = hex;
+        preview.style.color = getContrastTextColor(hex);
+        preview.textContent = 'Preview';
+    });
+
+    // Set the initial preview state.
     if (state.cleared) {
         preview.style.background = 'transparent';
         preview.style.color = '';
@@ -533,14 +555,10 @@ function initStudentColorPicker(inputId, previewId, clearBtnId, initialColorCode
         preview.style.color = getContrastTextColor(state.value);
         preview.textContent = 'Preview';
     }
-    input.addEventListener('input', (e) => {
-        input.dataset.cleared = 'false';
-        preview.style.background = e.target.value;
-        preview.style.color = getContrastTextColor(e.target.value);
-        preview.textContent = 'Preview';
-    });
+
     clearBtn.addEventListener('click', () => {
-        input.dataset.cleared = 'true';
+        hiddenInput.dataset.cleared = 'true';
+        hiddenInput.value = '';
         preview.style.background = 'transparent';
         preview.style.color = '';
         preview.textContent = 'None';
@@ -904,7 +922,24 @@ function navigateToPage(page, pushState = true) {
     else if (page === 'admin') loadAdminData();
     else if (page === 'attendance') initializeAttendancePage();
     else if (page === 'database') initializeDatabasePage();
-    else if (page === 'reports') { initMultiClassView(); loadReportsList(); }
+    else if (page === 'reports') {
+        // Always restore the default "Single Report" tab when navigating to this page
+        // (the global tab handler is scoped per-page, but if state was lost for any other
+        // reason, this guarantees a clean starting state).
+        const reportsPage = document.getElementById('reports-page');
+        if (reportsPage) {
+            reportsPage.querySelectorAll('.tab-btn').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
+            reportsPage.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            const defaultBtn = reportsPage.querySelector('[data-tab="single-report"]');
+            if (defaultBtn) { defaultBtn.classList.add('active'); defaultBtn.setAttribute('aria-selected', 'true'); }
+            const defaultTab = document.getElementById('single-report-tab');
+            if (defaultTab) defaultTab.classList.add('active');
+        }
+        initMultiClassView(); loadReportsList();
+    }
 }
 
 // Initialize attendance page with default date range (last 6 months)
@@ -1025,7 +1060,7 @@ async function loadDashboard() {
                             <span class="today-class-time">${extractTimeFromSchedule(cls.schedule) || ''}</span>
                         </div>
                         <div class="today-class-details">
-                            <span class="today-class-teacher">👤 ${escapeHtml(cls.teacher_name || 'No teacher')}</span>
+                            <span class="today-class-teacher">👤 ${escapeHtml((cls.teacher_name && cls.teacher_role !== 'admin') ? cls.teacher_name : 'No teacher')}</span>
                             <span class="today-class-schedule">📅 ${escapeHtml(cls.schedule || 'No schedule')}</span>
                         </div>
                         <div class="today-class-actions">
@@ -2852,10 +2887,10 @@ async function editStudentFromAttendance(studentId) {
                 </div>
                 <div class="form-group">
                     <label>Color Code</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="color" id="edit-student-color" class="form-control"
-                               style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
-                        <span id="edit-student-color-preview" style="padding: 8px 16px; border-radius: 4px; font-size: 12px;">Preview</span>
+                    <input type="hidden" id="edit-student-color">
+                    <div id="edit-student-color-wheel" style="margin-bottom:8px;"></div>
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+                        <span id="edit-student-color-preview" style="padding:8px 16px;border-radius:4px;font-size:12px;">Preview</span>
                         <button type="button" class="btn btn-small btn-secondary" id="edit-student-color-clear">Clear</button>
                     </div>
                 </div>
@@ -3526,20 +3561,22 @@ document.getElementById('export-multi-pdf-btn')?.addEventListener('click', expor
 // Initialize reports list
 document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
 
-// Admin Section
+// Tab navigation - scoped to the containing .page so that clicking a tab on one page
+// (e.g. Admin "Classes") does not deactivate tabs on a different page (e.g. Reports "Single Report").
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         const tab = e.target.dataset.tab;
-        
-        // Update tab buttons
-        document.querySelectorAll('.tab-btn').forEach(b => {
+        const page = e.target.closest('.page') || document;
+
+        // Update tab buttons within the same page only
+        page.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('active');
             b.setAttribute('aria-selected', 'false');
         });
-        
-        // Update tab content
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-        
+
+        // Update tab content within the same page only
+        page.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
         // Activate selected tab
         e.target.classList.add('active');
         e.target.setAttribute('aria-selected', 'true');
@@ -3603,7 +3640,7 @@ async function loadClassesList() {
             html += `
                 <tr>
                     <td><span style="color: ${cls.color}">●</span> ${cls.name}</td>
-                    <td>${cls.teacher_name || 'Unassigned'}</td>
+                    <td>${(cls.teacher_name && cls.teacher_role !== 'admin') ? cls.teacher_name : 'Unassigned'}</td>
                     <td>${cls.schedule || 'N/A'}</td>
                     <td class="action-buttons">
                         <button class="btn btn-primary btn-small" onclick="editClass(${cls.id})">Edit</button>
@@ -3647,11 +3684,10 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
             </div>
             <div class="form-group">
                 <label>Color Code</label>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <input type="color" id="student-color" value="#FFFFFF" class="form-control"
-                           style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;"
-                           data-cleared="true">
-                    <span id="student-color-preview" style="padding: 8px 16px; border-radius: 4px; background: transparent; font-size: 12px;">None</span>
+                <input type="hidden" id="student-color" data-cleared="true">
+                <div id="student-color-wheel" style="margin-bottom:8px;"></div>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+                    <span id="student-color-preview" style="padding:8px 16px;border-radius:4px;background:transparent;font-size:12px;">None</span>
                     <button type="button" class="btn btn-small btn-secondary" id="student-color-clear">Clear</button>
                 </div>
             </div>
@@ -3747,10 +3783,10 @@ async function editStudent(id) {
                 </div>
                 <div class="form-group">
                     <label>Color Code</label>
-                    <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="color" id="edit-student-color" class="form-control"
-                               style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
-                        <span id="edit-student-color-preview" style="padding: 8px 16px; border-radius: 4px; font-size: 12px;">Preview</span>
+                    <input type="hidden" id="edit-student-color">
+                    <div id="edit-student-color-wheel" style="margin-bottom:8px;"></div>
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+                        <span id="edit-student-color-preview" style="padding:8px 16px;border-radius:4px;font-size:12px;">Preview</span>
                         <button type="button" class="btn btn-small btn-secondary" id="edit-student-color-clear">Clear</button>
                     </div>
                 </div>
