@@ -341,12 +341,105 @@ function getContrastTextColor(hexColor) {
     return brightness > 128 ? '#000' : '#fff';
 }
 
-// Build a display label for a class including schedule if available
+// Build a rich display label for a class: "Name (Teacher • Schedule)"
+// Falls back gracefully when teacher or schedule are missing.
 function getClassDisplayName(cls) {
     if (!cls) return '';
     const name = cls.name || '';
+    const teacher = cls.teacher_name && cls.teacher_name.trim() ? cls.teacher_name.trim() : '';
     const schedule = cls.schedule && cls.schedule.trim() ? cls.schedule.trim() : '';
-    return schedule ? `${name} \u2014 ${schedule}` : name;
+    if (teacher && schedule) return `${name} (${teacher} \u2022 ${schedule})`;
+    if (teacher) return `${name} (${teacher})`;
+    if (schedule) return `${name} (${schedule})`;
+    return name;
+}
+
+// ── Schedule helpers ────────────────────────────────────────────────────────
+
+// Canonical schedule format: "Mon/Wed 10:00-11:30"
+// Days joined by "/", single space, HH:MM-HH:MM (24-hour).
+const SCHEDULE_DAY_ABBREVS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/**
+ * Parse a canonical schedule string into structured parts.
+ * Returns { days: string[], startTime: string, endTime: string } or null if
+ * the string doesn't match the canonical format (i.e. it is a legacy value).
+ */
+function parseScheduleString(schedule) {
+    if (!schedule || !schedule.trim()) return null;
+    const m = schedule.trim().match(/^([A-Za-z]+(?:\/[A-Za-z]+)*)\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/);
+    if (!m) return null;
+    return { days: m[1].split('/'), startTime: m[2], endTime: m[3] };
+}
+
+/**
+ * Compile structured inputs back into a canonical schedule string.
+ * Returns empty string when no days and no time are provided.
+ */
+function buildScheduleString(days, startTime, endTime) {
+    const hasDays = days && days.length > 0;
+    const hasTime = startTime && endTime;
+    if (!hasDays && !hasTime) return '';
+    const parts = [];
+    if (hasDays) parts.push(days.join('/'));
+    if (hasTime) parts.push(`${startTime}-${endTime}`);
+    return parts.join(' ');
+}
+
+/**
+ * Return the HTML for the structured schedule picker embedded inside a form.
+ * @param {string|null} existingSchedule - Current value from DB (may be legacy free-text).
+ * @param {string} prefix               - Unique prefix for element IDs (e.g. "add-cls", "edit-cls").
+ */
+function buildSchedulePickerHTML(existingSchedule, prefix) {
+    const parsed = parseScheduleString(existingSchedule);
+    const isLegacy = existingSchedule && existingSchedule.trim() && !parsed;
+
+    const dayCheckboxes = SCHEDULE_DAY_ABBREVS.map(d => {
+        const checked = parsed && parsed.days.includes(d) ? 'checked' : '';
+        return `<label class="day-checkbox-label" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;padding:3px 6px;border:1px solid #ccc;border-radius:4px;font-size:13px;user-select:none;">
+            <input type="checkbox" class="${prefix}-day-cb" value="${d}" ${checked} style="cursor:pointer;"> ${d}
+        </label>`;
+    }).join('');
+
+    const startVal = parsed ? parsed.startTime : '';
+    const endVal   = parsed ? parsed.endTime   : '';
+
+    const legacyWarning = isLegacy ? `
+        <div style="margin-top:6px;padding:6px 8px;background:#fff8e1;border:1px solid #ffe082;border-radius:4px;font-size:12px;color:#795548;">
+            ⚠️ Legacy schedule: <em>${escapeHtml(existingSchedule)}</em><br>
+            Select days/times above to replace it, or leave blank to keep it unchanged.
+        </div>` : '';
+
+    return `
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;">${dayCheckboxes}</div>
+        <div style="display:flex;gap:10px;align-items:flex-end;">
+            <div>
+                <label style="font-size:12px;display:block;margin-bottom:2px;">Start time</label>
+                <input type="time" id="${prefix}-start-time" class="form-control" value="${startVal}" style="width:130px;">
+            </div>
+            <span style="padding-bottom:6px;font-weight:bold;">–</span>
+            <div>
+                <label style="font-size:12px;display:block;margin-bottom:2px;">End time</label>
+                <input type="time" id="${prefix}-end-time" class="form-control" value="${endVal}" style="width:130px;">
+            </div>
+        </div>
+        ${legacyWarning}`;
+}
+
+/**
+ * Read back the schedule picker value.
+ * @param {string} prefix      - Same prefix used in buildSchedulePickerHTML.
+ * @param {string|null} legacy - The legacy schedule string (if any), used when pickers are left blank.
+ * @returns {string} Canonical schedule string, or legacy value if no new input was given.
+ */
+function getScheduleFromPicker(prefix, legacy) {
+    const checkedDays = Array.from(document.querySelectorAll(`.${prefix}-day-cb:checked`)).map(cb => cb.value);
+    const startTime   = (document.getElementById(`${prefix}-start-time`)?.value || '').trim();
+    const endTime     = (document.getElementById(`${prefix}-end-time`)?.value || '').trim();
+    const hasNewInput = checkedDays.length > 0 || startTime || endTime;
+    if (!hasNewInput && legacy) return legacy; // preserve legacy value unchanged
+    return buildScheduleString(checkedDays, startTime, endTime);
 }
 
 // Normalize legacy student color codes to hex values
@@ -574,15 +667,53 @@ function populateClassSelects() {
         document.getElementById('report-class')
     ];
 
+    // Separate the logged-in teacher's classes from the rest for smart defaulting.
+    const myClasses    = classes.filter(c => currentUser && c.teacher_id == currentUser.id);
+    const otherClasses = classes.filter(c => !currentUser || c.teacher_id != currentUser.id);
+
     selects.forEach(select => {
         if (!select) return;
+        // Preserve existing selection if possible.
+        const prevValue = select.value;
         select.innerHTML = '<option value="">Select a class...</option>';
-        classes.forEach(cls => {
-            const option = document.createElement('option');
-            option.value = cls.id;
-            option.textContent = getClassDisplayName(cls);
-            select.appendChild(option);
-        });
+
+        if (myClasses.length > 0) {
+            const myGroup = document.createElement('optgroup');
+            myGroup.label = 'My Classes';
+            myClasses.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls.id;
+                opt.textContent = getClassDisplayName(cls);
+                myGroup.appendChild(opt);
+            });
+            select.appendChild(myGroup);
+        }
+
+        if (otherClasses.length > 0) {
+            // Use an optgroup only when there are also "my" classes, so other classes
+            // are visually grouped separately.
+            if (myClasses.length > 0) {
+                const otherGroup = document.createElement('optgroup');
+                otherGroup.label = 'Other Classes';
+                otherClasses.forEach(cls => {
+                    const opt = document.createElement('option');
+                    opt.value = cls.id;
+                    opt.textContent = getClassDisplayName(cls);
+                    otherGroup.appendChild(opt);
+                });
+                select.appendChild(otherGroup);
+            } else {
+                otherClasses.forEach(cls => {
+                    const opt = document.createElement('option');
+                    opt.value = cls.id;
+                    opt.textContent = getClassDisplayName(cls);
+                    select.appendChild(opt);
+                });
+            }
+        }
+
+        // Restore previous selection if it still exists in the new list.
+        if (prevValue) select.value = prevValue;
     });
 }
 
@@ -3653,22 +3784,23 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
             <div class="form-group">
                 <label>Class Name *</label>
                 <input type="text" id="class-name" required class="form-control" 
-                       placeholder="e.g., Beginners Monday 10am" autofocus>
+                       placeholder="e.g., Adult Beginners" autofocus>
                 <small class="form-hint">Give your class a descriptive name</small>
             </div>
             <div class="form-group">
                 <label>Teacher (Optional)</label>
                 <select id="class-teacher" class="form-control">
                     <option value="">Current user (default)</option>
-                    ${teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('')}
+                    ${teachers.map(t => `<option value="${t.id}">${escapeHtml(t.full_name)}</option>`).join('')}
                 </select>
                 <small class="form-hint">Defaults to you if not selected</small>
             </div>
             <div class="form-group">
                 <label>Schedule (Optional)</label>
-                <input type="text" id="class-schedule" class="form-control schedule-picker" 
-                       placeholder="e.g., Mon/Wed 10:00-11:30 or Tuesday 2pm">
-                <small class="form-hint">Can be updated anytime</small>
+                <div id="add-cls-schedule-picker">
+                    ${buildSchedulePickerHTML(null, 'add-cls')}
+                </div>
+                <small class="form-hint">Select days and times, or leave blank to add later</small>
             </div>
             <div class="form-group">
                 <label>Color (Optional)</label>
@@ -3695,17 +3827,23 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
         e.preventDefault();
         
         try {
-            await api('/classes', {
+            const schedule = getScheduleFromPicker('add-cls', null);
+            const result = await api('/classes', {
                 method: 'POST',
                 body: JSON.stringify({
                     name: document.getElementById('class-name').value,
                     teacher_id: document.getElementById('class-teacher').value || null,
-                    schedule: document.getElementById('class-schedule').value,
+                    schedule: schedule,
                     color: document.getElementById('class-color').value
                 })
             });
 
-            Toast.success('Class created successfully!');
+            // Surface any double-booking warning returned by the server
+            if (result && result.warning) {
+                Toast.warning(result.warning);
+            } else {
+                Toast.success('Class created successfully!');
+            }
             closeModal();
             await loadInitialData();
             await loadClassesList();
@@ -3718,30 +3856,34 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
 async function editClass(id) {
     try {
         const cls = await api(`/classes/${id}`);
+        const legacySchedule = cls.schedule || null;
         
         showModal('Edit Class', `
             <form id="edit-class-form">
                 <div class="form-group">
                     <label>Name *</label>
-                    <input type="text" id="edit-class-name" value="${cls.name}" required class="form-control">
+                    <input type="text" id="edit-class-name" value="${escapeHtml(cls.name)}" required class="form-control">
                 </div>
                 <div class="form-group">
                     <label>Teacher</label>
                     <select id="edit-class-teacher" class="form-control">
                         <option value="">Unassigned</option>
-                        ${teachers.map(t => `<option value="${t.id}" ${t.id == cls.teacher_id ? 'selected' : ''}>${t.full_name}</option>`).join('')}
+                        ${teachers.map(t => `<option value="${t.id}" ${t.id == cls.teacher_id ? 'selected' : ''}>${escapeHtml(t.full_name)}</option>`).join('')}
                     </select>
+                    <small class="form-hint">Changing teacher does not affect past attendance or reports</small>
                 </div>
                 <div class="form-group">
                     <label>Schedule</label>
-                    <input type="text" id="edit-class-schedule" value="${cls.schedule || ''}" class="form-control">
+                    <div id="edit-cls-schedule-picker">
+                        ${buildSchedulePickerHTML(legacySchedule, 'edit-cls')}
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>Color</label>
                     <div style="display: flex; gap: 10px; align-items: center;">
-                        <input type="color" id="edit-class-color" value="${cls.color}" class="form-control"
+                        <input type="color" id="edit-class-color" value="${escapeHtml(cls.color || '#4285f4')}" class="form-control"
                                style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
-                        <span id="edit-color-preview" style="padding: 8px 16px; border-radius: 4px; background: ${cls.color}; color: white; font-size: 12px;">Preview</span>
+                        <span id="edit-color-preview" style="padding: 8px 16px; border-radius: 4px; background: ${escapeHtml(cls.color || '#4285f4')}; color: white; font-size: 12px;">Preview</span>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Update Class</button>
@@ -3765,17 +3907,22 @@ async function editClass(id) {
             e.preventDefault();
             
             try {
-                await api(`/classes/${id}`, {
+                const schedule = getScheduleFromPicker('edit-cls', legacySchedule);
+                const result = await api(`/classes/${id}`, {
                     method: 'PUT',
                     body: JSON.stringify({
                         name: document.getElementById('edit-class-name').value,
                         teacher_id: document.getElementById('edit-class-teacher').value || null,
-                        schedule: document.getElementById('edit-class-schedule').value,
+                        schedule: schedule,
                         color: document.getElementById('edit-class-color').value,
                         active: 1
                     })
                 });
 
+                // Surface any double-booking warning returned by the server
+                if (result && result.warning) {
+                    Toast.warning(result.warning);
+                }
                 closeModal();
                 await loadInitialData();
                 await loadClassesList();
