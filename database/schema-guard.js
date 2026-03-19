@@ -137,6 +137,23 @@ async function ensureTeacherCommentSheetColumns(client) {
         return;
     }
     
+    // Check date column type for compatibility.
+    // The application queries use LEFT(date::text, 10) which works for both DATE and VARCHAR(50),
+    // but a native DATE/TIMESTAMP column may cause issues with older code paths. Log a warning so
+    // the admin can convert it if needed. We do NOT auto-convert (too risky in production).
+    const dateColCheck = await client.query(`
+        SELECT data_type FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = 'teacher_comment_sheets' AND column_name = 'date'
+    `);
+    if (dateColCheck.rows.length > 0) {
+        const colType = dateColCheck.rows[0].data_type;
+        if (colType === 'date' || colType === 'timestamp without time zone' || colType === 'timestamp with time zone') {
+            console.warn(`⚠️  teacher_comment_sheets.date is ${colType} type. The schema defines it as VARCHAR(50).`);
+            console.warn('   For full compatibility, consider running:');
+            console.warn('   ALTER TABLE teacher_comment_sheets ALTER COLUMN date TYPE varchar(50) USING date::varchar;');
+        }
+    }
+    
     const requiredColumns = [
         { name: 'phrases', type: 'TEXT', default: null },
         { name: 'others', type: 'TEXT', default: null }

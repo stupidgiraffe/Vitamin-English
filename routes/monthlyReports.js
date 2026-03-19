@@ -5,6 +5,37 @@ const pool = dataHub.pool; // Reference to the connection pool
 const { generateMonthlyReportPDF } = require('../utils/monthlyReportPdf');
 const { uploadPDF, getDownloadUrl, isConfigured } = require('../utils/r2Storage');
 
+// Regex to validate YYYY-MM-DD format (structural check only; semantic validation happens downstream)
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Shared helper: calculate start/end date range and report year/month from request params.
+ * Accepts either { start_date, end_date } or { year, month }.
+ * Returns { startDate, endDate, reportYear, reportMonth } on success, or { error } on failure.
+ */
+function calculateDateRange({ start_date, end_date, year, month }) {
+    if (start_date && end_date) {
+        if (!ISO_DATE_RE.test(start_date) || !ISO_DATE_RE.test(end_date)) {
+            return { error: 'start_date and end_date must be in YYYY-MM-DD format' };
+        }
+        const dateParts = start_date.split('-');
+        return {
+            startDate: start_date,
+            endDate: end_date,
+            reportYear: parseInt(dateParts[0], 10),
+            reportMonth: parseInt(dateParts[1], 10)
+        };
+    } else if (year && month) {
+        const reportYear = parseInt(year, 10);
+        const reportMonth = parseInt(month, 10);
+        const startDate = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
+        const lastDay = new Date(Date.UTC(reportYear, reportMonth, 0)).getUTCDate(); // Day 0 of next month = last day of current month
+        const endDate = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+        return { startDate, endDate, reportYear, reportMonth };
+    }
+    return { error: 'Either (year and month) or (start_date and end_date) must be provided' };
+}
+
 // Middleware to check if R2 is configured
 const checkR2Config = (req, res, next) => {
     if (!isConfigured()) {
@@ -46,7 +77,8 @@ router.get('/', async (req, res) => {
         }
         
         let query = `
-            SELECT mr.*, c.name as class_name, c.schedule, u.full_name as created_by_name
+            SELECT mr.*, c.name as class_name, c.schedule, u.full_name as created_by_name,
+                   (SELECT COUNT(*) FROM monthly_report_weeks mrw WHERE mrw.monthly_report_id = mr.id) as week_count
             FROM monthly_reports mr
             JOIN classes c ON mr.class_id = c.id
             LEFT JOIN users u ON mr.created_by = u.id
@@ -128,55 +160,36 @@ router.post('/preview-generate', async (req, res) => {
         }
         
         // Calculate date range based on inputs
-        let startDate, endDate;
-
-        // Regex to validate YYYY-MM-DD format (used for both user-supplied and computed dates)
-        const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-        if (start_date && end_date) {
-            // Validate format before use
-            if (!ISO_DATE_RE.test(start_date) || !ISO_DATE_RE.test(end_date)) {
-                return res.status(400).json({
-                    error: 'start_date and end_date must be in YYYY-MM-DD format'
-                });
-            }
-            startDate = start_date;
-            endDate = end_date;
-        } else if (year && month) {
-            // Monthly
-            const yr = parseInt(year, 10);
-            const mo = parseInt(month, 10);
-            startDate = `${yr}-${String(mo).padStart(2, '0')}-01`;
-            const lastDay = new Date(Date.UTC(yr, mo, 0)).getUTCDate();
-            endDate = `${yr}-${String(mo).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-        } else {
-            return res.status(400).json({ 
-                error: 'Either (year and month) or (start_date and end_date) must be provided' 
-            });
+        const dateRange = calculateDateRange({ start_date, end_date, year, month });
+        if (dateRange.error) {
+            return res.status(400).json({ error: dateRange.error });
         }
+        const { startDate, endDate } = dateRange;
         
-        // Query lesson reports - try teacher_comment_sheets first, fallback to lesson_reports
-        // Use LEFT(date, 10) to extract just the YYYY-MM-DD portion from the stored VARCHAR.
-        // This safely handles dates stored with any time/timezone suffix (e.g. "2026-03-19T08:30:00Z")
-        // and avoids CAST timezone-related mismatches on servers running non-UTC timezones.
+        // Query lesson reports from teacher_comment_sheets.
+        // Use LEFT(date::text, 10) instead of LEFT(date, 10) to safely handle both
+        // native PostgreSQL DATE columns and VARCHAR columns — casting to text first
+        // ensures the LEFT() string function works regardless of the underlying type.
         let lessonsResult;
         try {
             lessonsResult = await dataHub.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
-                ORDER BY LEFT(date, 10)
+                WHERE class_id = $1 AND LEFT(date::text, 10) >= $2 AND LEFT(date::text, 10) <= $3
+                ORDER BY LEFT(date::text, 10)
             `, [class_id, startDate, endDate]);
         } catch (tableError) {
-            if (tableError.message && tableError.message.includes('does not exist')) {
+            // Only fall back if the table itself is missing (42P01 = undefined_table).
+            // Other errors (type mismatches, syntax, etc.) should surface directly.
+            if (tableError.code === '42P01') {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 try {
                     lessonsResult = await dataHub.query(`
                         SELECT * FROM lesson_reports
-                        WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
-                        ORDER BY LEFT(date, 10)
+                        WHERE class_id = $1 AND LEFT(date::text, 10) >= $2 AND LEFT(date::text, 10) <= $3
+                        ORDER BY LEFT(date::text, 10)
                     `, [class_id, startDate, endDate]);
                 } catch (fallbackError) {
-                    if (fallbackError.message && fallbackError.message.includes('does not exist')) {
+                    if (fallbackError.code === '42P01') {
                         console.warn('⚠️  lesson_reports table also not found, returning empty results');
                         lessonsResult = { rows: [] };
                     } else {
@@ -242,43 +255,18 @@ router.post('/auto-generate', async (req, res) => {
         
         // Calculate date range based on inputs
         // Precedence: start_date/end_date takes priority over year/month if both are provided
-        let startDate, endDate, reportYear, reportMonth;
-
-        // Regex to validate YYYY-MM-DD format (used for both user-supplied and computed dates)
-        const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-        if (start_date && end_date) {
-            // Validate format before use
-            if (!ISO_DATE_RE.test(start_date) || !ISO_DATE_RE.test(end_date)) {
-                return res.status(400).json({
-                    error: 'start_date and end_date must be in YYYY-MM-DD format'
-                });
-            }
-            startDate = start_date;
-            endDate = end_date;
-            // Extract year and month from start_date by parsing the string directly (avoid timezone issues)
-            const dateParts = start_date.split('-');
-            reportYear = parseInt(dateParts[0], 10);
-            reportMonth = parseInt(dateParts[1], 10);
-        } else if (year && month) {
-            // Monthly (backwards compatibility)
-            reportYear = parseInt(year, 10);
-            reportMonth = parseInt(month, 10);
-            startDate = `${reportYear}-${String(reportMonth).padStart(2, '0')}-01`;
-            const lastDay = new Date(Date.UTC(reportYear, reportMonth, 0)).getUTCDate();
-            endDate = `${reportYear}-${String(reportMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-        } else {
-            return res.status(400).json({ 
-                error: 'Either (year and month) or (start_date and end_date) must be provided' 
-            });
+        const dateRange = calculateDateRange({ start_date, end_date, year, month });
+        if (dateRange.error) {
+            return res.status(400).json({ error: dateRange.error });
         }
+        const { startDate, endDate, reportYear, reportMonth } = dateRange;
         
         await client.query('BEGIN');
         
-        // Get teacher comment sheets for this date range - try teacher_comment_sheets first
-        // Use LEFT(date, 10) to extract just the YYYY-MM-DD portion from the stored VARCHAR.
-        // This safely handles dates stored with any time/timezone suffix (e.g. "2026-03-19T08:30:00Z")
-        // and avoids CAST timezone-related mismatches on servers running non-UTC timezones.
+        // Get teacher comment sheets for this date range - try teacher_comment_sheets first.
+        // Use LEFT(date::text, 10) to safely handle both native PostgreSQL DATE columns and
+        // VARCHAR columns — casting to text first ensures the LEFT() string function works
+        // regardless of the underlying column type.
         //
         // IMPORTANT: Use a SAVEPOINT so that if the first query fails (e.g. table does not exist)
         // the transaction is NOT left in the 25P02 "aborted" state before we try the fallback query.
@@ -287,25 +275,27 @@ router.post('/auto-generate', async (req, res) => {
         try {
             lessonsResult = await client.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
-                ORDER BY LEFT(date, 10)
+                WHERE class_id = $1 AND LEFT(date::text, 10) >= $2 AND LEFT(date::text, 10) <= $3
+                ORDER BY LEFT(date::text, 10)
             `, [class_id, startDate, endDate]);
             await client.query('RELEASE SAVEPOINT before_teacher_comment_sheets_query');
         } catch (tableError) {
             await client.query('ROLLBACK TO SAVEPOINT before_teacher_comment_sheets_query');
-            if (tableError.message && tableError.message.includes('does not exist')) {
+            // Only fall back if the table itself is missing (42P01 = undefined_table).
+            // Other errors (type mismatches, syntax, etc.) should surface directly.
+            if (tableError.code === '42P01') {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 await client.query('SAVEPOINT before_lesson_reports_fallback');
                 try {
                     lessonsResult = await client.query(`
                         SELECT * FROM lesson_reports
-                        WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
-                        ORDER BY LEFT(date, 10)
+                        WHERE class_id = $1 AND LEFT(date::text, 10) >= $2 AND LEFT(date::text, 10) <= $3
+                        ORDER BY LEFT(date::text, 10)
                     `, [class_id, startDate, endDate]);
                     await client.query('RELEASE SAVEPOINT before_lesson_reports_fallback');
                 } catch (fallbackError) {
                     await client.query('ROLLBACK TO SAVEPOINT before_lesson_reports_fallback');
-                    if (fallbackError.message && fallbackError.message.includes('does not exist')) {
+                    if (fallbackError.code === '42P01') {
                         console.warn('⚠️  lesson_reports table also not found, proceeding with empty lessons');
                         lessonsResult = { rows: [] };
                     } else {
@@ -483,13 +473,15 @@ router.post('/auto-generate', async (req, res) => {
  */
 router.get('/available-months/:classId', async (req, res) => {
     try {
-        // Try teacher_comment_sheets first, fallback to lesson_reports
+        // Try teacher_comment_sheets first, fallback to lesson_reports.
+        // Use date::date cast which works for both native DATE and VARCHAR(50) columns.
+        // This avoids the CAST(LEFT(date, 10) AS DATE) pattern which fails on native DATE columns.
         let result;
         try {
             result = await pool.query(`
                 SELECT DISTINCT 
-                    EXTRACT(YEAR FROM CAST(LEFT(date, 10) AS DATE)) as year,
-                    EXTRACT(MONTH FROM CAST(LEFT(date, 10) AS DATE)) as month,
+                    EXTRACT(YEAR FROM date::date) as year,
+                    EXTRACT(MONTH FROM date::date) as month,
                     COUNT(*) as lesson_count
                 FROM teacher_comment_sheets
                 WHERE class_id = $1
@@ -497,13 +489,14 @@ router.get('/available-months/:classId', async (req, res) => {
                 ORDER BY year DESC, month DESC
             `, [req.params.classId]);
         } catch (tableError) {
-            if (tableError.message && tableError.message.includes('does not exist')) {
+            // Only fall back if the table itself is missing (42P01 = undefined_table).
+            if (tableError.code === '42P01') {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 try {
                     result = await pool.query(`
                         SELECT DISTINCT 
-                            EXTRACT(YEAR FROM CAST(LEFT(date, 10) AS DATE)) as year,
-                            EXTRACT(MONTH FROM CAST(LEFT(date, 10) AS DATE)) as month,
+                            EXTRACT(YEAR FROM date::date) as year,
+                            EXTRACT(MONTH FROM date::date) as month,
                             COUNT(*) as lesson_count
                         FROM lesson_reports
                         WHERE class_id = $1
@@ -511,7 +504,7 @@ router.get('/available-months/:classId', async (req, res) => {
                         ORDER BY year DESC, month DESC
                     `, [req.params.classId]);
                 } catch (fallbackError) {
-                    if (fallbackError.message && fallbackError.message.includes('does not exist')) {
+                    if (fallbackError.code === '42P01') {
                         console.warn('⚠️  lesson_reports table also not found, returning empty results');
                         result = { rows: [] };
                     } else {
