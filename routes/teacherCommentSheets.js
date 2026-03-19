@@ -10,8 +10,8 @@ router.get('/', async (req, res) => {
         let query = `
             SELECT r.*, c.name as class_name, c.color as class_color, u.full_name as teacher_name
             FROM teacher_comment_sheets r
-            JOIN classes c ON r.class_id = c.id
-            JOIN users u ON r.teacher_id = u.id
+            LEFT JOIN classes c ON r.class_id = c.id
+            LEFT JOIN users u ON r.teacher_id = u.id
             WHERE 1=1
         `;
         const params = [];

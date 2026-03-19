@@ -150,8 +150,9 @@ router.post('/', async (req, res) => {
             });
         }
         
-        // Smart defaults
-        const finalTeacherId = teacher_id || req.session?.userId || null;
+        // Smart defaults – teacher_id is intentionally left null when not provided
+        // so admins can create multiple classes quickly and assign teachers later.
+        const finalTeacherId = teacher_id || null;
         const finalSchedule = schedule?.trim() || null;  // Use null for consistency
         const finalColor = color || getRandomColor();
         

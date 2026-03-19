@@ -147,21 +147,22 @@ router.post('/preview-generate', async (req, res) => {
         }
         
         // Query lesson reports - try teacher_comment_sheets first, fallback to lesson_reports
-        // Use CAST(date AS DATE) for reliable comparison regardless of stored string format
+        // Use direct string comparison for ISO-formatted VARCHAR dates (YYYY-MM-DD) –
+        // more reliable than CAST which can behave differently across PostgreSQL timezones.
         let lessonsResult;
         try {
             lessonsResult = await dataHub.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                ORDER BY CAST(date AS DATE)
+                WHERE class_id = $1 AND date >= $2 AND date <= $3
+                ORDER BY date
             `, [class_id, startDate, endDate]);
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 lessonsResult = await dataHub.query(`
                     SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                    ORDER BY CAST(date AS DATE)
+                    WHERE class_id = $1 AND date >= $2 AND date <= $3
+                    ORDER BY date
                 `, [class_id, startDate, endDate]);
             } else {
                 throw tableError;
@@ -247,21 +248,22 @@ router.post('/auto-generate', async (req, res) => {
         await client.query('BEGIN');
         
         // Get teacher comment sheets for this date range - try teacher_comment_sheets first
-        // Use CAST(date AS DATE) for reliable comparison regardless of stored string format
+        // Use direct string comparison for ISO-formatted VARCHAR dates (YYYY-MM-DD) –
+        // more reliable than CAST which can behave differently across PostgreSQL timezones.
         let lessonsResult;
         try {
             lessonsResult = await client.query(`
                 SELECT * FROM teacher_comment_sheets
-                WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                ORDER BY CAST(date AS DATE)
+                WHERE class_id = $1 AND date >= $2 AND date <= $3
+                ORDER BY date
             `, [class_id, startDate, endDate]);
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
                 lessonsResult = await client.query(`
                     SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND CAST(date AS DATE) >= $2::DATE AND CAST(date AS DATE) <= $3::DATE
-                    ORDER BY CAST(date AS DATE)
+                    WHERE class_id = $1 AND date >= $2 AND date <= $3
+                    ORDER BY date
                 `, [class_id, startDate, endDate]);
             } else {
                 throw tableError;

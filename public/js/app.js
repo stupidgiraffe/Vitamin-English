@@ -341,6 +341,33 @@ function getContrastTextColor(hexColor) {
     return brightness > 128 ? '#000' : '#fff';
 }
 
+/**
+ * Apply a preset color swatch selection inside a class color picker.
+ * Called from inline onclick on the swatch spans generated in the Add/Edit Class modals.
+ *
+ * @param {string} colorInputId  - id of the <input type="color"> element
+ * @param {string} previewId     - id of the preview <span>
+ * @param {string} formSelector  - CSS selector for the parent form (used to scope sibling swatches)
+ * @param {string} color         - Hex color to apply (e.g. '#4285f4')
+ * @param {Element} swatchEl     - The clicked swatch element
+ */
+function applyColorSwatch(colorInputId, previewId, formSelector, color, swatchEl) {
+    const colorInput = document.getElementById(colorInputId);
+    const preview    = document.getElementById(previewId);
+    if (colorInput) colorInput.value = color;
+    if (preview) {
+        preview.style.background = color;
+        preview.style.color = getContrastTextColor(color);
+    }
+    // Update selection highlight on sibling swatches within the same form
+    const form = swatchEl.closest(formSelector) || document.querySelector(formSelector);
+    if (form) {
+        form.querySelectorAll('.color-swatch').forEach(s => {
+            s.style.borderColor = s === swatchEl ? '#333' : 'transparent';
+        });
+    }
+}
+
 // Build a rich display label for a class: "Name (Teacher • Schedule)"
 // Falls back gracefully when teacher or schedule are missing.
 function getClassDisplayName(cls) {
@@ -852,7 +879,24 @@ function navigateToPage(page, pushState = true) {
     else if (page === 'admin') loadAdminData();
     else if (page === 'attendance') initializeAttendancePage();
     else if (page === 'database') initializeDatabasePage();
-    else if (page === 'reports') { initMultiClassView(); loadReportsList(); }
+    else if (page === 'reports') {
+        // Ensure the default "Single Report" tab is active each time the page is opened.
+        // (It can be deactivated if the user switched tabs elsewhere before returning here.)
+        const singleReportTabBtn = document.querySelector('[data-tab="single-report"]');
+        const singleReportTabContent = document.getElementById('single-report-tab');
+        if (singleReportTabBtn) {
+            document.querySelectorAll('#reports-page .tab-btn').forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-selected', 'false');
+            });
+            document.querySelectorAll('#reports-page .tab-content').forEach(t => t.classList.remove('active'));
+            singleReportTabBtn.classList.add('active');
+            singleReportTabBtn.setAttribute('aria-selected', 'true');
+            if (singleReportTabContent) singleReportTabContent.classList.add('active');
+        }
+        initMultiClassView();
+        loadReportsList();
+    }
 }
 
 // Initialize attendance page with default date range (last 6 months)
@@ -3478,15 +3522,19 @@ document.getElementById('report-date').value = new Date().toISOString().split('T
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         const tab = e.target.dataset.tab;
+
+        // Scope tab switching to the parent .page element so that tabs on one
+        // page (e.g. Admin) don't deactivate tabs on another page (e.g. Reports).
+        const parentPage = e.target.closest('.page') || document;
         
-        // Update tab buttons
-        document.querySelectorAll('.tab-btn').forEach(b => {
+        // Update tab buttons within this page only
+        parentPage.querySelectorAll('.tab-btn').forEach(b => {
             b.classList.remove('active');
             b.setAttribute('aria-selected', 'false');
         });
         
-        // Update tab content
-        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        // Update tab content within this page only
+        parentPage.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
         
         // Activate selected tab
         e.target.classList.add('active');
@@ -3790,10 +3838,10 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
             <div class="form-group">
                 <label>Teacher (Optional)</label>
                 <select id="class-teacher" class="form-control">
-                    <option value="">Current user (default)</option>
+                    <option value="">— Unassigned —</option>
                     ${teachers.map(t => `<option value="${t.id}">${escapeHtml(t.full_name)}</option>`).join('')}
                 </select>
-                <small class="form-hint">Defaults to you if not selected</small>
+                <small class="form-hint">Assign a teacher now or leave unassigned to set later</small>
             </div>
             <div class="form-group">
                 <label>Schedule (Optional)</label>
@@ -3804,12 +3852,19 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
             </div>
             <div class="form-group">
                 <label>Color (Optional)</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px;">
+                    ${['#4285f4','#ea4335','#34a853','#fbbc04','#ff6d00','#9c27b0','#e91e63','#46bdc6','#00bcd4','#8bc34a'].map(c =>
+                        `<span class="color-swatch" data-color="${c}" title="${c}"
+                               style="display:inline-block;width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;border:2px solid transparent;flex-shrink:0;"
+                               onclick="applyColorSwatch('class-color','color-preview','#class-form','${c}',this)"></span>`
+                    ).join('')}
+                </div>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <input type="color" id="class-color" value="#4285f4" class="form-control" 
-                           style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
-                    <span id="color-preview" style="padding: 8px 16px; border-radius: 4px; background: #4285f4; color: white; font-size: 12px;">Preview</span>
+                           style="width: 50px; height: 34px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;" title="Custom color">
+                    <span id="color-preview" style="padding: 6px 14px; border-radius: 4px; background: #4285f4; color: white; font-size: 12px;">Preview</span>
                 </div>
-                <small class="form-hint">Pick any color or leave default</small>
+                <small class="form-hint">Click a swatch for a preset color, or use the picker for any color</small>
             </div>
             <button type="submit" class="btn btn-primary">Add Class</button>
         </form>
@@ -3821,6 +3876,10 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
         const preview = document.getElementById('color-preview');
         preview.style.background = color;
         preview.style.color = getContrastTextColor(color);
+        // Clear swatch selection highlight when using custom color picker
+        document.querySelectorAll('#class-form .color-swatch').forEach(s => {
+            s.style.borderColor = s.dataset.color === color ? '#333' : 'transparent';
+        });
     });
 
     document.getElementById('class-form').addEventListener('submit', async (e) => {
@@ -3880,10 +3939,17 @@ async function editClass(id) {
                 </div>
                 <div class="form-group">
                     <label>Color</label>
+                    <div style="display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px;">
+                        ${['#4285f4','#ea4335','#34a853','#fbbc04','#ff6d00','#9c27b0','#e91e63','#46bdc6','#00bcd4','#8bc34a'].map(c =>
+                            `<span class="color-swatch" data-color="${c}" title="${c}"
+                                   style="display:inline-block;width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;border:2px solid ${c === (cls.color || '#4285f4') ? '#333' : 'transparent'};flex-shrink:0;"
+                                   onclick="applyColorSwatch('edit-class-color','edit-color-preview','#edit-class-form','${c}',this)"></span>`
+                        ).join('')}
+                    </div>
                     <div style="display: flex; gap: 10px; align-items: center;">
                         <input type="color" id="edit-class-color" value="${escapeHtml(cls.color || '#4285f4')}" class="form-control"
-                               style="width: 80px; height: 40px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;">
-                        <span id="edit-color-preview" style="padding: 8px 16px; border-radius: 4px; background: ${escapeHtml(cls.color || '#4285f4')}; color: white; font-size: 12px;">Preview</span>
+                               style="width: 50px; height: 34px; cursor: pointer; border: 2px solid #ddd; border-radius: 4px;" title="Custom color">
+                        <span id="edit-color-preview" style="padding: 6px 14px; border-radius: 4px; background: ${escapeHtml(cls.color || '#4285f4')}; color: white; font-size: 12px;">Preview</span>
                     </div>
                 </div>
                 <button type="submit" class="btn btn-primary">Update Class</button>
@@ -3901,6 +3967,10 @@ async function editClass(id) {
             const color = e.target.value;
             editPreview.style.background = color;
             editPreview.style.color = getContrastTextColor(color);
+            // Clear swatch selection when using custom color picker
+            document.querySelectorAll('#edit-class-form .color-swatch').forEach(s => {
+                s.style.borderColor = s.dataset.color === color ? '#333' : 'transparent';
+            });
         });
 
         document.getElementById('edit-class-form').addEventListener('submit', async (e) => {
