@@ -2,6 +2,70 @@ const express = require('express');
 const router = express.Router();
 const dataHub = require('../database/DataHub');
 
+// ── Schedule conflict detection ─────────────────────────────────────────────
+// Canonical schedule format expected: "Mon/Wed 10:00-11:30"
+// Days are "/" separated day abbreviations; time is HH:MM-HH:MM (24-hour).
+const SCHEDULE_RE = /^([A-Za-z]+(?:\/[A-Za-z]+)*)\s+(\d{1,2}:\d{2})-(\d{1,2}:\d{2})$/;
+
+/**
+ * Compare two HH:MM time strings. Returns negative if a < b, positive if a > b.
+ * e.g. "09:00" < "10:30"
+ */
+function cmpTime(a, b) {
+    const [ah, am] = a.split(':').map(Number);
+    const [bh, bm] = b.split(':').map(Number);
+    return (ah * 60 + am) - (bh * 60 + bm);
+}
+
+/**
+ * Check whether a proposed teacher assignment would double-book the teacher.
+ *
+ * Returns a conflict descriptor object  { className, schedule }  if there is
+ * an overlap with an existing class, or  null  when everything is fine.
+ *
+ * @param {number|string} teacherId      - The teacher being assigned.
+ * @param {string}        schedule       - Proposed canonical schedule string.
+ * @param {number|string} [excludeId]    - Class ID to ignore (used when updating).
+ */
+async function findDoubleBooking(teacherId, schedule, excludeId) {
+    // Only check canonical schedules — free-text legacy values are skipped.
+    if (!teacherId || !schedule || !schedule.trim()) return null;
+    const m = schedule.trim().match(SCHEDULE_RE);
+    if (!m) return null;
+
+    const newDays  = m[1].split('/');
+    const newStart = m[2];
+    const newEnd   = m[3];
+
+    // Fetch all active classes for this teacher.
+    const allClasses = await dataHub.classes.findAll({ active: true, perPage: 0 });
+    const teacherClasses = allClasses.filter(c =>
+        String(c.teacher_id) === String(teacherId) &&
+        c.schedule &&
+        (!excludeId || String(c.id) !== String(excludeId))
+    );
+
+    for (const cls of teacherClasses) {
+        const em = cls.schedule.trim().match(SCHEDULE_RE);
+        if (!em) continue; // skip legacy schedules
+
+        const existDays  = em[1].split('/');
+        const existStart = em[2];
+        const existEnd   = em[3];
+
+        // Days overlap?
+        const dayOverlap = newDays.some(d => existDays.includes(d));
+        if (!dayOverlap) continue;
+
+        // Time ranges overlap? (newStart < existEnd AND newEnd > existStart)
+        if (cmpTime(newStart, existEnd) < 0 && cmpTime(newEnd, existStart) > 0) {
+            return { className: cls.name, schedule: cls.schedule };
+        }
+    }
+    return null;
+}
+// ───────────────────────────────────────────────────────────────────────────
+
 // Get all classes
 router.get('/', async (req, res) => {
     try {
@@ -108,6 +172,17 @@ router.post('/', async (req, res) => {
         });
         
         console.log('✅ Class created successfully:', classData);
+
+        // Check for teacher double-booking (non-blocking: returns a warning, not an error).
+        const conflict = await findDoubleBooking(finalTeacherId, finalSchedule, null);
+        if (conflict) {
+            const teacherName = classData.teacher_name || `Teacher #${finalTeacherId}`;
+            return res.status(201).json({
+                ...classData,
+                warning: `Warning: ${teacherName} is already scheduled to teach "${conflict.className}" at ${conflict.schedule}. Please verify the schedule.`
+            });
+        }
+
         res.status(201).json(classData);
         
     } catch (error) {
@@ -163,6 +238,18 @@ router.put('/:id', async (req, res) => {
         
         if (!classInfo) {
             return res.status(404).json({ error: 'Class not found' });
+        }
+
+        // Check for teacher double-booking (non-blocking: returns a warning, not an error).
+        const finalTeacherId = teacher_id || null;
+        const finalSchedule  = schedule?.trim() || null;
+        const conflict = await findDoubleBooking(finalTeacherId, finalSchedule, req.params.id);
+        if (conflict) {
+            const teacherName = classInfo.teacher_name || `Teacher #${finalTeacherId}`;
+            return res.json({
+                ...classInfo,
+                warning: `Warning: ${teacherName} is already scheduled to teach "${conflict.className}" at ${conflict.schedule}. Please verify the schedule.`
+            });
         }
         
         res.json(classInfo);
