@@ -169,11 +169,20 @@ router.post('/preview-generate', async (req, res) => {
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
-                lessonsResult = await dataHub.query(`
-                    SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
-                    ORDER BY LEFT(date, 10)
-                `, [class_id, startDate, endDate]);
+                try {
+                    lessonsResult = await dataHub.query(`
+                        SELECT * FROM lesson_reports
+                        WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
+                        ORDER BY LEFT(date, 10)
+                    `, [class_id, startDate, endDate]);
+                } catch (fallbackError) {
+                    if (fallbackError.message && fallbackError.message.includes('does not exist')) {
+                        console.warn('⚠️  lesson_reports table also not found, returning empty results');
+                        lessonsResult = { rows: [] };
+                    } else {
+                        throw fallbackError;
+                    }
+                }
             } else {
                 throw tableError;
             }
@@ -286,11 +295,23 @@ router.post('/auto-generate', async (req, res) => {
             await client.query('ROLLBACK TO SAVEPOINT before_teacher_comment_sheets_query');
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
-                lessonsResult = await client.query(`
-                    SELECT * FROM lesson_reports
-                    WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
-                    ORDER BY LEFT(date, 10)
-                `, [class_id, startDate, endDate]);
+                await client.query('SAVEPOINT before_lesson_reports_fallback');
+                try {
+                    lessonsResult = await client.query(`
+                        SELECT * FROM lesson_reports
+                        WHERE class_id = $1 AND LEFT(date, 10) >= $2 AND LEFT(date, 10) <= $3
+                        ORDER BY LEFT(date, 10)
+                    `, [class_id, startDate, endDate]);
+                    await client.query('RELEASE SAVEPOINT before_lesson_reports_fallback');
+                } catch (fallbackError) {
+                    await client.query('ROLLBACK TO SAVEPOINT before_lesson_reports_fallback');
+                    if (fallbackError.message && fallbackError.message.includes('does not exist')) {
+                        console.warn('⚠️  lesson_reports table also not found, proceeding with empty lessons');
+                        lessonsResult = { rows: [] };
+                    } else {
+                        throw fallbackError;
+                    }
+                }
             } else {
                 throw tableError;
             }
@@ -478,16 +499,25 @@ router.get('/available-months/:classId', async (req, res) => {
         } catch (tableError) {
             if (tableError.message && tableError.message.includes('does not exist')) {
                 console.warn('⚠️  teacher_comment_sheets table not found, falling back to lesson_reports');
-                result = await pool.query(`
-                    SELECT DISTINCT 
-                        EXTRACT(YEAR FROM CAST(LEFT(date, 10) AS DATE)) as year,
-                        EXTRACT(MONTH FROM CAST(LEFT(date, 10) AS DATE)) as month,
-                        COUNT(*) as lesson_count
-                    FROM lesson_reports
-                    WHERE class_id = $1
-                    GROUP BY year, month
-                    ORDER BY year DESC, month DESC
-                `, [req.params.classId]);
+                try {
+                    result = await pool.query(`
+                        SELECT DISTINCT 
+                            EXTRACT(YEAR FROM CAST(LEFT(date, 10) AS DATE)) as year,
+                            EXTRACT(MONTH FROM CAST(LEFT(date, 10) AS DATE)) as month,
+                            COUNT(*) as lesson_count
+                        FROM lesson_reports
+                        WHERE class_id = $1
+                        GROUP BY year, month
+                        ORDER BY year DESC, month DESC
+                    `, [req.params.classId]);
+                } catch (fallbackError) {
+                    if (fallbackError.message && fallbackError.message.includes('does not exist')) {
+                        console.warn('⚠️  lesson_reports table also not found, returning empty results');
+                        result = { rows: [] };
+                    } else {
+                        throw fallbackError;
+                    }
+                }
             } else {
                 throw tableError;
             }
