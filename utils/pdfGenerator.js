@@ -911,8 +911,8 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             const cardY    = doc.y;
 
             // Measure card height: label line + value line (+ optional schedule line)
-            const scheduleLine = sanitizeForPDF((classData && classData.schedule) || '').trim();
-            const cardH = cardPad + 12 + 14 + (scheduleLine ? 12 : 0) + cardPad; // ~50-58px
+            const scheduleLine = sanitizeForPDF(classData.schedule || '').trim();
+            const cardH = cardPad + 12 /* label */ + 14 /* value */ + (scheduleLine ? 12 /* schedule */ : 0) + cardPad; // ~50-58px
 
             doc.rect(MARGIN, cardY, CONTENT_WIDTH, cardH)
                .fill(THEME.colors.accentYellow);
@@ -953,9 +953,9 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                 drawSectionHeading('Students in Class');
 
                 const studentStartY = doc.y;
-                const leftX  = MARGIN;
-                const rightX = MARGIN + CONTENT_WIDTH / 2 + 4;
-                const sColW  = CONTENT_WIDTH / 2 - 8;
+                const leftX       = MARGIN;
+                const rightX      = MARGIN + CONTENT_WIDTH / 2 + 4;
+                const studentColW = CONTENT_WIDTH / 2 - 8;
                 let maxY     = studentStartY;
 
                 doc.fontSize(10).font('Helvetica').fillColor(THEME.colors.textDark);
@@ -967,7 +967,7 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                     const y    = studentStartY + row * 18;
                     const name = sanitizeForPDF(student.name || '').substring(0, 35);
 
-                    doc.text(`• ${name}`, x, y, { width: sColW, lineBreak: false });
+                    doc.text(`• ${name}`, x, y, { width: studentColW, lineBreak: false });
                     if (y + 18 > maxY) maxY = y + 18;
                 });
 
