@@ -863,7 +863,7 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
 
                 // Label row (primary-blue text, bold)
                 if (hasJapanese) {
-                    const parenIdx = label.search(/\([\u3000-\u9FFF\uF900-\uFAFF]/);
+                    const parenIdx = label.search(/\([\u3040-\u30FF\u3000-\u9FFF\uF900-\uFAFF]/);
                     if (parenIdx > 0) {
                         doc.fontSize(10).font('Helvetica-Bold').fillColor(THEME.colors.primaryBlue)
                            .text(label.slice(0, parenIdx), MARGIN, fieldY, { continued: true });
