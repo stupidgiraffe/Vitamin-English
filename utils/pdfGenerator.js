@@ -801,8 +801,8 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
         try {
             const MARGIN = 50;
             const CONTENT_WIDTH = 595.28 - MARGIN * 2; // A4 width minus margins
-            const FOOTER_HEIGHT = 40;
-            const FOOTER_RESERVE = FOOTER_HEIGHT + 10; // space to keep clear at page bottom
+            const FOOTER_HEIGHT = 50;
+            const FOOTER_RESERVE = FOOTER_HEIGHT + 15; // space to keep clear at page bottom (extra 5px safety buffer)
 
             const doc = new PDFDocument({ 
                 margin: MARGIN, 
@@ -895,16 +895,16 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             // ══════════════════════════════════════════════════════════════════
             // PAGE HEADER
             // ══════════════════════════════════════════════════════════════════
-            doc.rect(0, 0, doc.page.width, 88)
+            doc.rect(0, 0, doc.page.width, 95)
                .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
 
             doc.fontSize(24).font('Helvetica-Bold').fillColor(THEME.colors.white)
-               .text('Vitamin English School', MARGIN, 22, { align: 'center' });
+               .text('Vitamin English School', MARGIN, 24, { align: 'center' });
 
-            doc.fontSize(14).fillColor(THEME.colors.accentYellow)
-               .text('Lesson Report', MARGIN, 56, { align: 'center' });
+            doc.fontSize(14).fillColor(THEME.colors.brightYellow)
+               .text('Lesson Report', MARGIN, 60, { align: 'center' });
 
-            doc.y = 100;
+            doc.y = 110;
 
             // ── Class Information ──────────────────────────────────────────────
             drawSectionHeading('Class Information');
@@ -970,15 +970,15 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             const footerText = `Vitamin English School  |  Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
             for (let i = 0; i < totalPages; i++) {
                 doc.switchToPage(i);
-                const footerY = doc.page.height - FOOTER_HEIGHT + 6;
-                doc.moveTo(MARGIN, footerY - 6)
-                   .lineTo(MARGIN + CONTENT_WIDTH, footerY - 6)
+                const footerY = doc.page.height - FOOTER_HEIGHT + 10;
+                doc.moveTo(MARGIN, footerY - 8)
+                   .lineTo(MARGIN + CONTENT_WIDTH, footerY - 8)
                    .lineWidth(0.5).strokeColor('#CCCCCC').stroke();
                 doc.fontSize(8).font('Helvetica').fillColor('#888888')
                    .text(footerText, MARGIN, footerY,
                          { width: CONTENT_WIDTH, align: 'center' });
                 if (totalPages > 1) {
-                    doc.text(`${i + 1} / ${totalPages}`, MARGIN, footerY + 11,
+                    doc.text(`${i + 1} / ${totalPages}`, MARGIN, footerY + 14,
                              { width: CONTENT_WIDTH, align: 'right' });
                 }
             }
