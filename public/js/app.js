@@ -741,6 +741,18 @@ function populateClassSelects() {
     const myClasses    = classes.filter(c => currentUser && c.teacher_id == currentUser.id);
     const otherClasses = classes.filter(c => !currentUser || c.teacher_id != currentUser.id);
 
+    // Build a color-prefixed option for a class entry.
+    const makeClassOption = (cls) => {
+        const opt = document.createElement('option');
+        opt.value = cls.id;
+        const dot = cls.color ? `\u25cf ` : '';
+        opt.textContent = dot + getClassDisplayName(cls);
+        if (cls.color) {
+            opt.style.color = cls.color;
+        }
+        return opt;
+    };
+
     selects.forEach(select => {
         if (!select) return;
         // Preserve existing selection if possible.
@@ -750,12 +762,7 @@ function populateClassSelects() {
         if (myClasses.length > 0) {
             const myGroup = document.createElement('optgroup');
             myGroup.label = 'My Classes';
-            myClasses.forEach(cls => {
-                const opt = document.createElement('option');
-                opt.value = cls.id;
-                opt.textContent = getClassDisplayName(cls);
-                myGroup.appendChild(opt);
-            });
+            myClasses.forEach(cls => myGroup.appendChild(makeClassOption(cls)));
             select.appendChild(myGroup);
         }
 
@@ -765,20 +772,10 @@ function populateClassSelects() {
             if (myClasses.length > 0) {
                 const otherGroup = document.createElement('optgroup');
                 otherGroup.label = 'Other Classes';
-                otherClasses.forEach(cls => {
-                    const opt = document.createElement('option');
-                    opt.value = cls.id;
-                    opt.textContent = getClassDisplayName(cls);
-                    otherGroup.appendChild(opt);
-                });
+                otherClasses.forEach(cls => otherGroup.appendChild(makeClassOption(cls)));
                 select.appendChild(otherGroup);
             } else {
-                otherClasses.forEach(cls => {
-                    const opt = document.createElement('option');
-                    opt.value = cls.id;
-                    opt.textContent = getClassDisplayName(cls);
-                    select.appendChild(opt);
-                });
+                otherClasses.forEach(cls => select.appendChild(makeClassOption(cls)));
             }
         }
 
