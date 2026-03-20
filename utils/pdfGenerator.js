@@ -799,13 +799,12 @@ function formatPDFDate(dateStr) {
 async function generateLessonReportPDF(reportData, classData, students = null) {
     return new Promise((resolve, reject) => {
         try {
-            const MARGIN = 50;
+            const MARGIN = 40;
             const CONTENT_WIDTH = 595.28 - MARGIN * 2; // A4 width minus margins
-            const FOOTER_HEIGHT = 40;
-            const FOOTER_RESERVE = FOOTER_HEIGHT + 10; // space to keep clear at page bottom
+            // No footer — removes overflow risk; page numbers shown only on multi-page docs
 
-            const doc = new PDFDocument({ 
-                margin: MARGIN, 
+            const doc = new PDFDocument({
+                margin: MARGIN,
                 size: 'A4',
                 bufferPages: true,
                 info: {
@@ -815,10 +814,13 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                 }
             });
             const buffers = [];
-            
+
             doc.on('data', (chunk) => buffers.push(chunk));
             doc.on('end', () => resolve(Buffer.concat(buffers)));
             doc.on('error', reject);
+
+            const PAGE_H     = doc.page.height;
+            const SAFE_BOTTOM = PAGE_H - 36; // minimal bottom margin, no footer
 
             // Register Japanese fonts
             doc.registerFont('NotoJP', path.join(__dirname, '..', 'fonts', 'NotoSansJP-Regular.ttf'));
@@ -826,17 +828,17 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
 
             // ── Helper: section heading bar ─────────────────────────────────────
             const drawSectionHeading = (title) => {
-                if (doc.y > doc.page.height - FOOTER_RESERVE - 60) {
+                if (doc.y > SAFE_BOTTOM - 60) {
                     doc.addPage();
                 }
                 const y = doc.y;
-                doc.rect(MARGIN, y, CONTENT_WIDTH, 24)
-                   .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
-                doc.fontSize(11)
+                doc.rect(MARGIN, y, CONTENT_WIDTH, 22)
+                   .fill(THEME.colors.primaryBlue);
+                doc.fontSize(10.5)
                    .font('Helvetica-Bold')
                    .fillColor(THEME.colors.white)
-                   .text(title, MARGIN + 8, y + 6, { width: CONTENT_WIDTH - 16 });
-                doc.y = y + 24 + 6;
+                   .text(title, MARGIN + 10, y + 5.5, { width: CONTENT_WIDTH - 20 });
+                doc.y = y + 22 + 8;
             };
 
             // ── Helper: add a detail field (collapsed when empty) ───────────────
@@ -851,8 +853,8 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                     font: contentFont,
                     size: 10
                 }) / 14);
-                const neededHeight = 18 + estimatedLines * 14 + 16; // label + content + padding
-                if (doc.y + neededHeight > doc.page.height - FOOTER_RESERVE) {
+                const neededHeight = 16 + estimatedLines * 14 + 14; // label + content + padding
+                if (doc.y + neededHeight > SAFE_BOTTOM) {
                     doc.addPage();
                 }
 
@@ -861,7 +863,7 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
 
                 // Label row (primary-blue text, bold)
                 if (hasJapanese) {
-                    const parenIdx = label.search(/\([\u3040-\u30FF\u3000-\u9FFF\uF900-\uFAFF]/);
+                    const parenIdx = label.search(/\([\u3000-\u9FFF\uF900-\uFAFF]/);
                     if (parenIdx > 0) {
                         doc.fontSize(10).font('Helvetica-Bold').fillColor(THEME.colors.primaryBlue)
                            .text(label.slice(0, parenIdx), MARGIN, fieldY, { continued: true });
@@ -877,8 +879,8 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
 
                 // Content text with full word-wrap
                 doc.fontSize(10).font(contentFont).fillColor(THEME.colors.textDark)
-                   .text(text, MARGIN + 4, doc.y, {
-                       width: CONTENT_WIDTH - 8,
+                   .text(text, MARGIN + 6, doc.y, {
+                       width: CONTENT_WIDTH - 12,
                        align: 'left',
                        lineBreak: true
                    });
@@ -886,47 +888,57 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                 // Thin separator rule
                 doc.moveTo(MARGIN, doc.y + 5)
                    .lineTo(MARGIN + CONTENT_WIDTH, doc.y + 5)
-                   .lineWidth(0.5)
-                   .strokeColor('#DDDDDD')
+                   .lineWidth(0.4)
+                   .strokeColor('#EEEEEE')
                    .stroke();
-                doc.y = doc.y + 12;
+                doc.y = doc.y + 11;
             };
-            
+
             // ══════════════════════════════════════════════════════════════════
-            // PAGE HEADER
+            // PAGE HEADER — blue bar with school name & report type
             // ══════════════════════════════════════════════════════════════════
-            doc.rect(0, 0, doc.page.width, 88)
-               .fillAndStroke(THEME.colors.primaryBlue, THEME.colors.secondaryBlue);
+            const HDR_H = 80;
+            doc.rect(0, 0, doc.page.width, HDR_H)
+               .fill(THEME.colors.primaryBlue);
 
-            doc.fontSize(24).font('Helvetica-Bold').fillColor(THEME.colors.white)
-               .text('Vitamin English School', MARGIN, 22, { align: 'center' });
+            // Thin accent stripe at bottom of header
+            doc.rect(0, HDR_H - 4, doc.page.width, 4)
+               .fill(THEME.colors.secondaryBlue);
 
-            doc.fontSize(14).fillColor(THEME.colors.accentYellow)
-               .text('Lesson Report', MARGIN, 56, { align: 'center' });
+            doc.fontSize(22).font('Helvetica-Bold').fillColor(THEME.colors.white)
+               .text('Vitamin English School', MARGIN, 18, { align: 'center' });
 
-            doc.y = 100;
+            doc.fontSize(12).fillColor(THEME.colors.accentYellow)
+               .text('Lesson Report', MARGIN, 48, { align: 'center' });
 
-            // ── Class Information ──────────────────────────────────────────────
-            drawSectionHeading('Class Information');
+            doc.y = HDR_H + 16;
 
+            // ── Class Information — horizontal 3-column card ───────────────────
+            const INFO_H  = 52;
             const infoBoxY = doc.y;
+            const colW3   = CONTENT_WIDTH / 3;
+
+            doc.rect(MARGIN, infoBoxY, CONTENT_WIDTH, INFO_H)
+               .fill(THEME.colors.accentYellow);
+            // Left border accent
+            doc.rect(MARGIN, infoBoxY, 4, INFO_H)
+               .fill(THEME.colors.secondaryBlue);
+
             const infoItems = [
                 { label: 'Class',   value: sanitizeForPDF(classData.name) || '—' },
                 { label: 'Teacher', value: sanitizeForPDF(reportData.teacher_name) || '—' },
                 { label: 'Date',    value: formatPDFDate(reportData.date) }
             ];
-            const infoBoxHeight = infoItems.length * 20 + 10;
-            doc.rect(MARGIN, infoBoxY, CONTENT_WIDTH, infoBoxHeight)
-               .fill(THEME.colors.accentYellow);
 
             infoItems.forEach((item, i) => {
-                const y = infoBoxY + 6 + i * 20;
-                doc.fontSize(10).font('Helvetica-Bold').fillColor(THEME.colors.secondaryBlue)
-                   .text(`${item.label}:`, MARGIN + 8, y, { continued: true, width: 70 });
-                doc.font('Helvetica').fillColor(THEME.colors.textDark)
-                   .text(` ${item.value}`, { width: CONTENT_WIDTH - 90 });
+                const x = MARGIN + 12 + i * colW3;
+                doc.fontSize(8).font('Helvetica-Bold').fillColor(THEME.colors.secondaryBlue)
+                   .text(item.label.toUpperCase(), x, infoBoxY + 9, { width: colW3 - 12 });
+                doc.fontSize(11).font('Helvetica').fillColor(THEME.colors.textDark)
+                   .text(item.value, x, infoBoxY + 21, { width: colW3 - 12, lineBreak: false });
             });
-            doc.y = infoBoxY + infoBoxHeight + 10;
+
+            doc.y = infoBoxY + INFO_H + 14;
 
             // ── Students in Class (collapsed when none) ────────────────────────
             if (students && students.length > 0) {
@@ -941,17 +953,17 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
                 doc.fontSize(10).font('Helvetica').fillColor(THEME.colors.textDark);
 
                 students.forEach((student, index) => {
-                    const col     = index % 2;
-                    const row     = Math.floor(index / 2);
-                    const x       = col === 0 ? leftX : rightX;
-                    const y       = studentStartY + row * 18;
-                    const name    = sanitizeForPDF(student.name || '').substring(0, 35);
+                    const col  = index % 2;
+                    const row  = Math.floor(index / 2);
+                    const x    = col === 0 ? leftX : rightX;
+                    const y    = studentStartY + row * 17;
+                    const name = sanitizeForPDF(student.name || '').substring(0, 35);
 
                     doc.text(`• ${name}`, x, y, { width: colW, lineBreak: false });
-                    if (y + 18 > maxY) maxY = y + 18;
+                    if (y + 17 > maxY) maxY = y + 17;
                 });
 
-                doc.y = maxY + 10;
+                doc.y = maxY + 12;
             }
 
             // ── Lesson Details ─────────────────────────────────────────────────
@@ -965,20 +977,13 @@ async function generateLessonReportPDF(reportData, classData, students = null) {
             addField('Comments/Homework:',       reportData.comments);
             addField('Others (その他):',         reportData.others);
 
-            // ── Footer on every page ───────────────────────────────────────────
+            // ── Page numbers (only when multi-page) ───────────────────────────
             const totalPages = doc.bufferedPageRange().count;
-            const footerText = `Vitamin English School  |  Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`;
-            for (let i = 0; i < totalPages; i++) {
-                doc.switchToPage(i);
-                const footerY = doc.page.height - FOOTER_HEIGHT + 6;
-                doc.moveTo(MARGIN, footerY - 6)
-                   .lineTo(MARGIN + CONTENT_WIDTH, footerY - 6)
-                   .lineWidth(0.5).strokeColor('#CCCCCC').stroke();
-                doc.fontSize(8).font('Helvetica').fillColor('#888888')
-                   .text(footerText, MARGIN, footerY,
-                         { width: CONTENT_WIDTH, align: 'center' });
-                if (totalPages > 1) {
-                    doc.text(`${i + 1} / ${totalPages}`, MARGIN, footerY + 11,
+            if (totalPages > 1) {
+                for (let i = 0; i < totalPages; i++) {
+                    doc.switchToPage(i);
+                    doc.fontSize(8).font('Helvetica').fillColor('#AAAAAA')
+                       .text(`${i + 1} / ${totalPages}`, MARGIN, PAGE_H - 24,
                              { width: CONTENT_WIDTH, align: 'right' });
                 }
             }
