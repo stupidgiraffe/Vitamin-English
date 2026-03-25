@@ -140,17 +140,41 @@ const sessionConfig = {
 
 // Use PostgreSQL session store in production (Vercel)
 if (process.env.DATABASE_URL) {
-    sessionConfig.store = new pgSession({
+    const store = new pgSession({
         pool,
         tableName: 'session',
-        createTableIfMissing: true
+        createTableIfMissing: true,
+        // Prune expired sessions every 60 s — also keeps the connection alive
+        // so Neon is less likely to auto-suspend and break active sessions.
+        pruneSessionInterval: 60,
+        errorLog: console.error.bind(console, '❌ Session store error:'),
     });
+
+    // Log but don't crash on session store connection errors (e.g. Neon wake-up)
+    store.on('error', (err) => {
+        console.error('❌ Session store connection error (Neon may be waking up):', err.message);
+    });
+
+    sessionConfig.store = store;
     console.log('✅ Using PostgreSQL session store');
 } else {
     console.log('⚠️  Using memory session store (development only)');
 }
 
 app.use(session(sessionConfig));
+
+// Keep database connection alive to prevent Neon auto-suspend from breaking sessions
+if (process.env.NODE_ENV === 'production' && process.env.DATABASE_URL) {
+    const HEARTBEAT_INTERVAL = 4 * 60 * 1000; // 4 minutes
+    setInterval(async () => {
+        try {
+            await pool.query('SELECT 1');
+        } catch (err) {
+            console.warn('⚠️ Database heartbeat failed (Neon may be waking up):', err.message);
+        }
+    }, HEARTBEAT_INTERVAL);
+    console.log('💓 Database heartbeat enabled (every 4 minutes)');
+}
 
 // Session debugging middleware (conditional on DEBUG_SESSIONS env var)
 if (process.env.DEBUG_SESSIONS === 'true') {

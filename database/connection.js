@@ -24,11 +24,14 @@ const pool = new Pool({
         // These services use self-signed certificates or certificates not in Node's CA bundle
         rejectUnauthorized: false
     } : false,
-    // Enhanced pool configuration
-    max: parseInt(process.env.DB_POOL_MAX || '20', 10),
-    idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '30000', 10),
+    // Tuned for Neon PostgreSQL: smaller pool and faster idle release reduce stale connections
+    // after Neon auto-suspend wakes up.
+    max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+    idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '10000', 10),
     connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000', 10),
     maxUses: parseInt(process.env.DB_MAX_USES || '7500', 10),
+    // Allow the pool to fully drain when the app is idle (important for serverless/Vercel)
+    allowExitOnIdle: true,
 });
 
 // Test connection
@@ -37,7 +40,8 @@ pool.on('connect', () => {
 });
 
 pool.on('error', (err) => {
-    console.error('❌ Unexpected database error:', err);
+    // Expected during Neon auto-suspend wake-up; stale connections are removed automatically
+    console.error('⚠️ Database pool connection error (expected with Neon auto-suspend):', err.message);
 });
 
 /**

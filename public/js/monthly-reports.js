@@ -701,3 +701,233 @@ async function deleteMonthlyReport(reportId) {
         Toast.error('Failed to delete monthly report');
     }
 }
+
+// ── Batch Apply Theme ──────────────────────────────────────────────────────
+
+/**
+ * Show the modal for batch-applying a monthly theme to draft reports.
+ * Populates a class list dynamically based on the selected month/year.
+ */
+async function showBatchThemeModal() {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    let monthOpts = '';
+    monthNames.forEach((name, i) => {
+        const val = i + 1;
+        const sel = val === currentMonth ? 'selected' : '';
+        monthOpts += `<option value="${val}" ${sel}>${name}</option>`;
+    });
+
+    const html = `
+        <div id="batch-theme-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Month *</label>
+                    <select id="bt-month" class="form-control">${monthOpts}</select>
+                </div>
+                <div class="form-group">
+                    <label>Year *</label>
+                    <input type="number" id="bt-year" class="form-control" value="${currentYear}" min="2020" max="2099" style="width:100px;">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Theme to Apply *</label>
+                <textarea id="bt-theme" class="form-control" rows="3" placeholder="Enter the monthly theme to apply..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="bt-overwrite">
+                    Overwrite existing themes
+                </label>
+                <small id="bt-overwrite-note" class="form-text text-muted">Reports that already have a theme will be skipped.</small>
+            </div>
+            <div class="form-group">
+                <label>Select Classes</label>
+                <div class="batch-theme-presets" id="bt-presets"></div>
+                <div class="batch-theme-classes" id="bt-classes">
+                    <p class="info-text">Loading classes with draft reports…</p>
+                </div>
+            </div>
+            <div class="batch-theme-preview" id="bt-preview"></div>
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" id="bt-apply-btn">Apply Theme</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    showModal('📋 Batch Apply Theme', html);
+
+    // Load classes when month/year changes
+    document.getElementById('bt-month').addEventListener('change', batchThemeLoadClasses);
+    document.getElementById('bt-year').addEventListener('change', batchThemeLoadClasses);
+    document.getElementById('bt-overwrite').addEventListener('change', () => {
+        const note = document.getElementById('bt-overwrite-note');
+        if (note) note.style.display = document.getElementById('bt-overwrite').checked ? 'none' : '';
+        batchThemeUpdatePreview();
+    });
+    document.getElementById('bt-theme').addEventListener('input', batchThemeUpdatePreview);
+    document.getElementById('bt-apply-btn').addEventListener('click', batchThemeApply);
+
+    await batchThemeLoadClasses();
+}
+
+/** Load draft report classes for the selected month/year and render checkboxes. */
+async function batchThemeLoadClasses() {
+    const month = document.getElementById('bt-month')?.value;
+    const year = document.getElementById('bt-year')?.value;
+    const container = document.getElementById('bt-classes');
+    const presetsContainer = document.getElementById('bt-presets');
+    if (!container || !presetsContainer) return;
+
+    container.innerHTML = '<p class="info-text">Loading…</p>';
+    presetsContainer.innerHTML = '';
+
+    try {
+        const drafts = await api(`/monthly-reports/drafts-by-month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`);
+
+        if (!drafts || drafts.length === 0) {
+            container.innerHTML = '<p class="info-text">No draft reports found for this month/year.</p>';
+            batchThemeUpdatePreview();
+            return;
+        }
+
+        // Build checkboxes
+        let html = '';
+        drafts.forEach(d => {
+            const themeIndicator = d.has_theme
+                ? `<span class="theme-indicator" title="${escapeHtml(d.existing_theme)}">✏️ has theme</span>`
+                : '';
+            html += `
+                <label class="class-checkbox-item">
+                    <input type="checkbox" class="bt-class-cb" value="${d.class_id}" data-report-id="${d.report_id}" data-has-theme="${d.has_theme}" checked>
+                    ${escapeHtml(d.class_name)}${themeIndicator}
+                </label>
+            `;
+        });
+        container.innerHTML = html;
+
+        // Attach change listeners to update the preview
+        container.querySelectorAll('.bt-class-cb').forEach(cb => {
+            cb.addEventListener('change', batchThemeUpdatePreview);
+        });
+
+        // Build preset buttons
+        const keywords = ['Kindergarten', 'Elementary', 'Adult', 'Intermediate', 'Advanced'];
+        const classNames = drafts.map(d => d.class_name);
+        let presetsHtml = `<button type="button" class="btn btn-sm btn-secondary" id="bt-select-all">Select All</button>
+                           <button type="button" class="btn btn-sm btn-secondary" id="bt-select-none">Select None</button>`;
+        keywords.forEach(kw => {
+            if (classNames.some(n => n.toLowerCase().includes(kw.toLowerCase()))) {
+                presetsHtml += `<button type="button" class="btn btn-sm btn-outline" data-kw="${escapeHtml(kw)}">Select ${escapeHtml(kw)}</button>`;
+            }
+        });
+        presetsContainer.innerHTML = presetsHtml;
+
+        document.getElementById('bt-select-all')?.addEventListener('click', () => {
+            container.querySelectorAll('.bt-class-cb').forEach(cb => { cb.checked = true; });
+            batchThemeUpdatePreview();
+        });
+        document.getElementById('bt-select-none')?.addEventListener('click', () => {
+            container.querySelectorAll('.bt-class-cb').forEach(cb => { cb.checked = false; });
+            batchThemeUpdatePreview();
+        });
+        presetsContainer.querySelectorAll('[data-kw]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const kw = btn.dataset.kw.toLowerCase();
+                container.querySelectorAll('.bt-class-cb').forEach(cb => {
+                    const label = cb.closest('label');
+                    const name = label ? label.textContent.toLowerCase() : '';
+                    cb.checked = name.includes(kw);
+                });
+                batchThemeUpdatePreview();
+            });
+        });
+
+        batchThemeUpdatePreview();
+    } catch (error) {
+        console.error('Error loading draft classes:', error);
+        container.innerHTML = '<p class="info-text" style="color:red;">Failed to load classes.</p>';
+    }
+}
+
+/** Update the preview summary based on current selections. */
+function batchThemeUpdatePreview() {
+    const preview = document.getElementById('bt-preview');
+    if (!preview) return;
+
+    const overwrite = document.getElementById('bt-overwrite')?.checked;
+    const checkboxes = document.querySelectorAll('.bt-class-cb:checked');
+    let willUpdate = 0;
+    let willSkip = 0;
+
+    checkboxes.forEach(cb => {
+        const hasTheme = cb.dataset.hasTheme === 'true';
+        if (!overwrite && hasTheme) {
+            willSkip++;
+        } else {
+            willUpdate++;
+        }
+    });
+
+    if (checkboxes.length === 0) {
+        preview.textContent = 'No classes selected.';
+        return;
+    }
+
+    let msg = `Will update theme for ${willUpdate} report${willUpdate !== 1 ? 's' : ''}`;
+    if (willSkip > 0) {
+        msg += ` (${willSkip} will be skipped — already have a theme)`;
+    }
+    preview.textContent = msg;
+}
+
+/** Send the batch-theme request to the backend. */
+async function batchThemeApply() {
+    const month = parseInt(document.getElementById('bt-month')?.value, 10);
+    const year = parseInt(document.getElementById('bt-year')?.value, 10);
+    const theme = document.getElementById('bt-theme')?.value?.trim();
+    const overwrite = document.getElementById('bt-overwrite')?.checked || false;
+
+    if (!theme) {
+        Toast.error('Please enter a theme to apply.');
+        return;
+    }
+
+    const checkedBoxes = document.querySelectorAll('.bt-class-cb:checked');
+    if (checkedBoxes.length === 0) {
+        Toast.error('Please select at least one class.');
+        return;
+    }
+
+    const classIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
+
+    try {
+        const btn = document.getElementById('bt-apply-btn');
+        if (btn) btn.disabled = true;
+
+        const result = await api('/monthly-reports/batch-theme', {
+            method: 'PUT',
+            body: JSON.stringify({ class_ids: classIds, year, month, monthly_theme: theme, overwrite })
+        });
+
+        closeModal();
+        let msg = `Theme applied to ${result.updated} report${result.updated !== 1 ? 's' : ''}`;
+        if (result.skipped > 0) {
+            msg += ` (${result.skipped} skipped — already had a theme)`;
+        }
+        Toast.success(msg);
+        loadMonthlyReports();
+    } catch (error) {
+        console.error('Error applying batch theme:', error);
+        Toast.error(error.message || 'Failed to apply theme');
+        const btn = document.getElementById('bt-apply-btn');
+        if (btn) btn.disabled = false;
+    }
+}
