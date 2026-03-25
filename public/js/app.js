@@ -6315,18 +6315,28 @@ async function initializeMonthlyReportsPage() {
     const newBtn = document.getElementById('new-monthly-report-btn');
     const testBtn = document.getElementById('generate-test-report-btn');
     const batchThemeBtn = document.getElementById('batch-theme-btn');
+    const batchCreateBtn = document.getElementById('batch-create-btn');
+    const batchPdfBtn = document.getElementById('batch-pdf-btn');
     
     // Clone and replace to remove old listeners
     const newFilterBtn = filterBtn.cloneNode(true);
     const newNewBtn = newBtn.cloneNode(true);
     const newTestBtn = testBtn.cloneNode(true);
     const newBatchThemeBtn = batchThemeBtn ? batchThemeBtn.cloneNode(true) : null;
+    const newBatchCreateBtn = batchCreateBtn ? batchCreateBtn.cloneNode(true) : null;
+    const newBatchPdfBtn = batchPdfBtn ? batchPdfBtn.cloneNode(true) : null;
     
     filterBtn.parentNode.replaceChild(newFilterBtn, filterBtn);
     newBtn.parentNode.replaceChild(newNewBtn, newBtn);
     testBtn.parentNode.replaceChild(newTestBtn, testBtn);
     if (batchThemeBtn && newBatchThemeBtn) {
         batchThemeBtn.parentNode.replaceChild(newBatchThemeBtn, batchThemeBtn);
+    }
+    if (batchCreateBtn && newBatchCreateBtn) {
+        batchCreateBtn.parentNode.replaceChild(newBatchCreateBtn, batchCreateBtn);
+    }
+    if (batchPdfBtn && newBatchPdfBtn) {
+        batchPdfBtn.parentNode.replaceChild(newBatchPdfBtn, batchPdfBtn);
     }
     
     newFilterBtn.addEventListener('click', loadMonthlyReports);
@@ -6340,6 +6350,26 @@ async function initializeMonthlyReportsPage() {
             newBatchThemeBtn.addEventListener('click', showBatchThemeModal);
         } else {
             newBatchThemeBtn.style.display = 'none';
+        }
+    }
+
+    // Show batch-create button to both teachers and admins
+    if (newBatchCreateBtn) {
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'teacher')) {
+            newBatchCreateBtn.style.display = '';
+            newBatchCreateBtn.addEventListener('click', showBatchCreateModal);
+        } else {
+            newBatchCreateBtn.style.display = 'none';
+        }
+    }
+
+    // Show batch-pdf button to both teachers and admins
+    if (newBatchPdfBtn) {
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'teacher')) {
+            newBatchPdfBtn.style.display = '';
+            newBatchPdfBtn.addEventListener('click', showBatchPDFModal);
+        } else {
+            newBatchPdfBtn.style.display = 'none';
         }
     }
 

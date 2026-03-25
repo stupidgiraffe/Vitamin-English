@@ -931,3 +931,481 @@ async function batchThemeApply() {
         if (btn) btn.disabled = false;
     }
 }
+
+// ── Batch Create Monthly Reports ───────────────────────────────────────────
+
+/**
+ * Show the modal for batch-creating draft monthly reports across all classes.
+ * Role-aware: teachers see only their classes; admins see all active classes.
+ */
+async function showBatchCreateModal() {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    let monthOpts = '';
+    monthNames.forEach((name, i) => {
+        const val = i + 1;
+        const sel = val === currentMonth ? 'selected' : '';
+        monthOpts += `<option value="${val}" ${sel}>${name}</option>`;
+    });
+
+    // Calculate default start/end for current month
+    const defaultStart = `${currentYear}-${String(currentMonth).padStart(2, '0')}-01`;
+    const lastDay = new Date(currentYear, currentMonth, 0).getDate();
+    const defaultEnd = `${currentYear}-${String(currentMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+    const html = `
+        <div id="batch-create-form">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Month *</label>
+                    <select id="bc-month" class="form-control">${monthOpts}</select>
+                </div>
+                <div class="form-group">
+                    <label>Year *</label>
+                    <input type="number" id="bc-year" class="form-control" value="${currentYear}" min="2020" max="2099" style="width:100px;">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Start Date *</label>
+                    <input type="date" id="bc-start-date" class="form-control" value="${defaultStart}">
+                </div>
+                <div class="form-group">
+                    <label>End Date *</label>
+                    <input type="date" id="bc-end-date" class="form-control" value="${defaultEnd}">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Monthly Theme <small class="form-text text-muted">(optional — applied to all created reports)</small></label>
+                <textarea id="bc-theme" class="form-control" rows="2" placeholder="Enter a theme (optional)…"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select id="bc-status" class="form-control">
+                    <option value="draft" selected>Draft</option>
+                    <option value="published">Published</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Select Classes</label>
+                <div class="batch-theme-presets" id="bc-presets"></div>
+                <div class="batch-create-classes" id="bc-classes">
+                    <p class="info-text">Loading classes…</p>
+                </div>
+            </div>
+            <div class="batch-theme-preview" id="bc-preview"></div>
+            <div id="bc-progress" style="display:none;">
+                <div class="batch-progress-container">
+                    <div class="batch-progress-header">
+                        <span id="bc-progress-text">0 / 0 created</span>
+                    </div>
+                    <div class="batch-progress-bar-track">
+                        <div class="batch-progress-bar" id="bc-progress-bar" style="width:0%"></div>
+                    </div>
+                    <div class="batch-progress-list" id="bc-progress-list"></div>
+                </div>
+            </div>
+            <div class="form-actions" id="bc-actions">
+                <button type="button" class="btn btn-primary" id="bc-create-btn">Create Reports</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    showModal('📦 Create All Reports', html);
+
+    // Auto-fill date range when month/year changes
+    function updateBCDateRange() {
+        const m = parseInt(document.getElementById('bc-month')?.value, 10);
+        const y = parseInt(document.getElementById('bc-year')?.value, 10);
+        if (!isNaN(m) && !isNaN(y)) {
+            const startEl = document.getElementById('bc-start-date');
+            const endEl = document.getElementById('bc-end-date');
+            const last = new Date(y, m, 0).getDate();
+            if (startEl) startEl.value = `${y}-${String(m).padStart(2, '0')}-01`;
+            if (endEl) endEl.value = `${y}-${String(m).padStart(2, '0')}-${String(last).padStart(2, '0')}`;
+            batchCreateLoadClasses();
+        }
+    }
+
+    document.getElementById('bc-month').addEventListener('change', updateBCDateRange);
+    document.getElementById('bc-year').addEventListener('change', updateBCDateRange);
+    document.getElementById('bc-create-btn').addEventListener('click', batchCreateReports);
+
+    await batchCreateLoadClasses();
+}
+
+/** Load classes for the selected month/year and render checkboxes. */
+async function batchCreateLoadClasses() {
+    const month = document.getElementById('bc-month')?.value;
+    const year = document.getElementById('bc-year')?.value;
+    const container = document.getElementById('bc-classes');
+    const presetsContainer = document.getElementById('bc-presets');
+    if (!container || !presetsContainer) return;
+
+    container.innerHTML = '<p class="info-text">Loading…</p>';
+    presetsContainer.innerHTML = '';
+
+    try {
+        const classes = await api(`/monthly-reports/classes-for-batch?year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}`);
+
+        if (!classes || classes.length === 0) {
+            container.innerHTML = '<p class="info-text">No active classes found.</p>';
+            batchCreateUpdatePreview([]);
+            return;
+        }
+
+        // Build checkboxes — disabled/grayed for classes that already have a report
+        let html = '';
+        classes.forEach(c => {
+            if (c.has_report) {
+                html += `
+                    <label class="class-checkbox-item disabled">
+                        <input type="checkbox" class="bc-class-cb" value="${c.class_id}" data-name="${escapeHtml(c.class_name)}" disabled>
+                        ${escapeHtml(c.class_name)}
+                        <span class="theme-indicator">✅ report exists</span>
+                    </label>
+                `;
+            } else {
+                html += `
+                    <label class="class-checkbox-item">
+                        <input type="checkbox" class="bc-class-cb" value="${c.class_id}" data-name="${escapeHtml(c.class_name)}" checked>
+                        ${escapeHtml(c.class_name)}
+                    </label>
+                `;
+            }
+        });
+        container.innerHTML = html;
+
+        // Attach change listeners to update the preview
+        container.querySelectorAll('.bc-class-cb').forEach(cb => {
+            cb.addEventListener('change', () => batchCreateUpdatePreview(classes));
+        });
+
+        // Build preset buttons
+        const keywords = ['Kindergarten', 'Elementary', 'Adult', 'Intermediate', 'Advanced'];
+        const classNames = classes.map(c => c.class_name);
+        let presetsHtml = `<button type="button" class="btn btn-sm btn-secondary" id="bc-select-all">Select All</button>
+                           <button type="button" class="btn btn-sm btn-secondary" id="bc-select-none">Select None</button>`;
+        keywords.forEach(kw => {
+            if (classNames.some(n => n.toLowerCase().includes(kw.toLowerCase()))) {
+                presetsHtml += `<button type="button" class="btn btn-sm btn-outline" data-kw="${escapeHtml(kw)}">Select ${escapeHtml(kw)}</button>`;
+            }
+        });
+        presetsContainer.innerHTML = presetsHtml;
+
+        document.getElementById('bc-select-all')?.addEventListener('click', () => {
+            container.querySelectorAll('.bc-class-cb:not(:disabled)').forEach(cb => { cb.checked = true; });
+            batchCreateUpdatePreview(classes);
+        });
+        document.getElementById('bc-select-none')?.addEventListener('click', () => {
+            container.querySelectorAll('.bc-class-cb:not(:disabled)').forEach(cb => { cb.checked = false; });
+            batchCreateUpdatePreview(classes);
+        });
+        presetsContainer.querySelectorAll('[data-kw]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const kw = btn.dataset.kw.toLowerCase();
+                container.querySelectorAll('.bc-class-cb:not(:disabled)').forEach(cb => {
+                    const label = cb.closest('label');
+                    const name = label ? label.textContent.toLowerCase() : '';
+                    cb.checked = name.includes(kw);
+                });
+                batchCreateUpdatePreview(classes);
+            });
+        });
+
+        batchCreateUpdatePreview(classes);
+    } catch (error) {
+        console.error('Error loading classes for batch create:', error);
+        container.innerHTML = '<p class="info-text" style="color:red;">Failed to load classes.</p>';
+    }
+}
+
+/** Update the preview summary for batch create. */
+function batchCreateUpdatePreview(classes) {
+    const preview = document.getElementById('bc-preview');
+    if (!preview) return;
+
+    const checked = document.querySelectorAll('.bc-class-cb:checked');
+    const alreadyHave = (classes || []).filter(c => c.has_report).length;
+    const willCreate = checked.length;
+
+    if (willCreate === 0) {
+        preview.textContent = `No classes selected. ${alreadyHave > 0 ? `(${alreadyHave} class${alreadyHave !== 1 ? 'es' : ''} already have reports)` : ''}`;
+    } else {
+        preview.textContent = `Will create ${willCreate} report${willCreate !== 1 ? 's' : ''}${alreadyHave > 0 ? ` (${alreadyHave} class${alreadyHave !== 1 ? 'es' : ''} already have reports and are grayed out)` : ''}`;
+    }
+}
+
+/** Send the batch-create request to the backend. */
+async function batchCreateReports() {
+    const startDate = document.getElementById('bc-start-date')?.value;
+    const endDate = document.getElementById('bc-end-date')?.value;
+    const theme = document.getElementById('bc-theme')?.value?.trim() || '';
+    const status = document.getElementById('bc-status')?.value || 'draft';
+
+    if (!startDate || !endDate) {
+        Toast.error('Please provide a start date and end date.');
+        return;
+    }
+
+    const checkedBoxes = document.querySelectorAll('.bc-class-cb:checked');
+    if (checkedBoxes.length === 0) {
+        Toast.error('Please select at least one class.');
+        return;
+    }
+
+    const classIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
+
+    // Show progress UI
+    const progressEl = document.getElementById('bc-progress');
+    const actionsEl = document.getElementById('bc-actions');
+    const createBtn = document.getElementById('bc-create-btn');
+    const progressText = document.getElementById('bc-progress-text');
+    const progressBar = document.getElementById('bc-progress-bar');
+    const progressList = document.getElementById('bc-progress-list');
+
+    if (progressEl) progressEl.style.display = '';
+    if (actionsEl) {
+        const cancelBtn = actionsEl.querySelector('.btn-secondary');
+        if (cancelBtn) cancelBtn.disabled = true;
+    }
+    if (createBtn) createBtn.disabled = true;
+
+    // Show waiting items
+    const classLabels = {};
+    document.querySelectorAll('.bc-class-cb:checked').forEach(cb => {
+        classLabels[cb.value] = cb.dataset.name || `Class ${cb.value}`;
+    });
+
+    if (progressList) {
+        progressList.innerHTML = classIds.map(id =>
+            `<div class="batch-progress-item waiting" id="bc-item-${id}">⬜ ${escapeHtml(classLabels[id] || `Class ${id}`)}</div>`
+        ).join('');
+    }
+    if (progressText) progressText.textContent = `Creating reports…`;
+
+    try {
+        const result = await api('/monthly-reports/batch-create', {
+            method: 'POST',
+            body: JSON.stringify({ class_ids: classIds, start_date: startDate, end_date: endDate, monthly_theme: theme, status })
+        });
+
+        // Update progress items based on result
+        const createdIds = new Set((result.created_details || []).map(c => String(c.class_id)));
+        const skippedMap = {};
+        (result.skipped || []).forEach(s => { skippedMap[String(s.class_id)] = s.reason; });
+
+        classIds.forEach(id => {
+            const itemEl = document.getElementById(`bc-item-${id}`);
+            if (!itemEl) return;
+            if (createdIds.has(String(id))) {
+                itemEl.className = 'batch-progress-item completed';
+                itemEl.textContent = `✅ ${classLabels[id] || `Class ${id}`} — created`;
+            } else if (skippedMap[String(id)]) {
+                itemEl.className = 'batch-progress-item failed';
+                itemEl.textContent = `⏭ ${classLabels[id] || `Class ${id}`} — skipped (${skippedMap[String(id)]})`;
+            }
+        });
+
+        if (progressBar) progressBar.style.width = '100%';
+        if (progressText) progressText.textContent = `${result.total_created} / ${classIds.length} created`;
+
+        // Re-enable cancel
+        if (actionsEl) {
+            const cancelBtn = actionsEl.querySelector('.btn-secondary');
+            if (cancelBtn) cancelBtn.disabled = false;
+        }
+
+        let msg = `Created ${result.total_created} monthly report${result.total_created !== 1 ? 's' : ''} successfully!`;
+        if (result.total_skipped > 0) {
+            msg += ` (${result.total_skipped} skipped)`;
+        }
+        Toast.success(msg);
+        loadMonthlyReports();
+    } catch (error) {
+        console.error('Error in batch create:', error);
+        Toast.error(error.message || 'Failed to create reports');
+        if (createBtn) createBtn.disabled = false;
+        if (actionsEl) {
+            const cancelBtn = actionsEl.querySelector('.btn-secondary');
+            if (cancelBtn) cancelBtn.disabled = false;
+        }
+    }
+}
+
+// ── Batch Generate PDFs ────────────────────────────────────────────────────
+
+/**
+ * Show the modal for batch-generating PDFs for all currently visible monthly reports.
+ * Uses the existing /:id/generate-pdf endpoint sequentially with a live progress bar.
+ */
+function showBatchPDFModal() {
+    if (!monthlyReports || monthlyReports.length === 0) {
+        Toast.error('No monthly reports loaded. Please filter/load reports first.');
+        return;
+    }
+
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+
+    let rowsHtml = '';
+    monthlyReports.forEach(r => {
+        const period = `${monthNames[(r.month || 1) - 1]} ${r.year}`;
+        const cleanLabel = `${r.class_name || 'N/A'} — ${period}`;
+        const statusBadge = r.status === 'published'
+            ? '<span class="badge badge-success" style="font-size:0.7rem;">Published</span>'
+            : '<span class="badge badge-warning" style="font-size:0.7rem;">Draft</span>';
+        const pdfBadge = r.pdf_url
+            ? '<span class="theme-indicator">✅ Has PDF</span>'
+            : '<span class="theme-indicator" style="color:#dc3545;">No PDF</span>';
+        rowsHtml += `
+            <label class="class-checkbox-item">
+                <input type="checkbox" class="bp-report-cb" value="${r.id}" data-has-pdf="${r.pdf_url ? 'true' : 'false'}" data-label="${escapeHtml(cleanLabel)}" ${!r.pdf_url ? 'checked' : ''}>
+                ${escapeHtml(cleanLabel)} ${statusBadge} ${pdfBadge}
+            </label>
+        `;
+    });
+
+    const html = `
+        <div id="batch-pdf-form">
+            <p style="margin-bottom:8px;font-size:0.9rem;color:var(--text-secondary,#6c757d);">PDFs are generated sequentially. If one fails the rest will continue.</p>
+            <div class="batch-theme-presets" id="bp-presets">
+                <button type="button" class="btn btn-sm btn-secondary" id="bp-select-no-pdf">Select Without PDF</button>
+                <button type="button" class="btn btn-sm btn-secondary" id="bp-select-all">Select All</button>
+                <button type="button" class="btn btn-sm btn-secondary" id="bp-select-none">Select None</button>
+            </div>
+            <div class="batch-create-classes" id="bp-reports">
+                ${rowsHtml}
+            </div>
+            <div id="bp-progress" style="display:none;">
+                <div class="batch-progress-container">
+                    <div class="batch-progress-header">
+                        <span id="bp-progress-text">0 / 0 completed</span>
+                    </div>
+                    <div class="batch-progress-bar-track">
+                        <div class="batch-progress-bar" id="bp-progress-bar" style="width:0%"></div>
+                    </div>
+                    <div class="batch-progress-list" id="bp-progress-list"></div>
+                </div>
+            </div>
+            <div class="form-actions" id="bp-actions">
+                <button type="button" class="btn btn-primary" id="bp-generate-btn">Generate PDFs</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    `;
+
+    showModal('📄 Generate All PDFs', html);
+
+    document.getElementById('bp-select-no-pdf')?.addEventListener('click', () => {
+        document.querySelectorAll('.bp-report-cb').forEach(cb => {
+            cb.checked = cb.dataset.hasPdf !== 'true';
+        });
+    });
+    document.getElementById('bp-select-all')?.addEventListener('click', () => {
+        document.querySelectorAll('.bp-report-cb').forEach(cb => { cb.checked = true; });
+    });
+    document.getElementById('bp-select-none')?.addEventListener('click', () => {
+        document.querySelectorAll('.bp-report-cb').forEach(cb => { cb.checked = false; });
+    });
+    document.getElementById('bp-generate-btn')?.addEventListener('click', batchGeneratePDFs);
+}
+
+/** Sequentially generate PDFs for selected reports, updating a live progress bar. */
+async function batchGeneratePDFs() {
+    const checkedBoxes = document.querySelectorAll('.bp-report-cb:checked');
+    if (checkedBoxes.length === 0) {
+        Toast.error('Please select at least one report.');
+        return;
+    }
+
+    const reportIds = Array.from(checkedBoxes).map(cb => parseInt(cb.value, 10));
+
+    // Use data-label attribute for clean display names (avoids picking up badge HTML text)
+    const labelMap = {};
+    checkedBoxes.forEach(cb => {
+        labelMap[cb.value] = cb.dataset.label || `Report ${cb.value}`;
+    });
+
+    // Disable the generate button and hide the reports list
+    const generateBtn = document.getElementById('bp-generate-btn');
+    const reportsEl = document.getElementById('bp-reports');
+    const presetsEl = document.getElementById('bp-presets');
+    const progressEl = document.getElementById('bp-progress');
+    const progressText = document.getElementById('bp-progress-text');
+    const progressBar = document.getElementById('bp-progress-bar');
+    const progressList = document.getElementById('bp-progress-list');
+    const actionsEl = document.getElementById('bp-actions');
+
+    if (generateBtn) generateBtn.disabled = true;
+    if (reportsEl) reportsEl.style.display = 'none';
+    if (presetsEl) presetsEl.style.display = 'none';
+    if (progressEl) progressEl.style.display = '';
+    if (actionsEl) {
+        const cancelBtn = actionsEl.querySelector('.btn-secondary');
+        if (cancelBtn) cancelBtn.disabled = true;
+    }
+
+    // Render initial waiting rows
+    if (progressList) {
+        progressList.innerHTML = reportIds.map(id =>
+            `<div class="batch-progress-item waiting" id="bp-item-${id}">⬜ ${escapeHtml(labelMap[id] || `Report ${id}`)}</div>`
+        ).join('');
+    }
+
+    let completed = 0;
+    let failed = 0;
+    const total = reportIds.length;
+
+    for (const reportId of reportIds) {
+        const itemEl = document.getElementById(`bp-item-${reportId}`);
+
+        // Mark as in-progress
+        if (itemEl) {
+            itemEl.className = 'batch-progress-item in-progress';
+            itemEl.textContent = `⏳ ${labelMap[reportId] || `Report ${reportId}`} — Generating…`;
+        }
+        if (progressText) progressText.textContent = `${completed} / ${total} completed`;
+
+        try {
+            await api(`/monthly-reports/${reportId}/generate-pdf`, { method: 'POST' });
+            completed++;
+            if (itemEl) {
+                itemEl.className = 'batch-progress-item completed';
+                itemEl.textContent = `✅ ${labelMap[reportId] || `Report ${reportId}`} — PDF generated`;
+            }
+        } catch (err) {
+            failed++;
+            const errMsg = err.message || 'Unknown error';
+            if (itemEl) {
+                itemEl.className = 'batch-progress-item failed';
+                itemEl.textContent = `❌ ${labelMap[reportId] || `Report ${reportId}`} — Failed: ${errMsg}`;
+            }
+            console.error(`Failed to generate PDF for report ${reportId}:`, err);
+        }
+
+        const pct = Math.round(((completed + failed) / total) * 100);
+        if (progressBar) progressBar.style.width = `${pct}%`;
+        if (progressText) progressText.textContent = `${completed + failed} / ${total} completed`;
+    }
+
+    // Re-enable cancel button
+    if (actionsEl) {
+        const cancelBtn = actionsEl.querySelector('.btn-secondary');
+        if (cancelBtn) cancelBtn.disabled = false;
+    }
+
+    let summaryMsg = `Generated ${completed} PDF${completed !== 1 ? 's' : ''}`;
+    if (failed > 0) summaryMsg += ` (${failed} failed)`;
+    Toast.success(summaryMsg);
+
+    // Reload the reports list so pdf_url flags update
+    loadMonthlyReports();
+}

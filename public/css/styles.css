@@ -3719,3 +3719,84 @@ body {
     color: var(--text-secondary, #6c757d);
     margin-left: 4px;
 }
+
+/* ── Batch Create Classes (mirrors batch-theme-classes) ─────────────────── */
+.batch-create-classes {
+    max-height: 260px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 6px;
+    padding: 8px;
+    margin-top: 6px;
+    background: var(--card-background, #fff);
+}
+.class-checkbox-item.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.class-checkbox-item.disabled input[type="checkbox"] {
+    cursor: not-allowed;
+}
+
+/* ── Batch Progress UI ──────────────────────────────────────────────────── */
+.batch-progress-container {
+    margin-top: 12px;
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 6px;
+    padding: 12px;
+    background: var(--bg-secondary, #f8f9fa);
+}
+.batch-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+.batch-progress-bar-track {
+    background: var(--border-color, #dee2e6);
+    border-radius: 4px;
+    height: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+.batch-progress-bar {
+    height: 100%;
+    background: var(--primary-color, #4f46e5);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+.batch-progress-list {
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.batch-progress-item {
+    padding: 5px 8px;
+    border-radius: 4px;
+    font-size: 0.88rem;
+}
+.batch-progress-item.waiting {
+    color: var(--text-secondary, #6c757d);
+    background: transparent;
+}
+.batch-progress-item.in-progress {
+    color: var(--primary-color, #4f46e5);
+    background: rgba(79, 70, 229, 0.06);
+    animation: pulse-bg 1.2s ease-in-out infinite;
+}
+.batch-progress-item.completed {
+    color: #155724;
+    background: #d4edda;
+}
+.batch-progress-item.failed {
+    color: #721c24;
+    background: #f8d7da;
+}
+@keyframes pulse-bg {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.6; }
+}
