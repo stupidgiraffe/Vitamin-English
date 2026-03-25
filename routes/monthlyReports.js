@@ -524,6 +524,143 @@ router.get('/available-months/:classId', async (req, res) => {
 });
 
 /**
+ * GET /api/monthly-reports/drafts-by-month
+ * Returns draft reports for a given year/month, used to populate batch-theme class checkboxes.
+ * Query params: year (required), month (required)
+ * Returns: [{ class_id, class_name, report_id, has_theme, existing_theme }]
+ */
+router.get('/drafts-by-month', async (req, res) => {
+    try {
+        const { year, month } = req.query;
+        if (!year || !month) {
+            return res.status(400).json({ error: 'year and month query parameters are required' });
+        }
+        const reportYear = parseInt(year, 10);
+        const reportMonth = parseInt(month, 10);
+        if (isNaN(reportYear) || isNaN(reportMonth) || reportMonth < 1 || reportMonth > 12) {
+            return res.status(400).json({ error: 'Invalid year or month' });
+        }
+
+        const result = await pool.query(`
+            SELECT mr.id AS report_id,
+                   mr.class_id,
+                   c.name AS class_name,
+                   CASE WHEN mr.monthly_theme IS NOT NULL AND mr.monthly_theme <> '' THEN true ELSE false END AS has_theme,
+                   COALESCE(mr.monthly_theme, '') AS existing_theme
+            FROM monthly_reports mr
+            JOIN classes c ON c.id = mr.class_id
+            WHERE mr.year = $1
+              AND mr.month = $2
+              AND mr.status = 'draft'
+            ORDER BY c.name
+        `, [reportYear, reportMonth]);
+
+        res.json(result.rows);
+    } catch (error) {
+        console.error('Error fetching drafts by month:', error);
+        res.status(500).json({ error: 'Failed to fetch draft reports' });
+    }
+});
+
+/**
+ * PUT /api/monthly-reports/batch-theme
+ * Batch-apply a monthly theme to selected draft reports.
+ * Body: { class_ids: number[], year: number, month: number, monthly_theme: string, overwrite?: boolean }
+ * Admin only.
+ */
+router.put('/batch-theme', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        // Admin-only check
+        const sessionUserId = req.session?.userId;
+        if (!sessionUserId) {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+        const userCheck = await client.query('SELECT role FROM users WHERE id = $1', [sessionUserId]);
+        if (userCheck.rows.length === 0 || userCheck.rows[0].role !== 'admin') {
+            return res.status(403).json({ error: 'Admin access required' });
+        }
+
+        const { class_ids, year, month, monthly_theme, overwrite } = req.body;
+
+        // Validate inputs
+        if (!Array.isArray(class_ids) || class_ids.length === 0) {
+            return res.status(400).json({ error: 'class_ids must be a non-empty array' });
+        }
+        // Coerce and validate each id — JSON may send numbers or numeric strings
+        const parsedClassIds = class_ids.map(id => parseInt(id, 10));
+        if (parsedClassIds.some(id => isNaN(id) || id <= 0)) {
+            return res.status(400).json({ error: 'class_ids must be an array of positive integers' });
+        }
+        if (!year || !month) {
+            return res.status(400).json({ error: 'year and month are required' });
+        }
+        const reportYear = parseInt(year, 10);
+        const reportMonth = parseInt(month, 10);
+        if (isNaN(reportYear) || isNaN(reportMonth) || reportMonth < 1 || reportMonth > 12) {
+            return res.status(400).json({ error: 'Invalid year or month' });
+        }
+        if (!monthly_theme || typeof monthly_theme !== 'string' || monthly_theme.trim() === '') {
+            return res.status(400).json({ error: 'monthly_theme is required and must be a non-empty string' });
+        }
+
+        await client.query('BEGIN');
+
+        // Fetch all matching draft reports
+        const placeholders = parsedClassIds.map((_, i) => `$${i + 3}`).join(', ');
+        const draftsResult = await client.query(`
+            SELECT mr.id, mr.class_id, mr.monthly_theme, c.name AS class_name
+            FROM monthly_reports mr
+            JOIN classes c ON c.id = mr.class_id
+            WHERE mr.class_id IN (${placeholders})
+              AND mr.year = $1
+              AND mr.month = $2
+              AND mr.status = 'draft'
+        `, [reportYear, reportMonth, ...parsedClassIds]);
+
+        const drafts = draftsResult.rows;
+
+        const toUpdate = [];
+        const toSkip = [];
+
+        for (const draft of drafts) {
+            const alreadyHasTheme = draft.monthly_theme && draft.monthly_theme.trim() !== '';
+            if (!overwrite && alreadyHasTheme) {
+                toSkip.push({ id: draft.id, class_name: draft.class_name, existing_theme: draft.monthly_theme });
+            } else {
+                toUpdate.push({ id: draft.id, class_name: draft.class_name });
+            }
+        }
+
+        if (toUpdate.length > 0) {
+            const updateIds = toUpdate.map(r => r.id);
+            const updatePlaceholders = updateIds.map((_, i) => `$${i + 2}`).join(', ');
+            await client.query(`
+                UPDATE monthly_reports
+                SET monthly_theme = $1
+                WHERE id IN (${updatePlaceholders})
+            `, [monthly_theme.trim(), ...updateIds]);
+        }
+
+        await client.query('COMMIT');
+
+        res.json({
+            success: true,
+            updated: toUpdate.length,
+            skipped: toSkip.length,
+            skippedReports: toSkip,
+            updatedReports: toUpdate,
+        });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error in batch-theme:', error);
+        res.status(500).json({ error: 'Failed to apply batch theme' });
+    } finally {
+        client.release();
+    }
+});
+
+/**
  * GET /api/monthly-reports/:id
  * Get single monthly report with all weeks
  */

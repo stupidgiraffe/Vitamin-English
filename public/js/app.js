@@ -6314,19 +6314,34 @@ async function initializeMonthlyReportsPage() {
     const filterBtn = document.getElementById('filter-monthly-reports-btn');
     const newBtn = document.getElementById('new-monthly-report-btn');
     const testBtn = document.getElementById('generate-test-report-btn');
+    const batchThemeBtn = document.getElementById('batch-theme-btn');
     
     // Clone and replace to remove old listeners
     const newFilterBtn = filterBtn.cloneNode(true);
     const newNewBtn = newBtn.cloneNode(true);
     const newTestBtn = testBtn.cloneNode(true);
+    const newBatchThemeBtn = batchThemeBtn ? batchThemeBtn.cloneNode(true) : null;
     
     filterBtn.parentNode.replaceChild(newFilterBtn, filterBtn);
     newBtn.parentNode.replaceChild(newNewBtn, newBtn);
     testBtn.parentNode.replaceChild(newTestBtn, testBtn);
+    if (batchThemeBtn && newBatchThemeBtn) {
+        batchThemeBtn.parentNode.replaceChild(newBatchThemeBtn, batchThemeBtn);
+    }
     
     newFilterBtn.addEventListener('click', loadMonthlyReports);
     newNewBtn.addEventListener('click', showNewMonthlyReportModal);
     newTestBtn.addEventListener('click', generateTestMonthlyReport);
+
+    // Show batch-theme button to admins and wire up click handler
+    if (newBatchThemeBtn) {
+        if (currentUser && currentUser.role === 'admin') {
+            newBatchThemeBtn.style.display = '';
+            newBatchThemeBtn.addEventListener('click', showBatchThemeModal);
+        } else {
+            newBatchThemeBtn.style.display = 'none';
+        }
+    }
 
     // Auto-load reports on page open
     try {
