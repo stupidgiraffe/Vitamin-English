@@ -563,6 +563,255 @@ router.get('/drafts-by-month', async (req, res) => {
 });
 
 /**
+ * GET /api/monthly-reports/classes-for-batch
+ * Returns all active classes (role-filtered) with a flag indicating whether a monthly report
+ * already exists for the given year/month.
+ * Query params: year (required), month (required)
+ * Returns: [{ class_id, class_name, teacher_name, has_report, existing_report_id }]
+ */
+router.get('/classes-for-batch', async (req, res) => {
+    try {
+        const sessionUserId = req.session?.userId;
+        if (!sessionUserId) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const { year, month } = req.query;
+        if (!year || !month) {
+            return res.status(400).json({ error: 'year and month query parameters are required' });
+        }
+        const reportYear = parseInt(year, 10);
+        const reportMonth = parseInt(month, 10);
+        if (isNaN(reportYear) || isNaN(reportMonth) || reportMonth < 1 || reportMonth > 12) {
+            return res.status(400).json({ error: 'Invalid year or month' });
+        }
+
+        // Determine role — look it up in the DB to be authoritative
+        const userRow = await pool.query('SELECT role FROM users WHERE id = $1', [sessionUserId]);
+        if (userRow.rows.length === 0) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const role = userRow.rows[0].role;
+
+        let classesResult;
+        if (role === 'admin') {
+            // Admin sees all active classes
+            classesResult = await pool.query(`
+                SELECT c.id AS class_id,
+                       c.name AS class_name,
+                       COALESCE(u.full_name, '') AS teacher_name
+                FROM classes c
+                LEFT JOIN users u ON u.id = c.teacher_id
+                WHERE c.active = true
+                ORDER BY c.name
+            `);
+        } else {
+            // Teachers see only their own active classes
+            classesResult = await pool.query(`
+                SELECT c.id AS class_id,
+                       c.name AS class_name,
+                       COALESCE(u.full_name, '') AS teacher_name
+                FROM classes c
+                LEFT JOIN users u ON u.id = c.teacher_id
+                WHERE c.active = true AND c.teacher_id = $1
+                ORDER BY c.name
+            `, [sessionUserId]);
+        }
+
+        // For each class, check if a report already exists for this year/month
+        const classIds = classesResult.rows.map(c => c.class_id);
+        let existingReports = {};
+        if (classIds.length > 0) {
+            const existingResult = await pool.query(`
+                SELECT id AS report_id, class_id
+                FROM monthly_reports
+                WHERE year = $1 AND month = $2 AND class_id = ANY($3::int[])
+            `, [reportYear, reportMonth, classIds]);
+            existingResult.rows.forEach(r => {
+                existingReports[r.class_id] = r.report_id;
+            });
+        }
+
+        const result = classesResult.rows.map(c => ({
+            class_id: c.class_id,
+            class_name: c.class_name,
+            teacher_name: c.teacher_name,
+            has_report: Object.prototype.hasOwnProperty.call(existingReports, c.class_id),
+            existing_report_id: existingReports[c.class_id] || null
+        }));
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching classes for batch:', error);
+        res.status(500).json({ error: 'Failed to fetch classes' });
+    }
+});
+
+/**
+ * POST /api/monthly-reports/batch-create
+ * Create draft monthly reports for multiple classes in one request.
+ * Body: { class_ids: number[], start_date: string, end_date: string, monthly_theme?: string, status?: string }
+ * Teachers: only their own classes; Admins: any class.
+ * Returns: { created: [...ids], skipped: [...{class_id, reason}], total_created, total_skipped }
+ */
+router.post('/batch-create', async (req, res) => {
+    const client = await dataHub.pool.connect();
+    try {
+        const sessionUserId = req.session?.userId;
+        if (!sessionUserId) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+
+        const { class_ids, start_date, end_date, monthly_theme, status } = req.body;
+
+        // Validate class_ids
+        if (!Array.isArray(class_ids) || class_ids.length === 0) {
+            return res.status(400).json({ error: 'class_ids must be a non-empty array' });
+        }
+        const parsedClassIds = class_ids.map(id => parseInt(id, 10));
+        if (parsedClassIds.some(id => isNaN(id) || id <= 0)) {
+            return res.status(400).json({ error: 'class_ids must be an array of positive integers' });
+        }
+
+        // Validate date range
+        const dateRange = calculateDateRange({ start_date, end_date });
+        if (dateRange.error) {
+            return res.status(400).json({ error: dateRange.error });
+        }
+        const { startDate, endDate, reportYear, reportMonth } = dateRange;
+
+        // Determine role
+        const userRow = await pool.query('SELECT role FROM users WHERE id = $1', [sessionUserId]);
+        if (userRow.rows.length === 0) {
+            return res.status(401).json({ error: 'User not found' });
+        }
+        const role = userRow.rows[0].role;
+
+        // For teachers: filter class_ids to only their own classes
+        let allowedClassIds = parsedClassIds;
+        if (role !== 'admin') {
+            const owned = await pool.query(
+                `SELECT id FROM classes WHERE id = ANY($1::int[]) AND teacher_id = $2`,
+                [parsedClassIds, sessionUserId]
+            );
+            const ownedSet = new Set(owned.rows.map(r => r.id));
+            allowedClassIds = parsedClassIds.filter(id => ownedSet.has(id));
+        }
+
+        const skipped = [];
+        const created = [];
+
+        // Check which classes already have a report for this year/month
+        let alreadyExists = new Set();
+        if (allowedClassIds.length > 0) {
+            const existingResult = await pool.query(
+                `SELECT class_id FROM monthly_reports WHERE year = $1 AND month = $2 AND class_id = ANY($3::int[])`,
+                [reportYear, reportMonth, allowedClassIds]
+            );
+            existingResult.rows.forEach(r => alreadyExists.add(r.class_id));
+        }
+
+        // Report skipped entries for disallowed ids
+        parsedClassIds.forEach(id => {
+            if (!allowedClassIds.includes(id)) {
+                skipped.push({ class_id: id, reason: 'not authorized' });
+            } else if (alreadyExists.has(id)) {
+                skipped.push({ class_id: id, reason: 'report already exists' });
+            }
+        });
+
+        const toCreate = allowedClassIds.filter(id => !alreadyExists.has(id));
+
+        await client.query('BEGIN');
+
+        for (const classId of toCreate) {
+            // Query teacher comment sheets for this class and date range (with fallback)
+            let lessonsResult;
+            await client.query('SAVEPOINT before_tcs_query');
+            try {
+                lessonsResult = await client.query(`
+                    SELECT * FROM teacher_comment_sheets
+                    WHERE class_id = $1 AND LEFT(date::text, 10) >= $2 AND LEFT(date::text, 10) <= $3
+                    ORDER BY LEFT(date::text, 10)
+                `, [classId, startDate, endDate]);
+                await client.query('RELEASE SAVEPOINT before_tcs_query');
+            } catch (tableError) {
+                await client.query('ROLLBACK TO SAVEPOINT before_tcs_query');
+                if (tableError.code === '42P01') {
+                    lessonsResult = { rows: [] };
+                } else {
+                    throw tableError;
+                }
+            }
+
+            const lessons = lessonsResult.rows;
+
+            // Insert monthly_reports row
+            let reportResult;
+            await client.query('SAVEPOINT before_report_insert');
+            try {
+                reportResult = await client.query(`
+                    INSERT INTO monthly_reports (class_id, year, month, start_date, end_date, monthly_theme, status, created_by)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    RETURNING id
+                `, [classId, reportYear, reportMonth, startDate, endDate, monthly_theme || '', status || 'draft', sessionUserId]);
+                await client.query('RELEASE SAVEPOINT before_report_insert');
+            } catch (insertErr) {
+                await client.query('ROLLBACK TO SAVEPOINT before_report_insert');
+                if (insertErr.code === '42703' || (insertErr.message && (insertErr.message.includes('start_date') || insertErr.message.includes('end_date')))) {
+                    reportResult = await client.query(`
+                        INSERT INTO monthly_reports (class_id, year, month, monthly_theme, status, created_by)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        RETURNING id
+                    `, [classId, reportYear, reportMonth, monthly_theme || '', status || 'draft', sessionUserId]);
+                } else {
+                    throw insertErr;
+                }
+            }
+
+            const reportId = reportResult.rows[0].id;
+
+            // Insert weekly rows from teacher comment sheets
+            for (let index = 0; index < lessons.length; index++) {
+                const lesson = lessons[index];
+                await client.query(`
+                    INSERT INTO monthly_report_weeks
+                    (monthly_report_id, week_number, lesson_date, target, vocabulary, phrase, others, teacher_comment_sheet_id)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                `, [
+                    reportId,
+                    index + 1,
+                    lesson.date,
+                    lesson.target_topic || '',
+                    lesson.vocabulary || '',
+                    lesson.phrases || '',
+                    lesson.others || '',
+                    lesson.id
+                ]);
+            }
+
+            created.push({ class_id: classId, report_id: reportId });
+        }
+
+        await client.query('COMMIT');
+
+        res.status(201).json({
+            created: created.map(c => c.report_id),
+            created_details: created,
+            skipped,
+            total_created: created.length,
+            total_skipped: skipped.length
+        });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error in batch-create:', error);
+        res.status(500).json({ error: 'Failed to batch create monthly reports', message: error.message });
+    } finally {
+        client.release();
+    }
+});
+
+/**
  * PUT /api/monthly-reports/batch-theme
  * Batch-apply a monthly theme to selected draft reports.
  * Body: { class_ids: number[], year: number, month: number, monthly_theme: string, overwrite?: boolean }
