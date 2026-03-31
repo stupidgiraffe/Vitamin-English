@@ -407,6 +407,61 @@ function getClassDisplayName(cls) {
     return name;
 }
 
+// Returns SVG string for the Nanakuma station logo
+// Design: 6 diamond/rhombus shapes arranged in a hexagonal flower pattern (like a snowflake)
+function getNanakumaIcon(size = 20) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="location-icon nanakuma-icon" title="Nanakuma (七隈)">
+        <polygon points="12,2 15,6 12,10 9,6" fill="#6B7280"/>
+        <polygon points="18,5 19,10 15,12 14,7" fill="#6B7280"/>
+        <polygon points="18,13 19,18 15,16 14,11" fill="#6B7280"/>
+        <polygon points="12,14 15,18 12,22 9,18" fill="#6B7280"/>
+        <polygon points="6,13 5,18 9,16 10,11" fill="#6B7280"/>
+        <polygon points="6,5 5,10 9,12 10,7" fill="#6B7280"/>
+    </svg>`;
+}
+
+// Returns SVG string for the Befu station logo (used for Torikai location)
+// Design: Stylized blue wave/bridge arcs with a small circle figure on top
+function getBefuIcon(size = 20) {
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="location-icon befu-icon" title="Torikai (鳥飼) - Befu Station">
+        <circle cx="12" cy="4" r="2.5" fill="#0EA5E9"/>
+        <path d="M4 20 Q8 10 12 14 Q16 10 20 20" stroke="#0EA5E9" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+        <path d="M6 22 Q10 14 14 18 Q18 14 22 22" stroke="#0EA5E9" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+    </svg>`;
+}
+
+// Returns the appropriate location icon HTML for a class object, or empty string
+function getLocationIcon(cls) {
+    if (!cls || !cls.location) return '';
+    if (cls.location === 'nanakuma') return getNanakumaIcon();
+    if (cls.location === 'torikai') return getBefuIcon();
+    return '';
+}
+
+// Returns HTML with location icon + class name + teacher/schedule details.
+// Use where innerHTML is set; use getClassDisplayName() for plain-text contexts.
+function getClassDisplayHTML(cls) {
+    if (!cls) return '';
+    const icon = getLocationIcon(cls);
+    const name = escapeHtml(cls.name || '');
+    const teacher = (cls.teacher_name && cls.teacher_name.trim() && cls.teacher_role !== 'admin')
+        ? cls.teacher_name.trim() : '';
+    const schedule = cls.schedule && cls.schedule.trim() ? cls.schedule.trim() : '';
+    let details = '';
+    if (teacher && schedule) details = ` (${escapeHtml(teacher)} \u2022 ${escapeHtml(schedule)})`;
+    else if (teacher) details = ` (${escapeHtml(teacher)})`;
+    else if (schedule) details = ` (${escapeHtml(schedule)})`;
+    return `${icon}${icon ? ' ' : ''}${name}${details}`;
+}
+
+// Returns a text-only location indicator for use in <option> elements where HTML isn't supported
+function getLocationPrefix(cls) {
+    if (!cls || !cls.location) return '';
+    if (cls.location === 'nanakuma') return '🔷 ';
+    if (cls.location === 'torikai') return '🌊 ';
+    return '';
+}
+
 // ── Schedule helpers ────────────────────────────────────────────────────────
 
 // Canonical schedule format: "Mon/Wed 10:00-11:30"
@@ -753,7 +808,7 @@ function populateClassSelects() {
             myClasses.forEach(cls => {
                 const opt = document.createElement('option');
                 opt.value = cls.id;
-                opt.textContent = getClassDisplayName(cls);
+                opt.textContent = getLocationPrefix(cls) + getClassDisplayName(cls);
                 myGroup.appendChild(opt);
             });
             select.appendChild(myGroup);
@@ -768,7 +823,7 @@ function populateClassSelects() {
                 otherClasses.forEach(cls => {
                     const opt = document.createElement('option');
                     opt.value = cls.id;
-                    opt.textContent = getClassDisplayName(cls);
+                    opt.textContent = getLocationPrefix(cls) + getClassDisplayName(cls);
                     otherGroup.appendChild(opt);
                 });
                 select.appendChild(otherGroup);
@@ -776,7 +831,7 @@ function populateClassSelects() {
                 otherClasses.forEach(cls => {
                     const opt = document.createElement('option');
                     opt.value = cls.id;
-                    opt.textContent = getClassDisplayName(cls);
+                    opt.textContent = getLocationPrefix(cls) + getClassDisplayName(cls);
                     select.appendChild(opt);
                 });
             }
@@ -1056,7 +1111,7 @@ async function loadDashboard() {
                 ${todayScheduledClasses.map(cls => `
                     <div class="today-class-card" style="border-left: 4px solid ${cls.color || '#667eea'}">
                         <div class="today-class-header">
-                            <span class="today-class-name" style="color: ${cls.color || '#667eea'}">${escapeHtml(cls.name)}</span>
+                            <span class="today-class-name" style="color: ${cls.color || '#667eea'}">${getLocationIcon(cls)}${escapeHtml(cls.name)}</span>
                             <span class="today-class-time">${extractTimeFromSchedule(cls.schedule) || ''}</span>
                         </div>
                         <div class="today-class-details">
@@ -1076,7 +1131,7 @@ async function loadDashboard() {
                     <div class="other-classes-list">
                         ${otherClasses.map(cls => `
                             <div class="other-class-item">
-                                <span style="color: ${cls.color || '#667eea'}">${escapeHtml(cls.name)}</span>
+                                <span style="color: ${cls.color || '#667eea'}">${getLocationIcon(cls)}${escapeHtml(cls.name)}</span>
                                 <small>${escapeHtml(cls.schedule || 'No schedule')}</small>
                             </div>
                         `).join('')}
@@ -1093,7 +1148,7 @@ async function loadDashboard() {
                     <div class="other-classes-list">
                         ${classes.map(cls => `
                             <div class="other-class-item">
-                                <span style="color: ${cls.color || '#667eea'}">${escapeHtml(cls.name)}</span>
+                                <span style="color: ${cls.color || '#667eea'}">${getLocationIcon(cls)}${escapeHtml(cls.name)}</span>
                                 <small>${escapeHtml(cls.schedule || 'No schedule')}</small>
                             </div>
                         `).join('')}
@@ -1190,7 +1245,7 @@ function loadWeeklySchedule() {
                     <div class="day-classes">
                         ${classesByDay[day].map(cls => `
                             <div class="schedule-class-item" style="border-left-color: ${cls.color || '#667eea'}">
-                                <span class="schedule-class-name">${escapeHtml(cls.name)}</span>
+                                <span class="schedule-class-name">${getLocationIcon(cls)}${escapeHtml(cls.name)}</span>
                                 <span class="schedule-class-time">${escapeHtml(extractTimeFromSchedule(cls.schedule) || '')}</span>
                             </div>
                         `).join('')}
@@ -2213,7 +2268,7 @@ async function loadAttendanceOverview() {
         container.innerHTML = `<div class="attendance-overview-grid">
             ${data.classes.map(cls => `
                 <div class="attendance-overview-class-card" onclick="quickAttendanceLink(${cls.id})" title="Click to view attendance for ${escapeHtml(cls.name)}" style="border-left: 4px solid ${escapeHtml(cls.color || '#667eea')}">
-                    <div class="attendance-overview-class-name" style="color:${cls.color || '#667eea'}">${escapeHtml(cls.name)}</div>
+                    <div class="attendance-overview-class-name" style="color:${cls.color || '#667eea'}">${getLocationIcon(cls)}${escapeHtml(cls.name)}</div>
                     ${cls.monthlyRate !== null
                         ? `<div class="attendance-overview-rate attendance-rate-cell ${rateClass(cls.monthlyRate)}" style="display:inline-block;padding:3px 10px;border-radius:12px;font-size:1rem;">${cls.monthlyRate}%</div>`
                         : `<div class="attendance-overview-no-data">No data this month</div>`}
@@ -2245,7 +2300,7 @@ async function showNewAttendanceModal() {
         const allClasses = await api('/classes');
         
         const classOptions = allClasses
-            .map(c => `<option value="${c.id}">${escapeHtml(getClassDisplayName(c))}</option>`)
+            .map(c => `<option value="${c.id}">${escapeHtml(getLocationPrefix(c) + getClassDisplayName(c))}</option>`)
             .join('');
         
         const today = new Date().toISOString().split('T')[0];
@@ -2875,7 +2930,7 @@ async function editStudentFromAttendance(studentId) {
                     <label>Class</label>
                     <select id="edit-student-class" class="form-control">
                         <option value="">Unassigned</option>
-                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
+                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(getLocationPrefix(c) + getClassDisplayName(c))}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -3356,7 +3411,7 @@ async function initMultiClassView() {
         container.innerHTML = classes.map((cls, index) => `
             <div class="multi-select-item" data-class-id="${cls.id}" data-color="${colors[index % colors.length]}">
                 <input type="checkbox" id="class-${cls.id}" value="${cls.id}">
-                <label for="class-${cls.id}">${escapeHtml(getClassDisplayName(cls))}</label>
+                <label for="class-${cls.id}">${getClassDisplayHTML(cls)}</label>
             </div>
         `).join('');
         
@@ -3639,7 +3694,7 @@ async function loadClassesList() {
         classes.forEach(cls => {
             html += `
                 <tr>
-                    <td><span style="color: ${cls.color}">●</span> ${cls.name}</td>
+                    <td><span style="color: ${cls.color}">●</span> ${getLocationIcon(cls)}${escapeHtml(cls.name)}</td>
                     <td>${(cls.teacher_name && cls.teacher_role !== 'admin') ? cls.teacher_name : 'Unassigned'}</td>
                     <td>${cls.schedule || 'N/A'}</td>
                     <td class="action-buttons">
@@ -3671,7 +3726,7 @@ document.getElementById('add-student-btn').addEventListener('click', () => {
                 <label>Class (Optional)</label>
                 <select id="student-class" class="form-control">
                     <option value="">Unassigned (can assign later)</option>
-                    ${classes.map(c => `<option value="${c.id}">${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
+                    ${classes.map(c => `<option value="${c.id}">${escapeHtml(getLocationPrefix(c) + getClassDisplayName(c))}</option>`).join('')}
                 </select>
                 <small class="form-hint">You can assign the student to a class later</small>
             </div>
@@ -3771,7 +3826,7 @@ async function editStudent(id) {
                     <label>Class</label>
                     <select id="edit-student-class" class="form-control">
                         <option value="">Unassigned</option>
-                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
+                        ${classes.map(c => `<option value="${c.id}" ${c.id == student.class_id ? 'selected' : ''}>${escapeHtml(getLocationPrefix(c) + getClassDisplayName(c))}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -3898,6 +3953,15 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
                 </div>
                 <small class="form-hint">Drag the wheel or slider to pick any color</small>
             </div>
+            <div class="form-group">
+                <label for="class-location">Location (Optional)</label>
+                <select id="class-location" class="form-control">
+                    <option value="">No location</option>
+                    <option value="nanakuma">🔷 Nanakuma (七隈)</option>
+                    <option value="torikai">🌊 Torikai (鳥飼)</option>
+                </select>
+                <small class="form-hint">Which school location is this class at?</small>
+            </div>
             <button type="submit" class="btn btn-primary">Add Class</button>
         </form>
     `);
@@ -3922,7 +3986,8 @@ document.getElementById('add-class-btn').addEventListener('click', () => {
                     name: document.getElementById('class-name').value,
                     teacher_id: document.getElementById('class-teacher').value || null,
                     schedule: schedule,
-                    color: getAddColor()
+                    color: getAddColor(),
+                    location: document.getElementById('class-location').value || null
                 })
             });
 
@@ -3973,6 +4038,15 @@ async function editClass(id) {
                         <span id="edit-color-preview" style="padding:8px 16px;border-radius:4px;background:${escapeHtml(cls.color || '#4285f4')};color:white;font-size:12px;">Preview</span>
                     </div>
                 </div>
+                <div class="form-group">
+                    <label for="edit-class-location">Location (Optional)</label>
+                    <select id="edit-class-location" class="form-control">
+                        <option value="" ${!cls.location ? 'selected' : ''}>No location</option>
+                        <option value="nanakuma" ${cls.location === 'nanakuma' ? 'selected' : ''}>🔷 Nanakuma (七隈)</option>
+                        <option value="torikai" ${cls.location === 'torikai' ? 'selected' : ''}>🌊 Torikai (鳥飼)</option>
+                    </select>
+                    <small class="form-hint">Which school location is this class at?</small>
+                </div>
                 <button type="submit" class="btn btn-primary">Update Class</button>
             </form>
         `);
@@ -4004,6 +4078,7 @@ async function editClass(id) {
                         teacher_id: document.getElementById('edit-class-teacher').value || null,
                         schedule: schedule,
                         color: getEditColor(),
+                        location: document.getElementById('edit-class-location').value || null,
                         active: 1
                     })
                 });
@@ -4691,6 +4766,7 @@ function renderCleanTable(data, type, options = {}) {
             columns: ['name', 'teacher_name', 'schedule', 'active'],
             headers: ['Class Name', 'Teacher', 'Schedule', 'Active'],
             formatters: {
+                name: (val, row) => getLocationIcon(row) + escapeHtml(val || ''),
                 active: (val) => val ? 'Yes' : 'No'
             }
         },
@@ -5889,7 +5965,7 @@ async function editMakeupLesson(id) {
                 <div class="form-group">
                     <label>Class *</label>
                     <select id="edit-makeup-class" required class="form-control">
-                        ${classes.map(c => `<option value="${c.id}" ${c.id === lesson.class_id ? 'selected' : ''}>${escapeHtml(getClassDisplayName(c))}</option>`).join('')}
+                        ${classes.map(c => `<option value="${c.id}" ${c.id === lesson.class_id ? 'selected' : ''}>${escapeHtml(getLocationPrefix(c) + getClassDisplayName(c))}</option>`).join('')}
                     </select>
                 </div>
                 <div class="form-group">
@@ -6038,7 +6114,7 @@ async function showMakeupLessonForm() {
     classes.forEach(c => {
         const option = document.createElement('option');
         option.value = c.id;
-        option.textContent = getClassDisplayName(c);
+        option.textContent = getLocationPrefix(c) + getClassDisplayName(c);
         classSelect.appendChild(option);
     });
     
@@ -6144,7 +6220,7 @@ navigateToPage = function(page, pushState = true) {
         classes.forEach(c => {
             const option = document.createElement('option');
             option.value = c.id;
-            option.textContent = getClassDisplayName(c);
+            option.textContent = getLocationPrefix(c) + getClassDisplayName(c);
             classFilter.appendChild(option);
         });
     } else if (page === 'makeup') {
@@ -6302,7 +6378,7 @@ async function initializeMonthlyReportsPage() {
     classes.forEach(c => {
         const option = document.createElement('option');
         option.value = c.id;
-        option.textContent = getClassDisplayName(c);
+        option.textContent = getLocationPrefix(c) + getClassDisplayName(c);
         classFilter.appendChild(option);
     });
     

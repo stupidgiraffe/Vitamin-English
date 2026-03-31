@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS classes (
     teacher_id INTEGER,
     schedule TEXT,
     color VARCHAR(50) DEFAULT '#4A90E2',
+    location VARCHAR(50) DEFAULT NULL CHECK (location IS NULL OR location IN ('nanakuma', 'torikai')),
     active BOOLEAN DEFAULT true,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
