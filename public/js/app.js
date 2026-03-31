@@ -451,7 +451,7 @@ function getClassDisplayHTML(cls) {
     if (teacher && schedule) details = ` (${escapeHtml(teacher)} \u2022 ${escapeHtml(schedule)})`;
     else if (teacher) details = ` (${escapeHtml(teacher)})`;
     else if (schedule) details = ` (${escapeHtml(schedule)})`;
-    return `${icon}${icon ? ' ' : ''}${name}${details}`;
+    return `${icon}${name}${details}`;
 }
 
 // Returns a text-only location indicator for use in <option> elements where HTML isn't supported
