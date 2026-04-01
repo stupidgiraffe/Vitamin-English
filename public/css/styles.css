@@ -404,6 +404,9 @@ body {
 .today-class-name {
     font-weight: 600;
     font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .today-class-time {
@@ -1664,6 +1667,24 @@ body {
     
     .view-toggle-group {
         justify-content: center;
+    }
+
+    /* Constrain location icons on mobile */
+    .location-icon {
+        width: 16px;
+        height: 16px;
+        max-width: 16px;
+        max-height: 16px;
+        margin-right: 3px;
+    }
+
+    .schedule-class-name .location-icon,
+    .other-class-item .location-icon {
+        width: 12px;
+        height: 12px;
+        max-width: 12px;
+        max-height: 12px;
+        margin-right: 2px;
     }
 }
 
@@ -3807,6 +3828,10 @@ body {
     vertical-align: middle;
     margin-right: 4px;
     flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    max-width: 20px;
+    max-height: 20px;
 }
 
 .nanakuma-icon {
@@ -3815,4 +3840,24 @@ body {
 
 .befu-icon {
     opacity: 0.9;
+}
+
+/* Smaller icons in compact contexts */
+.schedule-class-name .location-icon,
+.other-class-item .location-icon {
+    width: 14px;
+    height: 14px;
+    max-width: 14px;
+    max-height: 14px;
+    margin-right: 3px;
+}
+
+.attendance-table .location-icon,
+.db-table .location-icon,
+.db-table-clean .location-icon {
+    width: 14px;
+    height: 14px;
+    max-width: 14px;
+    max-height: 14px;
+    margin-right: 2px;
 }
