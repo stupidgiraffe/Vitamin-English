@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
         const { classId } = req.query;
         const students = await dataHub.students.findAll({ 
             classId: classId ? parseInt(classId) : null,
-            orderBy: 'student_type',
+            orderBy: 'name',
             perPage: 0 // No pagination, get all
         });
         res.json(students);

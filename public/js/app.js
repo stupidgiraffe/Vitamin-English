@@ -4766,7 +4766,13 @@ function renderCleanTable(data, type, options = {}) {
             columns: ['name', 'teacher_name', 'schedule', 'active'],
             headers: ['Class Name', 'Teacher', 'Schedule', 'Active'],
             formatters: {
-                name: (val, row) => getLocationIcon(row) + escapeHtml(val || ''),
+                name: (val, row) => {
+                    const rawColor = row && row.color ? row.color : '#667eea';
+                    // Validate color is a safe hex color to prevent CSS injection
+                    const color = /^#[0-9A-Fa-f]{3,6}$/.test(rawColor) ? rawColor : '#667eea';
+                    const swatch = `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${color};margin-right:6px;flex-shrink:0;vertical-align:middle;"></span>`;
+                    return swatch + getLocationIcon(row) + escapeHtml(val || '');
+                },
                 active: (val) => val ? 'Yes' : 'No'
             }
         },
@@ -4845,7 +4851,7 @@ function renderCleanTable(data, type, options = {}) {
     });
     
     // Add Actions header for students and reports
-    if (includeActions || type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'makeup_lessons') {
+    if (includeActions || type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'makeup_lessons' || type === 'classes') {
         html += '<th>Actions</th>';
     }
     
@@ -4853,8 +4859,8 @@ function renderCleanTable(data, type, options = {}) {
     
     data.forEach(row => {
         const sanitizedId = parseInt(row.id);
-        const rowClass = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons') ? 'clickable-row' : '';
-        const rowAttrs = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons') 
+        const rowClass = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons' || type === 'classes') ? 'clickable-row' : '';
+        const rowAttrs = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons' || type === 'classes') 
             ? `data-type="${type}" data-id="${sanitizedId}"` 
             : '';
         
@@ -4936,6 +4942,15 @@ function renderCleanTable(data, type, options = {}) {
                     html += `<button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteMonthlyReport(${sanitizedId})" title="Delete">🗑️</button>`;
                 }
                 html += `</td>`;
+            } else {
+                html += '<td class="actions-cell"></td>';
+            }
+        } else if (type === 'classes') {
+            if (!isNaN(sanitizedId)) {
+                html += `<td class="actions-cell">
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); quickAttendanceLink(${sanitizedId})" title="View Attendance">📊 View</button>
+                    <button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editClass(${sanitizedId})" title="Edit Class">✏️ Edit</button>
+                </td>`;
             } else {
                 html += '<td class="actions-cell"></td>';
             }
@@ -5243,6 +5258,9 @@ async function viewSearchResult(type, id) {
             break;
         case 'makeup_lessons':
             await viewMakeupLessonDetail(id);
+            break;
+        case 'classes':
+            quickAttendanceLink(id);
             break;
         default:
             Toast.info('Detail view not available for this type');

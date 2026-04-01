@@ -38,6 +38,10 @@ class StudentRepository extends BaseRepository {
         }
 
         qb.orderBy(`s.${orderBy}`, orderDirection);
+        // Always add name as a secondary sort to ensure alphabetical order within groups
+        if (orderBy !== 'name') {
+            qb.orderBy('s.name', 'ASC');
+        }
         
         if (perPage > 0) {
             qb.paginate(page, perPage);
