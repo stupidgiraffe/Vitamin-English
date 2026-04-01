@@ -410,24 +410,24 @@ function getClassDisplayName(cls) {
 // Returns SVG string for the Nanakuma station logo
 // Design: 6 diamond/rhombus shapes arranged in a hexagonal flower pattern (like a snowflake)
 function getNanakumaIcon(size = 20) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="location-icon nanakuma-icon" title="Nanakuma (七隈)">
+    return `<span class="location-icon-wrapper"><svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="location-icon nanakuma-icon" title="Nanakuma (七隈)">
         <polygon points="12,2 15,6 12,10 9,6" fill="#6B7280"/>
         <polygon points="18,5 19,10 15,12 14,7" fill="#6B7280"/>
         <polygon points="18,13 19,18 15,16 14,11" fill="#6B7280"/>
         <polygon points="12,14 15,18 12,22 9,18" fill="#6B7280"/>
         <polygon points="6,13 5,18 9,16 10,11" fill="#6B7280"/>
         <polygon points="6,5 5,10 9,12 10,7" fill="#6B7280"/>
-    </svg>`;
+    </svg></span>`;
 }
 
 // Returns SVG string for the Befu station logo (used for Torikai location)
 // Design: Stylized blue wave/bridge arcs with a small circle figure on top
 function getBefuIcon(size = 20) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="location-icon befu-icon" title="Torikai (鳥飼) - Befu Station">
+    return `<span class="location-icon-wrapper"><svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" class="location-icon befu-icon" title="Torikai (鳥飼) - Befu Station">
         <circle cx="12" cy="4" r="2.5" fill="#0EA5E9"/>
         <path d="M4 20 Q8 10 12 14 Q16 10 20 20" stroke="#0EA5E9" stroke-width="2.5" fill="none" stroke-linecap="round"/>
         <path d="M6 22 Q10 14 14 18 Q18 14 22 22" stroke="#0EA5E9" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
-    </svg>`;
+    </svg></span>`;
 }
 
 // Returns the appropriate location icon HTML for a class object, or empty string
@@ -563,6 +563,16 @@ function normalizeStudentColor(colorCode) {
 function getStudentColorDot(colorCode) {
     const c = normalizeStudentColor(colorCode);
     return c.cleared ? '' : `<span style="color: ${c.value}">●</span> `;
+}
+
+// Validate and return a CSS-safe hex color for class colors.
+// Only allows exactly 3, 6, or 8 hex digit colors to prevent CSS injection.
+// Returns the fallback if the value is invalid.
+function safeClassColor(color, fallback = '#667eea') {
+    if (color && /^#[0-9A-Fa-f]{3}$|^#[0-9A-Fa-f]{6}$|^#[0-9A-Fa-f]{8}$/.test(color)) {
+        return color;
+    }
+    return fallback;
 }
 
 // Read the effective color value from a student color input (respects data-cleared state)
@@ -773,7 +783,8 @@ async function loadInitialData() {
         
         // Deduplicate by id in case the server returns duplicates (defense in depth)
         classes = Array.from(new Map(classesData.map(c => [c.id, c])).values());
-        students = studentsData;
+        // Sort students alphabetically by name (case-insensitive) as a frontend safety net
+        students = studentsData.slice().sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
         teachers = teachersData;
 
         populateClassSelects();
@@ -3647,7 +3658,9 @@ async function loadAdminData() {
 
 async function loadStudentsList() {
     try {
-        const students = await api('/students');
+        const rawStudents = await api('/students');
+        // Sort alphabetically by name (backend also sends sorted, but enforce here for safety)
+        const students = rawStudents.slice().sort((a, b) => (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase()));
         const container = document.getElementById('students-list');
         
         if (students.length === 0) {
@@ -4763,11 +4776,20 @@ function renderCleanTable(data, type, options = {}) {
             }
         },
         classes: {
-            columns: ['name', 'teacher_name', 'schedule', 'active'],
-            headers: ['Class Name', 'Teacher', 'Schedule', 'Active'],
+            columns: ['name', 'location', 'teacher_name', 'schedule', 'active'],
+            headers: ['Class Name', 'Location', 'Teacher', 'Schedule', 'Active'],
             formatters: {
-                name: (val, row) => getLocationIcon(row) + escapeHtml(val || ''),
-                active: (val) => val ? 'Yes' : 'No'
+                name: (val, row) => {
+                    const safeColor = safeClassColor(row && row.color);
+                    const swatch = `<span class="db-class-color-swatch" style="background:${safeColor};" title="Class color"></span>`;
+                    return `${swatch}${getLocationIcon(row)}${escapeHtml(val || '')}`;
+                },
+                location: (val) => {
+                    if (val === 'nanakuma') return '🔷 Nanakuma';
+                    if (val === 'torikai') return '🌊 Torikai';
+                    return '<em style="color:#999;">—</em>';
+                },
+                active: (val) => val ? '<span style="color:#22c55e;font-weight:600;">✓ Yes</span>' : '<span style="color:#ef4444;">✗ No</span>'
             }
         },
         teacher_comment_sheets: {
@@ -4844,8 +4866,8 @@ function renderCleanTable(data, type, options = {}) {
         html += `<th>${header}</th>`;
     });
     
-    // Add Actions header for students and reports
-    if (includeActions || type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'makeup_lessons') {
+    // Add Actions header for students, reports, and classes
+    if (includeActions || type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'makeup_lessons' || type === 'classes') {
         html += '<th>Actions</th>';
     }
     
@@ -4853,12 +4875,19 @@ function renderCleanTable(data, type, options = {}) {
     
     data.forEach(row => {
         const sanitizedId = parseInt(row.id);
-        const rowClass = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons') ? 'clickable-row' : '';
-        const rowAttrs = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons') 
+        const isClickable = (type === 'students' || type === 'teacher_comment_sheets' || type === 'monthly_reports' || type === 'attendance' || type === 'makeup_lessons' || type === 'classes');
+        const rowClass = isClickable ? (type === 'classes' ? 'clickable-row db-class-row' : 'clickable-row') : '';
+        const rowAttrs = isClickable
             ? `data-type="${type}" data-id="${sanitizedId}"` 
             : '';
+        // For class rows, add a subtle color tint via left-border inline style
+        let rowStyle = '';
+        if (type === 'classes') {
+            const borderColor = safeClassColor(row.color, '');
+            if (borderColor) rowStyle = `style="border-left: 3px solid ${borderColor};"`;
+        }
         
-        html += `<tr class="${rowClass}" ${rowAttrs} onclick="handleRowClick(event, '${type}', ${sanitizedId})">`;
+        html += `<tr class="${rowClass}" ${rowAttrs} ${rowStyle} onclick="handleRowClick(event, '${type}', ${sanitizedId})">`;
         
         // Add individual checkbox
         if (includeSelection) {
@@ -4936,6 +4965,15 @@ function renderCleanTable(data, type, options = {}) {
                     html += `<button class="btn btn-small btn-danger" onclick="event.stopPropagation(); deleteMonthlyReport(${sanitizedId})" title="Delete">🗑️</button>`;
                 }
                 html += `</td>`;
+            } else {
+                html += '<td class="actions-cell"></td>';
+            }
+        } else if (type === 'classes') {
+            if (!isNaN(sanitizedId)) {
+                html += `<td class="actions-cell">
+                    <button class="btn btn-small btn-primary" onclick="event.stopPropagation(); quickAttendanceLink(${sanitizedId})" title="View Attendance">📊 View</button>
+                    <button class="btn btn-small btn-warning" onclick="event.stopPropagation(); editClass(${sanitizedId})" title="Edit Class">✏️ Edit</button>
+                </td>`;
             } else {
                 html += '<td class="actions-cell"></td>';
             }
@@ -5230,6 +5268,9 @@ async function viewSearchResult(type, id) {
     switch(type) {
         case 'students':
             await showStudentDetail(id);
+            break;
+        case 'classes':
+            quickAttendanceLink(id);
             break;
         case 'reports':
         case 'teacher_comment_sheets':

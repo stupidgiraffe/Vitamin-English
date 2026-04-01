@@ -3802,10 +3802,22 @@ body {
 }
 
 /* Location icons */
-.location-icon {
-    display: inline-block;
-    vertical-align: middle;
+.location-icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
     margin-right: 4px;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.location-icon {
+    display: block;
+    width: 20px;
+    height: 20px;
+    max-width: 20px;
+    max-height: 20px;
+    overflow: hidden;
     flex-shrink: 0;
 }
 
@@ -3815,4 +3827,41 @@ body {
 
 .befu-icon {
     opacity: 0.9;
+}
+
+@media (max-width: 768px) {
+    .location-icon {
+        width: 16px;
+        height: 16px;
+        max-width: 16px;
+        max-height: 16px;
+    }
+}
+
+/* DataHub classes table — color swatches and row styling */
+.db-class-color-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 6px;
+    flex-shrink: 0;
+    vertical-align: middle;
+    border: 1px solid rgba(0,0,0,0.15);
+}
+
+.db-table-clean tr.db-class-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.db-table-clean tr.db-class-row:hover {
+    background: rgba(0,0,0,0.04);
+}
+
+.db-table-clean td.db-class-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: nowrap;
 }
