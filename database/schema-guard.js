@@ -117,7 +117,8 @@ async function ensureStudentColumns(client) {
 
 async function ensureClassColumns(client) {
     const requiredColumns = [
-        { name: 'color', type: 'VARCHAR(50)', default: "'#4A90E2'" }
+        { name: 'color', type: 'VARCHAR(50)', default: "'#4A90E2'" },
+        { name: 'location', type: 'VARCHAR(50)', default: 'NULL' }
     ];
 
     for (const column of requiredColumns) {
@@ -192,7 +193,7 @@ async function ensureColumnExists(client, tableName, columnName, columnType, def
         const allowedTables = ['students', 'classes', 'monthly_reports', 'teacher_comment_sheets'];
         const allowedColumns = {
             students: ['parent_phone', 'color_code', 'email', 'phone', 'parent_name', 'parent_email', 'enrollment_date'],
-            classes: ['color'],
+            classes: ['color', 'location'],
             monthly_reports: ['start_date', 'end_date'],
             teacher_comment_sheets: ['phrases', 'others']
         };

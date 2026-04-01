@@ -3800,3 +3800,19 @@ body {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.6; }
 }
+
+/* Location icons */
+.location-icon {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 4px;
+    flex-shrink: 0;
+}
+
+.nanakuma-icon {
+    opacity: 0.9;
+}
+
+.befu-icon {
+    opacity: 0.9;
+}

@@ -139,7 +139,7 @@ router.post('/', async (req, res) => {
     console.log('Session user:', req.session?.userId);
     
     try {
-        const { name, teacher_id, schedule, color } = req.body;
+        const { name, teacher_id, schedule, color, location } = req.body;
         
         // ONLY validate name
         if (!name || name.trim() === '') {
@@ -149,6 +149,10 @@ router.post('/', async (req, res) => {
                 hint: 'Give your class a name (e.g., "Beginners Monday 10am")'
             });
         }
+
+        // Validate optional location value
+        const validLocations = ['nanakuma', 'torikai'];
+        const finalLocation = (location && validLocations.includes(location)) ? location : null;
         
         // Smart defaults
         const finalTeacherId = teacher_id || req.session?.userId || null;
@@ -160,7 +164,8 @@ router.post('/', async (req, res) => {
             name: name.trim(),
             teacher_id: finalTeacherId,
             schedule: finalSchedule,
-            color: finalColor
+            color: finalColor,
+            location: finalLocation
         });
         
         const classData = await dataHub.classes.create({
@@ -168,6 +173,7 @@ router.post('/', async (req, res) => {
             teacher_id: finalTeacherId,
             schedule: finalSchedule,
             color: finalColor,
+            location: finalLocation,
             active: true
         });
         
@@ -218,7 +224,7 @@ router.post('/', async (req, res) => {
 // Update a class
 router.put('/:id', async (req, res) => {
     try {
-        const { name, teacher_id, schedule, color, active } = req.body;
+        const { name, teacher_id, schedule, color, active, location } = req.body;
         
         // Validate required field
         if (!name || name.trim() === '') {
@@ -227,12 +233,17 @@ router.put('/:id', async (req, res) => {
                 hint: 'Please enter the class name'
             });
         }
+
+        // Validate optional location value
+        const validLocations = ['nanakuma', 'torikai'];
+        const finalLocation = (location && validLocations.includes(location)) ? location : null;
         
         const classInfo = await dataHub.classes.update(req.params.id, {
             name: name.trim(),
             teacher_id: teacher_id || null,
             schedule: schedule?.trim() || null,  // Use null for consistency
             color: color || '#4A90E2',
+            location: finalLocation,
             active: active !== undefined ? active : true
         });
         
