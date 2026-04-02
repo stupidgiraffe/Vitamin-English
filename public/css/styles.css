@@ -3291,15 +3291,16 @@ body {
     margin-right: 2px;
 }
 .makeup-inactive-cell {
-    background: #F5F5F5 !important;
-    color: #E0E0E0 !important;
-    cursor: default !important;
+    background: #F5F5F5;
+    color: #E0E0E0;
+    cursor: default;
     pointer-events: none;
     font-size: 0.7em;
     text-align: center;
 }
-.makeup-guest-card {
-    background: #F3E5F5 !important;
+.attendance-table .makeup-guest-card,
+.student-grid-card.makeup-guest-card {
+    background: #F3E5F5;
     border-left: 3px solid #7B68EE;
 }
 

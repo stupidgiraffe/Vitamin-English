@@ -3144,7 +3144,9 @@ function showAddMakeupStudentModal() {
         return;
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // Use local date components to avoid timezone issues with toISOString()
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const selectedClass = classes.find(c => c.id == classId);
     const className = selectedClass ? (getLocationPrefix(selectedClass) + getClassDisplayName(selectedClass)) : '';
 
