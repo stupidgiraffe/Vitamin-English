@@ -2692,10 +2692,10 @@ function renderAttendanceTable(data, classId) {
             else s += '—';
 
             // Remove button – removes the visitor record for ALL their dates in view
-            const datesParam = encodeURIComponent(JSON.stringify([...(student.makeup_dates || [])]));
+            const datesParam = (student.makeup_dates || []).join(',');
             s += `<button class="btn btn-small remove-makeup-visitor-btn" 
                 title="Remove from this class's attendance" 
-                onclick="removeMakeupVisitor(${student.id}, ${classId}, ${datesParam})">❌</button>`;
+                onclick="removeMakeupVisitor(${student.id}, ${classId}, '${datesParam}')">❌</button>`;
             s += '</td></tr>';
         });
         return s;
@@ -2865,7 +2865,7 @@ function renderAttendanceGridView(data, classId) {
             const rateClass = student.attendanceRate >= 80 ? 'good' : student.attendanceRate >= 60 ? 'warning' : 'poor';
             const makeupDatesSet = new Set(student.makeup_dates || []);
             const homeClass = student.source_class_name ? `<div class="makeup-visitor-home-class" style="font-size:0.8em;opacity:0.8;">${escapeHtml(student.source_class_name)}</div>` : '';
-            const datesParam = encodeURIComponent(JSON.stringify([...(student.makeup_dates || [])]));
+            const datesParam = (student.makeup_dates || []).join(',');
             html += `
                 <div class="student-grid-card makeup-visitor-card">
                     <div class="student-card-header">
@@ -2898,7 +2898,7 @@ function renderAttendanceGridView(data, classId) {
                     </div>
                     <div class="student-card-actions">
                         <button class="btn btn-small btn-secondary" onclick="navigateToStudentProfile(${student.id})" title="View student profile">📊</button>
-                        <button class="btn btn-small remove-makeup-visitor-btn" onclick="removeMakeupVisitor(${student.id}, ${classId}, ${datesParam})" title="Remove from this class">❌ Remove</button>
+                        <button class="btn btn-small remove-makeup-visitor-btn" onclick="removeMakeupVisitor(${student.id}, ${classId}, '${datesParam}')" title="Remove from this class">❌ Remove</button>
                     </div>
                 </div>
             `;
@@ -3058,14 +3058,12 @@ async function toggleAttendance(cell) {
 }
 
 // Remove a makeup visitor from a class's attendance for one or more dates
-async function removeMakeupVisitor(studentId, classId, datesJson) {
-    let dates;
-    try {
-        dates = typeof datesJson === 'string' ? JSON.parse(decodeURIComponent(datesJson)) : datesJson;
-    } catch (e) {
-        dates = [datesJson];
-    }
-    if (!Array.isArray(dates) || dates.length === 0) return;
+async function removeMakeupVisitor(studentId, classId, datesStr) {
+    // datesStr is a comma-separated list of YYYY-MM-DD dates
+    const dates = typeof datesStr === 'string'
+        ? datesStr.split(',').map(d => d.trim()).filter(d => d)
+        : [];
+    if (dates.length === 0) return;
 
     if (!confirm('Remove this makeup visitor from attendance?')) return;
 
