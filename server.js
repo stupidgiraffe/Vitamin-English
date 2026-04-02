@@ -31,6 +31,7 @@ app.use(helmet({
             imgSrc: ["'self'", "data:", "blob:"],
             fontSrc: ["'self'", "data:"],
             connectSrc: ["'self'"],
+            workerSrc: ["'self'"],
             frameSrc: ["'none'"],
             objectSrc: ["'none'"],
             baseUri: ["'self'"],
@@ -114,6 +115,16 @@ app.use(cors(corsOptions));
 app.use(bodyParser.json({ limit: '2mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '2mb' }));
 app.use(sanitizeInput); // Input sanitization
+
+// Serve the service worker with no-cache headers so browsers always check for
+// updates. Without this, Vercel's CDN might cache the SW file and prevent the
+// update notification from triggering on new deployments.
+app.get('/sw.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(__dirname, 'public', 'sw.js'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Request logging

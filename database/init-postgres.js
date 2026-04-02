@@ -14,8 +14,8 @@ const DEFAULT_TEACHER_PASSWORD = 'teacher123';
  */
 async function createSchemaIfNeeded() {
     try {
-        // Check if users table exists
-        const tablesCheck = await pool.query(`
+        // Check if users table exists (with retry for Neon cold-start wake-up)
+        const tablesCheck = await pool.queryWithRetry(`
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' AND table_name = 'users'

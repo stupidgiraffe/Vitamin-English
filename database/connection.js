@@ -24,11 +24,14 @@ const pool = new Pool({
         // These services use self-signed certificates or certificates not in Node's CA bundle
         rejectUnauthorized: false
     } : false,
-    // Tuned for Neon PostgreSQL: smaller pool and faster idle release reduce stale connections
-    // after Neon auto-suspend wakes up.
-    max: parseInt(process.env.DB_POOL_MAX || '10', 10),
+    // Tuned for Neon PostgreSQL on Vercel serverless:
+    // - Keep pool small (max 5) to avoid exhausting Neon connection limits across concurrent cold starts
+    // - Longer connectionTimeoutMillis to survive Neon auto-suspend wake-up (can take 3-5 s)
+    // - min:0 so idle serverless instances don't hold open connections that Neon will terminate
+    max: parseInt(process.env.DB_POOL_MAX || '5', 10),
+    min: 0,
     idleTimeoutMillis: parseInt(process.env.DB_IDLE_TIMEOUT || '10000', 10),
-    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '5000', 10),
+    connectionTimeoutMillis: parseInt(process.env.DB_CONNECTION_TIMEOUT || '15000', 10),
     maxUses: parseInt(process.env.DB_MAX_USES || '7500', 10),
     // Allow the pool to fully drain when the app is idle (important for serverless/Vercel)
     allowExitOnIdle: true,
@@ -63,6 +66,41 @@ pool.healthCheck = async () => {
             error: error.message 
         };
     }
+};
+
+/**
+ * Execute a query with exponential-backoff retry for transient connection errors.
+ * This helps survive Neon auto-suspend wake-up timeouts on cold starts.
+ * @param {string|Object} text - SQL text or query object
+ * @param {Array} [values] - Query parameters
+ * @param {number} [maxRetries=3] - Maximum number of retries
+ * @returns {Promise<Object>} Query result
+ */
+pool.queryWithRetry = async (text, values = [], maxRetries = 3) => {
+    let lastError;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            return await pool.query(text, values);
+        } catch (err) {
+            lastError = err;
+            const isTransient =
+                err.message && (
+                    err.message.includes('Connection terminated') ||
+                    err.message.includes('connection timeout') ||
+                    err.message.includes('ECONNRESET') ||
+                    err.message.includes('ETIMEDOUT') ||
+                    err.code === 'ECONNRESET' ||
+                    err.code === 'ETIMEDOUT'
+                );
+            if (!isTransient || attempt === maxRetries) {
+                throw err;
+            }
+            const delay = Math.min(200 * Math.pow(2, attempt - 1), 3000); // 200ms, 400ms, 800ms …
+            console.warn(`⚠️ DB query transient error (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${err.message}`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+    throw lastError;
 };
 
 /**
