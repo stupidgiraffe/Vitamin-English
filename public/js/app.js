@@ -1315,6 +1315,7 @@ document.getElementById('export-attendance-pdf-btn').addEventListener('click', e
 document.getElementById('new-attendance-btn')?.addEventListener('click', showNewAttendanceModal);
 document.getElementById('add-date-btn')?.addEventListener('click', showAddDateModal);
 document.getElementById('move-attendance-btn')?.addEventListener('click', showMoveAttendanceModal);
+document.getElementById('add-makeup-student-btn')?.addEventListener('click', showAddMakeupStudentModal);
 
 // Debounced auto-load when date inputs change (Part 6)
 let attendanceDateChangeTimer = null;
@@ -2499,11 +2500,15 @@ async function loadAttendance() {
         document.getElementById('metadata-date-range').textContent = dateRangeText;
         
         // Update student count metadata
-        const regularCount = data.students.filter(s => s.student_type === 'regular').length;
-        const trialCount = data.students.filter(s => s.student_type !== 'regular').length;
-        const studentCountText = trialCount > 0 
-            ? `${data.students.length} (${regularCount} regular, ${trialCount} trial/makeup)`
-            : `${data.students.length}`;
+        const regularCount = data.students.filter(s => s.student_type === 'regular' && !s.is_makeup_guest).length;
+        const trialCount = data.students.filter(s => s.student_type !== 'regular' && !s.is_makeup_guest).length;
+        const makeupGuestCount = data.students.filter(s => s.is_makeup_guest).length;
+        let studentCountText = `${data.students.length}`;
+        const parts = [];
+        if (regularCount) parts.push(`${regularCount} regular`);
+        if (trialCount) parts.push(`${trialCount} trial`);
+        if (makeupGuestCount) parts.push(`${makeupGuestCount} makeup guest${makeupGuestCount > 1 ? 's' : ''}`);
+        if (parts.length > 1 || makeupGuestCount) studentCountText += ` (${parts.join(', ')})`;
         document.getElementById('metadata-student-count').textContent = studentCountText;
         
         metadataDiv.style.display = 'grid';
@@ -2561,14 +2566,16 @@ function renderAttendanceTable(data, classId) {
     // Update quick mark button visibility
     updateQuickMarkButtonVisibility();
 
-    // Separate regular and trial students
-    const regularStudents = students.filter(s => s.student_type === 'regular');
-    const trialStudents = students.filter(s => s.student_type !== 'regular');
+    // Separate regular, trial, and makeup guest students
+    const regularStudents = students.filter(s => s.student_type === 'regular' && !s.is_makeup_guest);
+    const trialStudents = students.filter(s => s.student_type !== 'regular' && !s.is_makeup_guest);
+    const makeupGuestStudents = students.filter(s => s.is_makeup_guest);
 
-    // ── Part 1D: Per-student rate calculation ─────────────────────────────────
+    // ── Per-student rate calculation ─────────────────────────────────────────
     const getStudentRate = (student) => {
+        const activeDates = student.is_makeup_guest ? (student.makeup_dates || []) : dates;
         let present = 0, total = 0;
-        dates.forEach(date => {
+        activeDates.forEach(date => {
             const key = `${student.id}-${date}`;
             const status = attendance[key] || '';
             if (status) { total++; if (status === 'O') present++; }
@@ -2601,16 +2608,19 @@ function renderAttendanceTable(data, classId) {
     html += '<th style="min-width:70px;">Rate</th></tr></thead><tbody>';
 
     // ── Render a section of students ────────────────────────────────────────
-    const renderSection = (sectionStudents, sectionTitle) => {
+    const renderSection = (sectionStudents, sectionTitle, isMakeupGuest = false) => {
         if (sectionStudents.length === 0) return '';
-        let s = `<tr><td colspan="${colSpan}" class="student-type-header">${sectionTitle}</td></tr>`;
+        let s = `<tr><td colspan="${colSpan}" class="student-type-header${isMakeupGuest ? ' makeup-guest-header' : ''}">${sectionTitle}</td></tr>`;
         sectionStudents.forEach(student => {
-            const rowClass = (student.color_code && !student.color_code.startsWith('#')) ? `student-row-${student.color_code}` : '';
-            const rowStyle = (student.color_code && student.color_code.startsWith('#')) ? ` style="background: ${student.color_code}"` : '';
-            const colorDot = getStudentColorDot(student.color_code);
+            const makeupDatesSet = student.is_makeup_guest ? new Set(student.makeup_dates || []) : null;
+            const rowClass = isMakeupGuest ? 'makeup-guest-row' :
+                (student.color_code && !student.color_code.startsWith('#')) ? `student-row-${student.color_code}` : '';
+            const rowStyle = (!isMakeupGuest && student.color_code && student.color_code.startsWith('#')) ? ` style="background: ${student.color_code}"` : '';
+            const colorDot = isMakeupGuest ? '' : getStudentColorDot(student.color_code);
+            const guestBadge = isMakeupGuest ? '<span class="makeup-guest-badge" title="Makeup student from another class">🔄</span>' : '';
             s += `<tr class="${rowClass}"${rowStyle}><td class="student-name">
                 <div class="student-name-cell">
-                    <span>${colorDot}${escapeHtml(student.name)}</span>
+                    <span>${guestBadge}${colorDot}${escapeHtml(student.name)}</span>
                     <button class="edit-student-btn" onclick="editStudentFromAttendance(${student.id})" title="Edit student" aria-label="Edit ${escapeHtml(student.name)}">✏️</button>
                     <button class="edit-student-btn" onclick="viewStudentAttendanceSummary(${student.id})" title="View attendance summary" aria-label="View attendance for ${escapeHtml(student.name)}">📊</button>
                 </div>
@@ -2619,17 +2629,23 @@ function renderAttendanceTable(data, classId) {
             dates.forEach(date => {
                 const key = `${student.id}-${date}`;
                 const status = attendance[key] || '';
-                const statusClass = status === 'O' ? 'present' : status === 'X' ? 'absent' : status === '/' ? 'partial' : '';
-                s += `<td class="attendance-cell ${statusClass}" 
-                    data-student="${student.id}" 
-                    data-class="${classId}" 
-                    data-date="${date}"
-                    role="gridcell"
-                    tabindex="-1"
-                    onclick="toggleAttendance(this)">${status}</td>`;
+                // Makeup guests: only their scheduled date(s) are interactive
+                const isActiveMakeupDate = !makeupDatesSet || makeupDatesSet.has(date);
+                if (isMakeupGuest && !isActiveMakeupDate) {
+                    s += `<td class="attendance-cell makeup-inactive-cell" title="Not scheduled for this date">·</td>`;
+                } else {
+                    const statusClass = status === 'O' ? 'present' : status === 'X' ? 'absent' : status === '/' ? 'partial' : '';
+                    s += `<td class="attendance-cell ${statusClass}" 
+                        data-student="${student.id}" 
+                        data-class="${classId}" 
+                        data-date="${date}"
+                        role="gridcell"
+                        tabindex="-1"
+                        onclick="toggleAttendance(this)">${status}</td>`;
+                }
             });
 
-            // ── Part 1D: Summary column ───────────────────────────────────
+            // ── Summary column ───────────────────────────────────────────
             const { present, total, rate } = getStudentRate(student);
             const rateClass = rate === null ? '' : rate >= 85 ? 'rate-green' : rate >= 65 ? 'rate-yellow' : 'rate-red';
             s += `<td class="attendance-rate-cell ${rateClass}" title="${present} present out of ${total}">`;
@@ -2642,13 +2658,19 @@ function renderAttendanceTable(data, classId) {
 
     html += renderSection(regularStudents, 'Regular Students');
     html += renderSection(trialStudents, 'Make-up / Trial Students');
+    html += renderSection(makeupGuestStudents, '🔄 Makeup Students (Guests)', true);
 
-    // ── Part 1D: Summary row (present count per column) ──────────────────────
+    // ── Summary row (present count per column) ────────────────────────────────
     if (dates.length > 0) {
+        // Exclude makeup guests from the denominator for dates they aren't scheduled
         html += `<tr class="attendance-summary-row"><td class="summary-label-cell">Present / Total</td>`;
         dates.forEach(date => {
-            const presentCount = students.filter(s => (attendance[`${s.id}-${date}`] || '') === 'O').length;
-            const totalCount   = students.length;
+            const activeStudents = students.filter(s => {
+                if (s.is_makeup_guest) return (s.makeup_dates || []).includes(date);
+                return true;
+            });
+            const presentCount = activeStudents.filter(s => (attendance[`${s.id}-${date}`] || '') === 'O').length;
+            const totalCount = activeStudents.length;
             html += `<td title="${date}: ${presentCount} present">${presentCount}/${totalCount}</td>`;
         });
         html += '<td></td></tr>';
@@ -2685,15 +2707,17 @@ function renderAttendanceGridView(data, classId) {
         dates = allDates;
     }
 
-    // Separate regular and trial students
-    const regularStudents = students.filter(s => s.student_type === 'regular');
-    const trialStudents = students.filter(s => s.student_type !== 'regular');
+    // Separate regular, trial, and makeup guest students
+    const regularStudents = students.filter(s => s.student_type === 'regular' && !s.is_makeup_guest);
+    const trialStudents = students.filter(s => s.student_type !== 'regular' && !s.is_makeup_guest);
+    const makeupGuestStudents = students.filter(s => s.is_makeup_guest);
 
     // Calculate attendance statistics
     const getStats = (studentList) => {
         return studentList.map(student => {
+            const activeDates = student.is_makeup_guest ? (student.makeup_dates || []).filter(d => dates.includes(d)) : dates;
             let present = 0, absent = 0, partial = 0, unmarked = 0;
-            dates.forEach(date => {
+            activeDates.forEach(date => {
                 const key = `${student.id}-${date}`;
                 const status = attendance[key] || '';
                 if (status === 'O') present++;
@@ -2701,7 +2725,7 @@ function renderAttendanceGridView(data, classId) {
                 else if (status === '/') partial++;
                 else unmarked++;
             });
-            const total = dates.length;
+            const total = activeDates.length;
             const attendanceRate = total > 0 ? Math.round((present / total) * 100) : 0;
             return { ...student, present, absent, partial, unmarked, total, attendanceRate };
         });
@@ -2709,6 +2733,7 @@ function renderAttendanceGridView(data, classId) {
 
     const regularWithStats = getStats(regularStudents);
     const trialWithStats = getStats(trialStudents);
+    const makeupWithStats = getStats(makeupGuestStudents);
 
     let html = `
         <div class="attendance-grid-view">
@@ -2732,11 +2757,19 @@ function renderAttendanceGridView(data, classId) {
         
         studentList.forEach(student => {
             const rateClass = student.attendanceRate >= 80 ? 'good' : student.attendanceRate >= 60 ? 'warning' : 'poor';
+            const isMakeupGuest = student.is_makeup_guest;
+            const makeupDatesSet = isMakeupGuest ? new Set(student.makeup_dates || []) : null;
+            const cardClass = isMakeupGuest ? 'makeup-guest-card' :
+                (student.color_code && !student.color_code.startsWith('#') ? `student-card-${student.color_code}` : '');
+            const cardStyle = (!isMakeupGuest && student.color_code && student.color_code.startsWith('#')) ? `style="background: ${student.color_code}"` : '';
+            const guestBadge = isMakeupGuest ? '<span class="makeup-guest-badge" title="Makeup guest">🔄</span> ' : '';
+            // For makeup guests, only show their makeup dates
+            const displayDates = isMakeupGuest ? dates.filter(d => makeupDatesSet.has(d)) : dates;
             
             sectionHtml += `
-                <div class="student-grid-card ${student.color_code && !student.color_code.startsWith('#') ? `student-card-${student.color_code}` : ''}" ${student.color_code && student.color_code.startsWith('#') ? `style="background: ${student.color_code}"` : ''}>
+                <div class="student-grid-card ${cardClass}" ${cardStyle}>
                     <div class="student-card-header">
-                        <span class="student-card-name">${escapeHtml(student.name)}</span>
+                        <span class="student-card-name">${guestBadge}${escapeHtml(student.name)}</span>
                         <span class="student-card-rate ${rateClass}">${student.attendanceRate}%</span>
                     </div>
                     <div class="student-card-stats">
@@ -2745,7 +2778,7 @@ function renderAttendanceGridView(data, classId) {
                         <span class="stat partial" title="Partial">${student.partial} ~</span>
                     </div>
                     <div class="student-card-dates">
-                        ${dates.slice(0, 10).map(date => {
+                        ${displayDates.slice(0, 10).map(date => {
                             const key = `${student.id}-${date}`;
                             const status = attendance[key] || '';
                             const statusClass = status === 'O' ? 'present' : status === 'X' ? 'absent' : status === '/' ? 'partial' : 'empty';
@@ -2759,7 +2792,7 @@ function renderAttendanceGridView(data, classId) {
                                 onclick="toggleAttendance(this)" 
                                 title="${shortDate}: Click to mark attendance">${status || ''}</span>`;
                         }).join('')}
-                        ${dates.length > 10 ? `<span class="more-dates">+${dates.length - 10}</span>` : ''}
+                        ${displayDates.length > 10 ? `<span class="more-dates">+${displayDates.length - 10}</span>` : ''}
                     </div>
                     <div class="student-card-actions">
                         <button class="btn btn-small btn-secondary" onclick="navigateToStudentProfile(${student.id})" title="View student profile">📊</button>
@@ -2775,11 +2808,13 @@ function renderAttendanceGridView(data, classId) {
 
     html += renderStudentCards(regularWithStats, 'Regular Students');
     html += renderStudentCards(trialWithStats, 'Make-up / Trial Students');
+    html += renderStudentCards(makeupWithStats, '🔄 Makeup Students (Guests)');
 
     // Summary section
-    const totalPresent = [...regularWithStats, ...trialWithStats].reduce((sum, s) => sum + s.present, 0);
-    const totalAbsent = [...regularWithStats, ...trialWithStats].reduce((sum, s) => sum + s.absent, 0);
-    const totalPartial = [...regularWithStats, ...trialWithStats].reduce((sum, s) => sum + s.partial, 0);
+    const allWithStats = [...regularWithStats, ...trialWithStats, ...makeupWithStats];
+    const totalPresent = allWithStats.reduce((sum, s) => sum + s.present, 0);
+    const totalAbsent = allWithStats.reduce((sum, s) => sum + s.absent, 0);
+    const totalPartial = allWithStats.reduce((sum, s) => sum + s.partial, 0);
 
     html += `
             </div>
@@ -3096,6 +3131,103 @@ function showAddDateModal() {
         } catch (error) {
             console.error('Error adding date:', error);
             Toast.error('Failed to add date');
+        }
+    });
+}
+
+// Add a makeup student from another class for a specific date
+function showAddMakeupStudentModal() {
+    const classId = document.getElementById('attendance-class-select').value;
+
+    if (!classId) {
+        Toast.error('Please select a class first');
+        return;
+    }
+
+    // Use local date components to avoid timezone issues with toISOString()
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const selectedClass = classes.find(c => c.id == classId);
+    const className = selectedClass ? (getLocationPrefix(selectedClass) + getClassDisplayName(selectedClass)) : '';
+
+    // Build student options — only show students NOT in this class
+    const otherStudents = students.filter(s => String(s.class_id) !== String(classId) && s.active !== false);
+
+    if (otherStudents.length === 0) {
+        Toast.info('No students from other classes available');
+        return;
+    }
+
+    let studentOptions = otherStudents.map(s => {
+        const sClass = classes.find(c => c.id == s.class_id);
+        const sClassName = sClass ? sClass.name : 'No class';
+        return `<option value="${s.id}">${escapeHtml(s.name)} (${escapeHtml(sClassName)})</option>`;
+    }).join('');
+
+    showModal('Add Makeup Student', `
+        <form id="add-makeup-student-form">
+            <p class="info-text">Add a student from another class to <strong>${escapeHtml(className)}</strong> for a specific makeup date.</p>
+            <div class="form-group">
+                <label>Student *</label>
+                <select id="makeup-guest-student" required class="form-control">
+                    <option value="">— Select student —</option>
+                    ${studentOptions}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Makeup Date *</label>
+                <input type="date" id="makeup-guest-date" class="form-control" value="${today}" required>
+            </div>
+            <div class="form-group">
+                <label>Reason</label>
+                <textarea id="makeup-guest-reason" rows="2" class="form-control" placeholder="e.g. Absent from regular class on..."></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Add Makeup Student</button>
+        </form>
+    `);
+
+    document.getElementById('add-makeup-student-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const studentId = document.getElementById('makeup-guest-student').value;
+        const date = document.getElementById('makeup-guest-date').value;
+        const reason = document.getElementById('makeup-guest-reason').value;
+
+        if (!studentId || !date) {
+            Toast.error('Please select a student and date');
+            return;
+        }
+
+        try {
+            // Create a makeup_lesson record linking this student to this class on this date
+            await api('/makeup', {
+                method: 'POST',
+                body: JSON.stringify({
+                    student_id: parseInt(studentId),
+                    class_id: parseInt(classId),
+                    scheduled_date: date,
+                    reason: reason || '',
+                    notes: ''
+                })
+            });
+
+            closeModal();
+
+            // Expand date range if needed so the makeup date is visible
+            const startDateInput = document.getElementById('attendance-start-date');
+            const endDateInput = document.getElementById('attendance-end-date');
+            if (startDateInput.value && date < startDateInput.value) {
+                startDateInput.value = date;
+            }
+            if (endDateInput.value && date > endDateInput.value) {
+                endDateInput.value = date;
+            }
+
+            await loadAttendance();
+            Toast.success('Makeup student added! They will appear in the attendance grid for ' + date);
+        } catch (error) {
+            console.error('Error adding makeup student:', error);
+            Toast.error('Failed to add makeup student: ' + error.message);
         }
     });
 }
