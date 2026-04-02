@@ -4,6 +4,7 @@ const ClassRepository = require('./repositories/ClassRepository');
 const AttendanceRepository = require('./repositories/AttendanceRepository');
 const TeacherCommentSheetRepository = require('./repositories/TeacherCommentSheetRepository');
 const MakeupLessonRepository = require('./repositories/MakeupLessonRepository');
+const AttendanceMakeupRepository = require('./repositories/AttendanceMakeupRepository');
 const MonthlyReportRepository = require('./repositories/MonthlyReportRepository');
 const UserRepository = require('./repositories/UserRepository');
 const PdfHistoryRepository = require('./repositories/PdfHistoryRepository');
@@ -23,6 +24,7 @@ class DataHub {
         this.attendance = new AttendanceRepository(pool);
         this.teacherCommentSheets = new TeacherCommentSheetRepository(pool);
         this.makeupLessons = new MakeupLessonRepository(pool);
+        this.attendanceMakeup = new AttendanceMakeupRepository(pool);
         this.monthlyReports = new MonthlyReportRepository(pool);
         this.users = new UserRepository(pool);
         this.pdfHistory = new PdfHistoryRepository(pool);
@@ -34,6 +36,7 @@ class DataHub {
             'attendance': this.attendance,
             'teacher_comment_sheets': this.teacherCommentSheets,
             'makeup_lessons': this.makeupLessons,
+            'attendance_makeup_students': this.attendanceMakeup,
             'monthly_reports': this.monthlyReports,
             'users': this.users,
             'pdf_history': this.pdfHistory

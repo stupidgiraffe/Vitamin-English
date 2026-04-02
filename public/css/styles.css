@@ -3274,6 +3274,46 @@ body {
 }
 .makeup-star { font-size: 0.7em; vertical-align: super; }
 
+/* ── Makeup visitor rows ──────────────────────────────────────────────────── */
+.makeup-visitor-row {
+    background: #e8f4fd !important;
+}
+.makeup-visitor-row:hover {
+    background: #d0eaf9 !important;
+}
+.makeup-visitor-header {
+    background: #b8d9f0 !important;
+    color: #1a5f8b !important;
+}
+.makeup-visitor-inactive {
+    background: #f0f0f0;
+    color: #bbb;
+    text-align: center;
+    cursor: default;
+}
+.makeup-visitor-home-class {
+    color: #666;
+    font-size: 0.8em;
+    display: block;
+}
+.remove-makeup-visitor-btn {
+    background: transparent;
+    border: none;
+    color: #c0392b;
+    cursor: pointer;
+    font-size: 0.85em;
+    padding: 2px 4px;
+    margin-left: 4px;
+    border-radius: 3px;
+}
+.remove-makeup-visitor-btn:hover {
+    background: #fde;
+}
+.makeup-visitor-card {
+    background: #e8f4fd !important;
+    border: 1px solid #b8d9f0 !important;
+}
+
 /* ── Keyboard focus indicator for attendance cells (Part 4C) ──────────────── */
 .attendance-cell:focus,
 .attendance-cell[data-focused="true"] {

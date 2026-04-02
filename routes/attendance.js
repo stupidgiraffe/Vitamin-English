@@ -690,4 +690,166 @@ router.get('/teacher-dashboard', async (req, res) => {
     }
 });
 
+// ─── Attendance Makeup Students endpoints ─────────────────────────────────────
+
+// GET /api/attendance/makeup-students?classId=X&startDate=Y&endDate=Z
+// Returns makeup visitors for a class within a date range
+router.get('/makeup-students', async (req, res) => {
+    try {
+        const { classId, startDate, endDate } = req.query;
+
+        if (!classId || !startDate || !endDate) {
+            return res.status(400).json({ error: 'classId, startDate, and endDate are required' });
+        }
+
+        const normalizedStart = normalizeToISO(startDate);
+        const normalizedEnd   = normalizeToISO(endDate);
+
+        if (!normalizedStart || !normalizedEnd) {
+            return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
+        }
+
+        const visitors = await dataHub.attendanceMakeup.getByClassAndDateRange(
+            parseInt(classId),
+            normalizedStart,
+            normalizedEnd
+        );
+
+        res.json(visitors);
+    } catch (error) {
+        console.error('❌ Error fetching makeup visitors:', error);
+        res.status(500).json({ error: 'Failed to fetch makeup visitors' });
+    }
+});
+
+// POST /api/attendance/makeup-student
+// Add a makeup student to a class for a date.
+// Auto-detects source_class_id from the student's class_id.
+// Optionally links to an existing makeup_lessons record or creates one.
+router.post('/makeup-student', async (req, res) => {
+    if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    try {
+        const { student_id, class_id, date, reason } = req.body;
+
+        if (!student_id || !class_id || !date) {
+            return res.status(400).json({ error: 'student_id, class_id, and date are required' });
+        }
+
+        const normalizedDate = normalizeToISO(date);
+        if (!normalizedDate) {
+            return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
+        }
+
+        const studentIdInt = parseInt(student_id);
+        const classIdInt   = parseInt(class_id);
+
+        // Look up the student to get their home class
+        const studentResult = await dataHub.query(
+            'SELECT id, class_id FROM students WHERE id = $1',
+            [studentIdInt]
+        );
+        if (studentResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        const sourceClassId = studentResult.rows[0].class_id || null;
+
+        // Prevent adding a student to their own class this way
+        if (sourceClassId && sourceClassId === classIdInt) {
+            return res.status(400).json({ error: 'Student already belongs to this class' });
+        }
+
+        // Find or create a linked makeup_lessons record
+        let makeupLessonId = null;
+        try {
+            const existingLesson = await dataHub.query(
+                `SELECT id FROM makeup_lessons
+                 WHERE student_id = $1 AND class_id = $2 AND scheduled_date = $3
+                 LIMIT 1`,
+                [studentIdInt, classIdInt, normalizedDate]
+            );
+
+            if (existingLesson.rows.length > 0) {
+                makeupLessonId = existingLesson.rows[0].id;
+                // Update status to completed
+                await dataHub.query(
+                    `UPDATE makeup_lessons SET status = 'completed' WHERE id = $1`,
+                    [makeupLessonId]
+                );
+            } else {
+                // Auto-create a makeup_lessons record
+                const newLesson = await dataHub.query(
+                    `INSERT INTO makeup_lessons (student_id, class_id, scheduled_date, reason, status)
+                     VALUES ($1, $2, $3, $4, 'completed')
+                     RETURNING id`,
+                    [studentIdInt, classIdInt, normalizedDate, reason || null]
+                );
+                makeupLessonId = newLesson.rows[0].id;
+            }
+        } catch (mlErr) {
+            // If makeup_lessons is unavailable, continue without linking
+            console.warn('⚠️  Could not link makeup_lessons record:', mlErr.message);
+        }
+
+        const record = await dataHub.attendanceMakeup.addMakeupStudent(
+            studentIdInt,
+            classIdInt,
+            normalizedDate,
+            sourceClassId,
+            reason || null,
+            req.session.userId,
+            makeupLessonId
+        );
+
+        res.status(201).json(record);
+    } catch (error) {
+        console.error('❌ Error adding makeup student:', error);
+        if (error.code === '23505') {
+            return res.status(409).json({ error: 'Student already added as makeup visitor for this class and date' });
+        }
+        if (error.code === '23503') {
+            return res.status(400).json({ error: 'Invalid student or class ID' });
+        }
+        res.status(500).json({ error: 'Failed to add makeup student' });
+    }
+});
+
+// DELETE /api/attendance/makeup-student
+// Remove a makeup student from a class for a date
+router.delete('/makeup-student', async (req, res) => {
+    if (!req.session || !req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    try {
+        const { student_id, class_id, date } = req.body;
+
+        if (!student_id || !class_id || !date) {
+            return res.status(400).json({ error: 'student_id, class_id, and date are required' });
+        }
+
+        const normalizedDate = normalizeToISO(date);
+        if (!normalizedDate) {
+            return res.status(400).json({ error: 'Invalid date format. Expected ISO date (YYYY-MM-DD)' });
+        }
+
+        const deleted = await dataHub.attendanceMakeup.removeMakeupStudent(
+            parseInt(student_id),
+            parseInt(class_id),
+            normalizedDate
+        );
+
+        if (!deleted) {
+            return res.status(404).json({ error: 'Makeup visitor record not found' });
+        }
+
+        res.json({ message: 'Makeup student removed successfully' });
+    } catch (error) {
+        console.error('❌ Error removing makeup student:', error);
+        res.status(500).json({ error: 'Failed to remove makeup student' });
+    }
+});
+
 module.exports = router;

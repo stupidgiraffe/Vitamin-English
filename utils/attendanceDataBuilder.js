@@ -42,6 +42,55 @@ async function buildAttendanceMatrix(pool, classId, startDate, endDate) {
         seenIds.add(s.id);
         return true;
     });
+
+    // Get makeup visitor students for this class within the date range
+    let makeupVisitors = [];
+    if (normalizedStartDate && normalizedEndDate) {
+        try {
+            const makeupResult = await pool.query(
+                `SELECT ams.student_id, ams.date as makeup_date,
+                        s.id, s.name, s.student_type, s.color_code,
+                        sc.name as source_class_name
+                 FROM attendance_makeup_students ams
+                 JOIN students s ON ams.student_id = s.id
+                 LEFT JOIN classes sc ON ams.source_class_id = sc.id
+                 WHERE ams.class_id = $1
+                   AND ams.date >= $2
+                   AND ams.date <= $3
+                 ORDER BY ams.date, s.name`,
+                [classId, normalizedStartDate, normalizedEndDate]
+            );
+
+            // Group makeup visitors by student_id so each student appears once,
+            // carrying a `makeup_dates` array of the specific dates they were added for.
+            const visitorMap = new Map();
+            makeupResult.rows.forEach(row => {
+                if (!visitorMap.has(row.student_id)) {
+                    visitorMap.set(row.student_id, {
+                        id: row.id,
+                        name: row.name,
+                        student_type: row.student_type,
+                        color_code: row.color_code,
+                        is_makeup_visitor: true,
+                        source_class_name: row.source_class_name,
+                        makeup_dates: []
+                    });
+                }
+                visitorMap.get(row.student_id).makeup_dates.push(row.makeup_date);
+            });
+
+            // Only include makeup visitors that are not already permanent members
+            visitorMap.forEach((visitor) => {
+                if (!seenIds.has(visitor.id)) {
+                    makeupVisitors.push(visitor);
+                }
+            });
+        } catch (err) {
+            // Gracefully degrade if the table does not exist yet (before migration)
+            if (err.code !== '42P01') throw err;
+            console.warn('⚠️  attendance_makeup_students table not found – skipping makeup visitors');
+        }
+    }
     
     // Generate date range - always include all dates in range (including empty days)
     let dates = [];
@@ -117,7 +166,7 @@ async function buildAttendanceMatrix(pool, classId, startDate, endDate) {
     });
     
     return {
-        students,
+        students: [...students, ...makeupVisitors],
         dates,
         attendanceMap,
         classData,
