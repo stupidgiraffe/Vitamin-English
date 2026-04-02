@@ -116,6 +116,29 @@ router.post('/', async (req, res) => {
             teacher_id: teacher_id || null
         });
         
+        // Auto-update makeup lesson status when attendance is marked for a makeup guest.
+        // If a student has a scheduled makeup_lesson for this class+date and is marked
+        // present (O), auto-complete it. If cleared (''), revert to scheduled.
+        try {
+            const makeupResult = await dataHub.pool.query(
+                `SELECT id, status FROM makeup_lessons
+                 WHERE student_id = $1 AND class_id = $2 AND scheduled_date = $3
+                 AND status IN ('scheduled', 'completed')
+                 LIMIT 1`,
+                [student_id, class_id, normalizedDate]
+            );
+            if (makeupResult.rows.length > 0) {
+                const ml = makeupResult.rows[0];
+                const newMakeupStatus = (status === 'O' || status === '/' || status === 'X') ? 'completed' : 'scheduled';
+                if (ml.status !== newMakeupStatus) {
+                    await dataHub.makeupLessons.updateStatus(ml.id, newMakeupStatus);
+                }
+            }
+        } catch (makeupErr) {
+            // Non-critical — log but don't fail the attendance save
+            console.warn('⚠️ Could not auto-update makeup lesson status:', makeupErr.message);
+        }
+        
         // Ensure returned date is in ISO format
         res.status(201).json({
             ...record,

@@ -3274,6 +3274,35 @@ body {
 }
 .makeup-star { font-size: 0.7em; vertical-align: super; }
 
+/* ── Makeup guest student styles ──────────────────────────────────────────── */
+.makeup-guest-header {
+    background: #E8E0F7 !important;
+    color: #4A148C !important;
+    font-style: italic;
+}
+.makeup-guest-row {
+    background: #F3E5F5;
+}
+.makeup-guest-row:hover {
+    background: #E8E0F7;
+}
+.makeup-guest-badge {
+    font-size: 0.85em;
+    margin-right: 2px;
+}
+.makeup-inactive-cell {
+    background: #F5F5F5 !important;
+    color: #E0E0E0 !important;
+    cursor: default !important;
+    pointer-events: none;
+    font-size: 0.7em;
+    text-align: center;
+}
+.makeup-guest-card {
+    background: #F3E5F5 !important;
+    border-left: 3px solid #7B68EE;
+}
+
 /* ── Keyboard focus indicator for attendance cells (Part 4C) ──────────────── */
 .attendance-cell:focus,
 .attendance-cell[data-focused="true"] {

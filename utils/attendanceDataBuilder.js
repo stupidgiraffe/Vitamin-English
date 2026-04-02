@@ -42,6 +42,78 @@ async function buildAttendanceMatrix(pool, classId, startDate, endDate) {
         seenIds.add(s.id);
         return true;
     });
+
+    // Get makeup guest students — students from OTHER classes who have a
+    // scheduled/completed makeup lesson for THIS class within the date range.
+    // They appear in the grid only for their specific makeup date(s).
+    let makeupGuestQuery = `
+        SELECT DISTINCT s.*, ml.scheduled_date as makeup_date, ml.id as makeup_lesson_id,
+               ml.status as makeup_status, ml.reason as makeup_reason
+        FROM makeup_lessons ml
+        JOIN students s ON ml.student_id = s.id
+        WHERE ml.class_id = $1
+          AND ml.status IN ('scheduled', 'completed')
+    `;
+    const makeupParams = [classId];
+    let makeupParamIndex = 2;
+
+    if (normalizedStartDate) {
+        makeupGuestQuery += ` AND ml.scheduled_date >= $${makeupParamIndex}`;
+        makeupParams.push(normalizedStartDate);
+        makeupParamIndex++;
+    }
+    if (normalizedEndDate) {
+        makeupGuestQuery += ` AND ml.scheduled_date <= $${makeupParamIndex}`;
+        makeupParams.push(normalizedEndDate);
+        makeupParamIndex++;
+    }
+
+    makeupGuestQuery += ' ORDER BY ml.scheduled_date, s.name';
+
+    const makeupResult = await pool.query(makeupGuestQuery, makeupParams);
+
+    // Group makeup dates by student, and add guests who aren't already class members
+    const makeupDatesByStudent = {};
+    for (const row of makeupResult.rows) {
+        const sid = row.id;
+        const mDate = normalizeToISO(row.makeup_date) || row.makeup_date;
+        if (!makeupDatesByStudent[sid]) {
+            makeupDatesByStudent[sid] = {
+                student: row,
+                dates: [],
+                lessonIds: []
+            };
+        }
+        makeupDatesByStudent[sid].dates.push(mDate);
+        makeupDatesByStudent[sid].lessonIds.push(row.makeup_lesson_id);
+    }
+
+    const makeupStudents = [];
+    for (const [sid, info] of Object.entries(makeupDatesByStudent)) {
+        if (seenIds.has(Number(sid))) {
+            // Student is already a class member — just annotate their makeup dates
+            const existing = students.find(s => s.id === Number(sid));
+            if (existing) {
+                existing.makeup_dates = info.dates;
+                existing.makeup_lesson_ids = info.lessonIds;
+            }
+            continue;
+        }
+        // Mark as makeup guest — will appear in a separate section
+        const guestStudent = {
+            ...info.student,
+            student_type: 'makeup_guest',
+            is_makeup_guest: true,
+            makeup_dates: info.dates,
+            makeup_lesson_ids: info.lessonIds
+        };
+        // Remove makeup-join artifacts from student object
+        delete guestStudent.makeup_date;
+        delete guestStudent.makeup_lesson_id;
+        delete guestStudent.makeup_status;
+        delete guestStudent.makeup_reason;
+        makeupStudents.push(guestStudent);
+    }
     
     // Generate date range - always include all dates in range (including empty days)
     let dates = [];
@@ -116,8 +188,13 @@ async function buildAttendanceMatrix(pool, classId, startDate, endDate) {
         attendanceMap[key] = record.status;
     });
     
+    // Combine class members and makeup guests into the full student list.
+    // Makeup guests go at the end so the frontend can render them in a
+    // dedicated "Makeup Students" section.
+    const allStudents = [...students, ...makeupStudents];
+
     return {
-        students,
+        students: allStudents,
         dates,
         attendanceMap,
         classData,
