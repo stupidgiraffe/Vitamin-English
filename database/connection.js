@@ -76,6 +76,9 @@ pool.healthCheck = async () => {
  * @param {number} [maxRetries=3] - Maximum number of retries
  * @returns {Promise<Object>} Query result
  */
+const INITIAL_RETRY_DELAY_MS = 200;  // First retry after 200ms; doubles each attempt
+const MAX_RETRY_DELAY_MS     = 3000; // Cap at 3s to avoid excessively long waits
+
 pool.queryWithRetry = async (text, values = [], maxRetries = 3) => {
     let lastError;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -95,7 +98,7 @@ pool.queryWithRetry = async (text, values = [], maxRetries = 3) => {
             if (!isTransient || attempt === maxRetries) {
                 throw err;
             }
-            const delay = Math.min(200 * Math.pow(2, attempt - 1), 3000); // 200ms, 400ms, 800ms …
+            const delay = Math.min(INITIAL_RETRY_DELAY_MS * Math.pow(2, attempt - 1), MAX_RETRY_DELAY_MS);
             console.warn(`⚠️ DB query transient error (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${err.message}`);
             await new Promise(resolve => setTimeout(resolve, delay));
         }
