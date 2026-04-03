@@ -130,22 +130,30 @@ router.put('/:id', async (req, res) => {
     try {
         const { student_id, class_id, scheduled_date, reason, status, notes } = req.body;
 
+        // Always fetch the existing record so we can preserve any fields not included in the update
+        const existing = await dataHub.makeupLessons.findById(req.params.id);
+        if (!existing) {
+            return res.status(404).json({ error: 'Makeup lesson not found' });
+        }
+
         // Re-derive scheduled_time from the class schedule when class changes
         let scheduled_time;
         if (class_id) {
             const classData = await dataHub.classes.findById(class_id);
-            scheduled_time = classData ? (extractTimeFromSchedule(classData.schedule) || '') : '';
+            scheduled_time = classData ? (extractTimeFromSchedule(classData.schedule) || existing.scheduled_time || '') : (existing.scheduled_time || '');
         } else {
-            const existing = await dataHub.makeupLessons.findById(req.params.id);
-            scheduled_time = existing ? (existing.scheduled_time || '') : '';
+            scheduled_time = existing.scheduled_time || '';
         }
 
         const updateData = {
-            scheduled_date,
+            // Preserve existing scheduled_date when the request does not supply one
+            scheduled_date: (scheduled_date !== undefined && scheduled_date !== null && scheduled_date !== '')
+                ? scheduled_date
+                : existing.scheduled_date,
             scheduled_time,
-            reason: reason || '',
-            status: status || 'scheduled',
-            notes: notes || ''
+            reason: reason !== undefined ? (reason || '') : (existing.reason || ''),
+            status: status || existing.status || 'scheduled',
+            notes: notes !== undefined ? (notes || '') : (existing.notes || '')
         };
 
         if (student_id) updateData.student_id = student_id;

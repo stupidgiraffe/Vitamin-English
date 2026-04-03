@@ -7,7 +7,15 @@ const pool = require('./connection');
  * Only runs for PostgreSQL (not SQLite)
  */
 
+// Cache: once verified per process, skip subsequent calls (avoids cold-start connection storms)
+let schemaCheckDone = false;
+
 async function ensureSchemaColumns() {
+    // Skip repeated calls within the same process lifecycle
+    if (schemaCheckDone) {
+        return;
+    }
+
     try {
         // Skip if not using Postgres (e.g., SQLite in development)
         if (!process.env.DATABASE_URL) {
@@ -36,6 +44,7 @@ async function ensureSchemaColumns() {
             await ensureTeacherCommentSheetColumns(client);
             
             console.log('✅ Schema guard completed successfully');
+            schemaCheckDone = true;
             
         } finally {
             client.release();

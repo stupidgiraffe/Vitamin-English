@@ -46,6 +46,14 @@
 <body>
     <!-- Skip to main content link for accessibility -->
     <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <!-- PWA Update Notification Banner -->
+    <div id="pwa-update-banner" class="pwa-update-banner" role="alert" aria-live="polite" style="display:none;">
+        <span class="pwa-update-icon">🍊</span>
+        <span class="pwa-update-message">A new version of Vitamin English is available.</span>
+        <button id="pwa-update-btn" class="pwa-update-btn">Tap to update</button>
+        <button id="pwa-update-dismiss" class="pwa-update-dismiss" aria-label="Dismiss update notification">&times;</button>
+    </div>
     
     <!-- Loading Splash (shown during session check to avoid login screen flash) -->
     <div id="splash-screen" class="screen active" role="status" aria-live="polite" aria-label="Loading">
@@ -629,5 +637,71 @@
     <!-- API client module (must load before app.js and monthly-reports.js) -->
     <script src="/js/api.js"></script>
     <script src="/js/app.js"></script>
+
+    <!-- PWA Service Worker Registration & Update Notification -->
+    <script>
+    (function () {
+        if (!('serviceWorker' in navigator)) return;
+
+        let newWorker = null;
+
+        const banner  = document.getElementById('pwa-update-banner');
+        const updateBtn  = document.getElementById('pwa-update-btn');
+        const dismissBtn = document.getElementById('pwa-update-dismiss');
+
+        function showBanner() {
+            if (banner) banner.style.display = 'flex';
+        }
+        function hideBanner() {
+            if (banner) banner.style.display = 'none';
+        }
+
+        navigator.serviceWorker.register('/sw.js').then(function (reg) {
+            // If there's already a waiting SW on load (e.g. page was refreshed), show banner
+            if (reg.waiting) {
+                newWorker = reg.waiting;
+                showBanner();
+            }
+
+            reg.addEventListener('updatefound', function () {
+                const installing = reg.installing;
+                if (!installing) return;
+                installing.addEventListener('statechange', function () {
+                    if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                        // New SW installed and waiting — prompt user
+                        newWorker = installing;
+                        showBanner();
+                    }
+                });
+            });
+        }).catch(function (err) {
+            console.warn('Service worker registration failed:', err);
+        });
+
+        // When user taps "Tap to update"
+        if (updateBtn) {
+            updateBtn.addEventListener('click', function () {
+                hideBanner();
+                if (newWorker) {
+                    newWorker.postMessage({ type: 'SKIP_WAITING' });
+                }
+            });
+        }
+
+        // When user dismisses banner
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', hideBanner);
+        }
+
+        // Reload once the new SW takes control
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+            if (!refreshing) {
+                refreshing = true;
+                window.location.reload();
+            }
+        });
+    }());
+    </script>
 </body>
 </html>

@@ -642,6 +642,19 @@ function formatDisplayDate(isoDate) {
     });
 }
 
+/**
+ * Format a full ISO datetime as a user-friendly "Saved" label.
+ * e.g. "Apr 2, 2026 at 7:02 PM"
+ */
+function formatSavedTimestamp(isoDatetime) {
+    if (!isoDatetime) return '—';
+    const dt = new Date(isoDatetime);
+    if (isNaN(dt.getTime())) return '—';
+    const datePart = dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    const timePart = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    return `${datePart} at ${timePart}`;
+}
+
 // Attendance status display formatter
 function formatAttendanceStatus(status) {
     const statusMap = {
@@ -4595,6 +4608,12 @@ function renderAttendanceClassView(results) {
         const schedule = classInfo.schedule || '';
         const scheduleDisplay = schedule ? schedule : '';
 
+        // Find the most recent saved timestamp for this class's attendance records
+        const latestSaved = cls.records.reduce((latest, r) => {
+            if (!r.created_at) return latest;
+            return (!latest || r.created_at > latest) ? r.created_at : latest;
+        }, null);
+
         // Per-student attendance rates for flagged students (<75%)
         const studentMap = new Map();
         cls.records.forEach(r => {
@@ -4614,6 +4633,7 @@ function renderAttendanceClassView(results) {
                         <div class="datahub-card-name">${escapeHtml(cls.name || '—')}</div>
                         <div class="datahub-card-teacher">${escapeHtml(cls.teacher_name || classInfo.teacher_name || '')}</div>
                         ${scheduleDisplay ? `<div class="datahub-card-schedule">${escapeHtml(scheduleDisplay)}</div>` : ''}
+                        ${latestSaved ? `<div class="datahub-card-saved-time" title="Most recent attendance save time">🕐 Last saved: ${formatSavedTimestamp(latestSaved)}</div>` : ''}
                     </div>
                     <div class="datahub-card-stats">
                         <span class="datahub-card-rate ${rateClass}">${rateLabel}</span>
@@ -4876,8 +4896,8 @@ function renderCleanTable(data, type, options = {}) {
     // Define column configurations for each type
     const columnConfig = {
         attendance: {
-            columns: ['date', 'student_name', 'class_name', 'status'],
-            headers: ['Date', 'Student', 'Class', 'Status'],
+            columns: ['date', 'student_name', 'class_name', 'status', 'created_at'],
+            headers: ['Date', 'Student', 'Class', 'Status', 'Saved'],
             formatters: {
                 date: formatDisplayDate,
                 student_name: (val, row) => getStudentColorDot(row && row.color_code) + escapeHtml(val || ''),
@@ -4890,7 +4910,8 @@ function renderCleanTable(data, type, options = {}) {
                 status: (val) => {
                     const s = formatAttendanceStatus(val);
                     return `<span class="${s.class}">${s.icon} ${s.text}</span>`;
-                }
+                },
+                created_at: (val) => val ? `<span class="db-saved-timestamp" title="Saved: ${formatSavedTimestamp(val)}">${formatSavedTimestamp(val)}</span>` : '<em style="color:#999;">—</em>'
             }
         },
         students: {
