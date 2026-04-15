@@ -130,6 +130,35 @@ class TeacherCommentSheetRepository extends BaseRepository {
     }
 
     /**
+     * Get recent teacher comment sheets for a specific teacher
+     * @param {number} teacherId - Teacher user ID
+     * @param {string|null} date - Optional date filter (YYYY-MM-DD)
+     * @param {number} limit - Max number of records to return
+     * @returns {Promise<Array>} Recent teacher comment sheets
+     */
+    async getRecentByTeacher(teacherId, date = null, limit = 5) {
+        let query = `
+            SELECT tcs.*, c.name as class_name, c.color as class_color, u.full_name as teacher_name
+            FROM teacher_comment_sheets tcs
+            LEFT JOIN classes c ON tcs.class_id = c.id
+            LEFT JOIN users u ON tcs.teacher_id = u.id
+            WHERE tcs.teacher_id = $1
+        `;
+        const params = [teacherId];
+
+        if (date) {
+            query += ` AND LEFT(tcs.date, 10) = $2`;
+            params.push(date);
+        }
+
+        query += ` ORDER BY tcs.date DESC, tcs.id DESC LIMIT $${params.length + 1}`;
+        params.push(limit);
+
+        const result = await this.query(query, params);
+        return result.rows;
+    }
+
+    /**
      * Get teacher comment sheet by ID with full details (override base method)
      * @param {number} id - Teacher comment sheet ID
      * @returns {Promise<Object|null>} Teacher comment sheet with related info

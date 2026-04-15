@@ -52,6 +52,30 @@ router.get('/', async (req, res) => {
     }
 });
 
+// Get recent teacher comment sheets for a specific teacher (for "Copy from Previous" feature)
+// NOTE: Must be defined before /:id to avoid Express matching 'recent-by-teacher' as :id
+router.get('/recent-by-teacher', async (req, res) => {
+    try {
+        const { teacher_id, date, limit } = req.query;
+
+        if (!teacher_id) {
+            return res.status(400).json({ error: 'Missing required query parameter: teacher_id' });
+        }
+
+        const parsedLimit = limit ? parseInt(limit, 10) : 5;
+        const sheets = await dataHub.teacherCommentSheets.getRecentByTeacher(
+            parseInt(teacher_id, 10),
+            date || null,
+            isNaN(parsedLimit) || parsedLimit < 1 ? 5 : parsedLimit
+        );
+
+        res.json(sheets);
+    } catch (error) {
+        console.error('❌ Error fetching recent teacher comment sheets by teacher:', error);
+        res.status(500).json({ error: 'Failed to fetch recent teacher comment sheets' });
+    }
+});
+
 // Get teacher comment sheet by class and date
 // NOTE: Must be defined before /:id to avoid Express matching 'by-date' as :id
 router.get('/by-date/:classId/:date', async (req, res) => {
