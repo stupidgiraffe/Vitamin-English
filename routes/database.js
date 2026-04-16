@@ -27,6 +27,21 @@ function getUsagePercent(usedBytes, limitBytes) {
     return Number(((used / limit) * 100).toFixed(1));
 }
 
+function getR2ListMaxKeysFromEnv() {
+    const rawValue = process.env.R2_STORAGE_LIST_MAX_KEYS;
+    if (rawValue === undefined) {
+        return 1000;
+    }
+
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        console.warn(`⚠️ Invalid R2_STORAGE_LIST_MAX_KEYS value "${rawValue}", using default 1000`);
+        return 1000;
+    }
+
+    return Math.floor(parsed);
+}
+
 // Get data from a specific table with pagination
 router.get('/table/:tableName', async (req, res) => {
     const { tableName } = req.params;
@@ -115,7 +130,7 @@ router.get('/storage', async (req, res) => {
         let r2ActualCount = storageInfo.pdfHistory.totalFiles;
         if (r2Configured) {
             try {
-                const r2ListMaxKeys = Math.max(1, Math.floor(Number(process.env.R2_STORAGE_LIST_MAX_KEYS || 1000)));
+                const r2ListMaxKeys = getR2ListMaxKeysFromEnv();
                 const r2Files = await listPDFs('pdfs/', r2ListMaxKeys);
                 r2ActualCount = r2Files.length;
             } catch (r2Error) {
