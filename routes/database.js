@@ -68,8 +68,7 @@ function getEnvNumberWithDefault(name, defaultValue) {
  */
 function getR2FileType(file) {
     const key = typeof file?.key === 'string' ? file.key : '';
-    const fileNameFromKey = key.split('/').pop() || '';
-    const fileName = typeof file?.fileName === 'string' && file.fileName ? file.fileName : fileNameFromKey;
+    const fileName = typeof file?.fileName === 'string' && file.fileName ? file.fileName : (key.split('/').pop() || '');
 
     const normalizedKey = key.startsWith('pdfs/') ? key.slice(5) : key;
     const segments = normalizedKey.split('/').filter(Boolean);
@@ -193,9 +192,7 @@ router.get('/storage', async (req, res) => {
                     inferredFilesByType[type].size += size;
                 });
 
-                if (Object.keys(inferredFilesByType).length > 0) {
-                    r2FilesByType = inferredFilesByType;
-                }
+                r2FilesByType = inferredFilesByType;
             } catch (r2Error) {
                 console.warn('⚠️ Failed to fetch R2 file list for storage meter:', r2Error.message);
             }
