@@ -57,6 +57,13 @@ function getEnvNumberWithDefault(name, defaultValue) {
     return parsed;
 }
 
+/**
+ * Infer a PDF "type" from an R2 listed object.
+ * Prefers folder-style keys like "pdfs/<type>/<filename>", and falls back
+ * to filename prefix before "_" for flat key structures.
+ * @param {{ key?: string, fileName?: string }} file
+ * @returns {string|null}
+ */
 function getR2FileType(file) {
     const key = typeof file?.key === 'string' ? file.key : '';
     const fileNameFromKey = key.split('/').pop() || '';
@@ -176,10 +183,7 @@ router.get('/storage', async (req, res) => {
                 const inferredFilesByType = {};
                 let inferredAnyType = false;
                 r2Files.forEach((file) => {
-                    const type = getR2FileType(file);
-                    if (!type) {
-                        return;
-                    }
+                    const type = getR2FileType(file) || 'unknown';
                     const size = Number(file?.size) || 0;
                     if (!inferredFilesByType[type]) {
                         inferredFilesByType[type] = { count: 0, size: 0 };
