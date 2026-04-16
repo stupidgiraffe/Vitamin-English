@@ -289,6 +289,86 @@ class DataHub {
     }
 
     /**
+     * Get comprehensive storage information for database and PDF history
+     * @returns {Promise<Object>} Storage information
+     */
+    async getStorageInfo() {
+        try {
+            const tableStatsResult = await this.pool.query(`
+                SELECT
+                    relname AS table_name,
+                    n_live_tup AS row_count,
+                    pg_total_relation_size(relid) AS size_bytes,
+                    pg_size_pretty(pg_total_relation_size(relid)) AS size_pretty
+                FROM pg_stat_user_tables
+                WHERE schemaname = 'public'
+                ORDER BY pg_total_relation_size(relid) DESC
+            `);
+
+            const dbSizeResult = await this.pool.query(`
+                SELECT
+                    pg_database_size(current_database()) AS database_size_bytes,
+                    pg_size_pretty(pg_database_size(current_database())) AS database_size_pretty
+            `);
+
+            let pdfTypeResult = { rows: [] };
+            try {
+                pdfTypeResult = await this.pool.query(`
+                    SELECT
+                        type,
+                        COUNT(*)::int AS count,
+                        COALESCE(SUM(file_size), 0)::bigint AS total_size
+                    FROM pdf_history
+                    GROUP BY type
+                    ORDER BY total_size DESC
+                `);
+            } catch (error) {
+                if (error.code !== '42P01') {
+                    throw error;
+                }
+            }
+
+            const filesByType = {};
+            let pdfTotalFiles = 0;
+            let pdfTotalSizeBytes = 0;
+
+            pdfTypeResult.rows.forEach((row) => {
+                const count = Number(row.count) || 0;
+                const totalSize = Number(row.total_size) || 0;
+
+                filesByType[row.type] = {
+                    count,
+                    size: totalSize
+                };
+
+                pdfTotalFiles += count;
+                pdfTotalSizeBytes += totalSize;
+            });
+
+            return {
+                database: {
+                    totalSize: dbSizeResult.rows[0].database_size_pretty,
+                    totalSizeBytes: Number(dbSizeResult.rows[0].database_size_bytes) || 0,
+                    tables: tableStatsResult.rows.map((row) => ({
+                        name: row.table_name,
+                        rowCount: Number(row.row_count) || 0,
+                        size: row.size_pretty,
+                        sizeBytes: Number(row.size_bytes) || 0
+                    }))
+                },
+                pdfHistory: {
+                    totalFiles: pdfTotalFiles,
+                    totalSizeBytes: pdfTotalSizeBytes,
+                    filesByType
+                }
+            };
+        } catch (error) {
+            console.error('❌ Storage info error:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Perform database health check
      * @returns {Promise<Object>} Health check result
      */

@@ -1,6 +1,31 @@
 const express = require('express');
 const router = express.Router();
 const dataHub = require('../database/DataHub');
+const { listPDFs, isConfigured } = require('../utils/r2Storage');
+
+function formatBytes(bytes) {
+    const size = Number(bytes) || 0;
+    if (size < 1024) return `${size} B`;
+
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = size / 1024;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+
+    const precision = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+    return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function getUsagePercent(usedBytes, limitBytes) {
+    const used = Number(usedBytes) || 0;
+    const limit = Number(limitBytes) || 0;
+    if (limit <= 0) return 0;
+    return Number(((used / limit) * 100).toFixed(1));
+}
 
 // Get data from a specific table with pagination
 router.get('/table/:tableName', async (req, res) => {
@@ -73,6 +98,77 @@ router.get('/stats', async (req, res) => {
     } catch (error) {
         console.error('❌ Stats error:', error);
         res.status(500).json({ error: 'Failed to retrieve statistics' });
+    }
+});
+
+// Comprehensive storage usage overview
+router.get('/storage', async (req, res) => {
+    try {
+        const storageInfo = await dataHub.getStorageInfo();
+
+        const dbLimitMb = Number(process.env.DB_STORAGE_LIMIT_MB || 512);
+        const r2LimitGb = Number(process.env.R2_STORAGE_LIMIT_GB || 10);
+        const dbLimitBytes = Math.max(0, Math.floor(dbLimitMb * 1024 * 1024));
+        const r2LimitBytes = Math.max(0, Math.floor(r2LimitGb * 1024 * 1024 * 1024));
+
+        const r2Configured = isConfigured();
+        let r2ActualCount = storageInfo.pdfHistory.totalFiles;
+        if (r2Configured) {
+            try {
+                const r2Files = await listPDFs('pdfs/', 1000);
+                r2ActualCount = r2Files.length;
+            } catch (r2Error) {
+                console.warn('⚠️ Failed to fetch R2 file list for storage meter:', r2Error.message);
+            }
+        }
+
+        const dbUsagePercent = getUsagePercent(storageInfo.database.totalSizeBytes, dbLimitBytes);
+        const r2UsagePercent = getUsagePercent(storageInfo.pdfHistory.totalSizeBytes, r2LimitBytes);
+
+        const usageValues = [dbUsagePercent];
+        if (r2Configured) {
+            usageValues.push(r2UsagePercent);
+        }
+
+        const maxUsage = Math.max(...usageValues);
+        let healthStatus = 'healthy';
+        if (maxUsage > 90) {
+            healthStatus = 'critical';
+        } else if (maxUsage >= 70) {
+            healthStatus = 'warning';
+        }
+
+        const combinedBytes = storageInfo.database.totalSizeBytes + storageInfo.pdfHistory.totalSizeBytes;
+
+        res.json({
+            database: {
+                totalSize: storageInfo.database.totalSize,
+                totalSizeBytes: storageInfo.database.totalSizeBytes,
+                tables: storageInfo.database.tables,
+                limit: formatBytes(dbLimitBytes),
+                limitBytes: dbLimitBytes,
+                usagePercent: dbUsagePercent
+            },
+            r2: {
+                configured: r2Configured,
+                totalFiles: r2ActualCount,
+                totalSize: formatBytes(storageInfo.pdfHistory.totalSizeBytes),
+                totalSizeBytes: storageInfo.pdfHistory.totalSizeBytes,
+                filesByType: storageInfo.pdfHistory.filesByType,
+                limit: formatBytes(r2LimitBytes),
+                limitBytes: r2LimitBytes,
+                usagePercent: r2UsagePercent
+            },
+            combined: {
+                totalSizeBytes: combinedBytes,
+                totalSizeFormatted: formatBytes(combinedBytes),
+                healthStatus
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('❌ Storage overview error:', error);
+        res.status(500).json({ error: 'Failed to retrieve storage overview' });
     }
 });
 
