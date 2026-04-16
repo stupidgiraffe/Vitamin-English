@@ -42,6 +42,21 @@ function getR2ListMaxKeysFromEnv() {
     return Math.floor(parsed);
 }
 
+function getEnvNumberWithDefault(name, defaultValue) {
+    const rawValue = process.env[name];
+    if (rawValue === undefined) {
+        return defaultValue;
+    }
+
+    const parsed = Number(rawValue);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+        console.warn(`⚠️ Invalid ${name} value "${rawValue}", using default ${defaultValue}`);
+        return defaultValue;
+    }
+
+    return parsed;
+}
+
 // Get data from a specific table with pagination
 router.get('/table/:tableName', async (req, res) => {
     const { tableName } = req.params;
@@ -121,8 +136,8 @@ router.get('/storage', async (req, res) => {
     try {
         const storageInfo = await dataHub.getStorageInfo();
 
-        const dbLimitMb = Number(process.env.DB_STORAGE_LIMIT_MB || 512);
-        const r2LimitGb = Number(process.env.R2_STORAGE_LIMIT_GB || 10);
+        const dbLimitMb = getEnvNumberWithDefault('DB_STORAGE_LIMIT_MB', 512);
+        const r2LimitGb = getEnvNumberWithDefault('R2_STORAGE_LIMIT_GB', 10);
         const dbLimitBytes = Math.max(0, Math.floor(dbLimitMb * 1024 * 1024));
         const r2LimitBytes = Math.max(0, Math.floor(r2LimitGb * 1024 * 1024 * 1024));
 
