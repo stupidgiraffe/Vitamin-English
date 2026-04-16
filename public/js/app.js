@@ -1290,7 +1290,8 @@ async function loadStorageMeter({ showLoading = true, showAlert = true } = {}) {
             if (storageMeterLastStatusNotice !== alertKey) {
                 storageMeterLastStatusNotice = alertKey;
                 const title = data.combined.healthStatus === 'critical' ? 'Storage Critical' : 'Storage Warning';
-                Toast.info(`Storage usage is ${data.combined.healthStatus}. Please review old PDFs/logs in Data Hub.`, title);
+                const levelText = data.combined.healthStatus === 'critical' ? 'at critical levels' : 'at warning levels';
+                Toast.info(`Storage usage is ${levelText}. Please review old PDFs/logs in Data Hub.`, title);
             }
         }
     } catch (error) {

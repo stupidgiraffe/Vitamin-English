@@ -115,7 +115,8 @@ router.get('/storage', async (req, res) => {
         let r2ActualCount = storageInfo.pdfHistory.totalFiles;
         if (r2Configured) {
             try {
-                const r2Files = await listPDFs('pdfs/', 1000);
+                const r2ListMaxKeys = Math.max(1, Math.floor(Number(process.env.R2_STORAGE_LIST_MAX_KEYS || 1000)));
+                const r2Files = await listPDFs('pdfs/', r2ListMaxKeys);
                 r2ActualCount = r2Files.length;
             } catch (r2Error) {
                 console.warn('⚠️ Failed to fetch R2 file list for storage meter:', r2Error.message);
