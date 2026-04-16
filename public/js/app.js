@@ -1061,9 +1061,250 @@ function getDefaultAttendanceDateRange() {
     };
 }
 
+// Data Hub storage meter state
+let storageMeterLastStatusNotice = null;
+
+function formatStorageBytes(bytes) {
+    const size = Number(bytes) || 0;
+    if (size < 1024) return `${size} B`;
+
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = size / 1024;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+        value /= 1024;
+        unitIndex += 1;
+    }
+
+    const precision = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+    return `${value.toFixed(precision)} ${units[unitIndex]}`;
+}
+
+function getStorageUsageClass(usagePercent) {
+    if (usagePercent > 90) return 'red';
+    if (usagePercent >= 70) return 'amber';
+    return 'green';
+}
+
+function ensureStorageMeterContainer() {
+    const page = document.getElementById('database-page');
+    if (!page) return null;
+
+    let container = document.getElementById('storage-meter-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'storage-meter-container';
+        container.className = 'storage-meter-root';
+        const searchContainer = page.querySelector('.search-container');
+        if (searchContainer) {
+            page.insertBefore(container, searchContainer);
+        } else {
+            page.appendChild(container);
+        }
+    }
+
+    return container;
+}
+
+function renderStorageMeterLoading() {
+    const container = ensureStorageMeterContainer();
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="storage-meter-card">
+            <div class="storage-meter-header">
+                <h3>Storage Meter</h3>
+            </div>
+            <div class="storage-meter-loading">
+                <span class="skeleton skeleton-row"></span>
+                <span class="skeleton skeleton-row"></span>
+                <span class="skeleton skeleton-row"></span>
+            </div>
+        </div>
+    `;
+}
+
+function renderStorageMeterError(message) {
+    const container = ensureStorageMeterContainer();
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="storage-meter-card">
+            <div class="storage-meter-header">
+                <h3>Storage Meter</h3>
+            </div>
+            <div class="storage-meter-error">
+                <p>⚠️ ${escapeHtml(message || 'Failed to load storage usage')}</p>
+                <button id="storage-meter-retry-btn" class="btn btn-secondary btn-small">Retry</button>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('storage-meter-retry-btn')?.addEventListener('click', () => {
+        loadStorageMeter({ showLoading: true, showAlert: false });
+    });
+}
+
+function getStorageBarHtml(label, usedBytes, limitLabel, usagePercent) {
+    const width = Math.max(0, Math.min(100, Number(usagePercent) || 0));
+    const colorClass = getStorageUsageClass(width);
+
+    return `
+        <div class="storage-meter-row">
+            <div class="storage-meter-row-label">
+                <strong>${escapeHtml(label)}</strong>
+                <span>${escapeHtml(formatStorageBytes(usedBytes))} / ${escapeHtml(limitLabel)}</span>
+            </div>
+            <div class="storage-bar">
+                <div class="storage-bar-fill ${colorClass}" style="width:${width}%"></div>
+            </div>
+            <div class="storage-meter-row-percent ${colorClass}">${width.toFixed(1)}%</div>
+        </div>
+    `;
+}
+
+function renderStorageMeter(data) {
+    const container = ensureStorageMeterContainer();
+    if (!container) return;
+
+    const combinedLimitBytes = data.database.limitBytes + (data.r2.configured ? data.r2.limitBytes : 0);
+    const combinedPercent = combinedLimitBytes > 0
+        ? Math.min(100, (data.combined.totalSizeBytes / combinedLimitBytes) * 100)
+        : 0;
+    const combinedClass = getStorageUsageClass(combinedPercent);
+
+    const tableRows = (data.database.tables || []).map((table) => {
+        const tablePercent = data.database.totalSizeBytes > 0
+            ? Math.min(100, (table.sizeBytes / data.database.totalSizeBytes) * 100)
+            : 0;
+        return `
+            <div class="storage-breakdown-row">
+                <div class="storage-breakdown-label">
+                    <span>${escapeHtml(table.name)}</span>
+                    <small>${table.rowCount.toLocaleString()} rows</small>
+                </div>
+                <div class="storage-bar mini">
+                    <div class="storage-bar-fill green" style="width:${tablePercent}%"></div>
+                </div>
+                <span class="storage-breakdown-size">${escapeHtml(table.size || formatStorageBytes(table.sizeBytes))}</span>
+            </div>
+        `;
+    }).join('');
+
+    const pdfTypeEntries = Object.entries(data.r2.filesByType || {});
+    const pdfTypeRows = pdfTypeEntries.length > 0
+        ? pdfTypeEntries.map(([type, details]) => `
+            <div class="storage-breakdown-row">
+                <div class="storage-breakdown-label">
+                    <span>${escapeHtml(type)}</span>
+                    <small>${Number(details.count || 0).toLocaleString()} files</small>
+                </div>
+                <span class="storage-breakdown-size">${escapeHtml(formatStorageBytes(details.size || 0))}</span>
+            </div>
+        `).join('')
+        : '<p class="info-text">No PDF history records yet.</p>';
+
+    container.innerHTML = `
+        <div class="storage-meter-card">
+            <div class="storage-meter-header">
+                <h3>Storage Meter</h3>
+                <div class="storage-meter-actions">
+                    <button id="storage-view-pdf-history-btn" class="btn btn-secondary btn-small">View PDF History</button>
+                    <button id="storage-refresh-btn" class="btn btn-primary btn-small">Refresh</button>
+                </div>
+            </div>
+
+            <div class="storage-overall-meter">
+                <div class="storage-overall-label">Combined Usage</div>
+                <div class="storage-bar large">
+                    <div class="storage-bar-fill ${combinedClass}" style="width:${combinedPercent}%"></div>
+                </div>
+                <div class="storage-overall-meta">
+                    <strong>${escapeHtml(data.combined.totalSizeFormatted)}</strong>
+                    <span class="${combinedClass}">${combinedPercent.toFixed(1)}% • ${escapeHtml(data.combined.healthStatus)}</span>
+                </div>
+            </div>
+
+            ${getStorageBarHtml('Database (PostgreSQL)', data.database.totalSizeBytes, data.database.limit, data.database.usagePercent)}
+            ${data.r2.configured
+                ? getStorageBarHtml('PDF Storage (Cloudflare R2)', data.r2.totalSizeBytes, data.r2.limit, data.r2.usagePercent)
+                : '<div class="storage-r2-notice">ℹ️ Cloudflare R2 is not configured. Showing PDF totals from database history only.</div>'}
+
+            <details class="storage-breakdown" open>
+                <summary>Database Table Breakdown (${(data.database.tables || []).length} tables)</summary>
+                <div class="storage-breakdown-content">${tableRows || '<p class="info-text">No table data available.</p>'}</div>
+            </details>
+
+            <details class="storage-breakdown">
+                <summary>PDF Breakdown by Type (${Number(data.r2.totalFiles || 0).toLocaleString()} files)</summary>
+                <div class="storage-breakdown-content">${pdfTypeRows}</div>
+            </details>
+
+            <div class="storage-meter-timestamp">Updated: ${escapeHtml(new Date(data.timestamp).toLocaleString())}</div>
+        </div>
+    `;
+
+    document.getElementById('storage-refresh-btn')?.addEventListener('click', () => {
+        loadStorageMeter({ showLoading: true, showAlert: false });
+    });
+    document.getElementById('storage-view-pdf-history-btn')?.addEventListener('click', () => {
+        viewPdfHistoryFromStorageMeter();
+    });
+}
+
+async function viewPdfHistoryFromStorageMeter() {
+    const advancedOptions = document.getElementById('db-advanced-options');
+    const advancedToggle = document.getElementById('db-advanced-toggle');
+    if (advancedOptions && !advancedOptions.classList.contains('show')) {
+        advancedOptions.classList.add('show');
+        if (advancedToggle) advancedToggle.textContent = 'Advanced ▲';
+    }
+
+    const tableSelect = document.getElementById('db-table-select');
+    if (tableSelect) {
+        if (!tableSelect.querySelector('option[value="pdf_history"]')) {
+            const option = document.createElement('option');
+            option.value = 'pdf_history';
+            option.textContent = 'PDF History';
+            tableSelect.appendChild(option);
+        }
+        tableSelect.value = 'pdf_history';
+    }
+
+    await loadDatabaseTable();
+    document.getElementById('db-viewer-container')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function loadStorageMeter({ showLoading = true, showAlert = true } = {}) {
+    if (showLoading) {
+        renderStorageMeterLoading();
+    }
+
+    try {
+        const data = await api('/database/storage');
+        renderStorageMeter(data);
+
+        if (showAlert && (data.combined.healthStatus === 'warning' || data.combined.healthStatus === 'critical')) {
+            const alertKey = `${data.combined.healthStatus}:${data.timestamp}`;
+            if (storageMeterLastStatusNotice !== alertKey) {
+                storageMeterLastStatusNotice = alertKey;
+                const title = data.combined.healthStatus === 'critical' ? 'Storage Critical' : 'Storage Warning';
+                const levelText = data.combined.healthStatus === 'critical' ? 'at critical levels' : 'at warning levels';
+                const notify = data.combined.healthStatus === 'critical' ? Toast.error : Toast.info;
+                notify(`Storage usage is ${levelText}. Please review old PDFs and database records in Data Hub.`, title);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading storage meter:', error);
+        renderStorageMeterError(error.message || 'Failed to load storage meter');
+    }
+}
+
 // Initialize database page to show recent records by default
 async function initializeDatabasePage() {
     const container = document.getElementById('db-viewer-container');
+    loadStorageMeter({ showLoading: true, showAlert: true });
     
     // Check if already loaded
     if (container.querySelector('.db-table-clean') || container.querySelector('.db-table')) {
