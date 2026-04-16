@@ -3,6 +3,8 @@ const router = express.Router();
 const dataHub = require('../database/DataHub');
 const { listPDFs, isConfigured } = require('../utils/r2Storage');
 
+const UNKNOWN_R2_FILE_TYPE = 'unknown';
+
 function formatBytes(bytes) {
     const size = Number(bytes) || 0;
     if (size < 1024) return `${size} B`;
@@ -181,19 +183,17 @@ router.get('/storage', async (req, res) => {
                 r2ActualTotalSizeBytes = r2Files.reduce((total, file) => total + (Number(file?.size) || 0), 0);
 
                 const inferredFilesByType = {};
-                let inferredAnyType = false;
                 r2Files.forEach((file) => {
-                    const type = getR2FileType(file) || 'unknown';
+                    const type = getR2FileType(file) || UNKNOWN_R2_FILE_TYPE;
                     const size = Number(file?.size) || 0;
                     if (!inferredFilesByType[type]) {
                         inferredFilesByType[type] = { count: 0, size: 0 };
                     }
                     inferredFilesByType[type].count += 1;
                     inferredFilesByType[type].size += size;
-                    inferredAnyType = true;
                 });
 
-                if (inferredAnyType) {
+                if (Object.keys(inferredFilesByType).length > 0) {
                     r2FilesByType = inferredFilesByType;
                 }
             } catch (r2Error) {
