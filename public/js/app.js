@@ -3333,17 +3333,23 @@ async function populateCopyFromDropdown(date) {
 
     const teacherSelect = document.getElementById('report-teacher');
     const dateInput = document.getElementById('report-form-date');
-    const teacherId = teacherSelect?.value || currentUser?.id;
-    const queryDate = normalizeToISO(dateInput?.value) || normalizeToISO(date) || new Date().toISOString().split('T')[0];
-
-    select.innerHTML = '<option value="">— select a recent sheet —</option>';
+    const selectedTeacherId = teacherSelect?.value?.trim();
+    const teacherId = selectedTeacherId || currentUser?.id;
+    const formDateValue = dateInput?.value?.trim();
+    const fallbackDateValue = typeof date === 'string' ? date.trim() : '';
+    const queryDate = (formDateValue ? normalizeToISO(formDateValue) : null)
+        || (fallbackDateValue ? normalizeToISO(fallbackDateValue) : null)
+        || new Date().toISOString().split('T')[0];
 
     if (!teacherId) {
+        select.innerHTML = '<option value="">— select a recent sheet —</option>';
         select.disabled = true;
         applyBtn.disabled = true;
         emptyState.textContent = 'Select a teacher to load recent sheets.';
         return;
     }
+
+    select.innerHTML = '<option value="">— select a recent sheet —</option>';
 
     try {
         const sheets = await api(
@@ -3372,7 +3378,7 @@ async function populateCopyFromDropdown(date) {
         console.error('Error fetching recent sheets for copy-from toolbar:', err);
         select.disabled = true;
         applyBtn.disabled = true;
-        emptyState.textContent = 'No recent sheets found for this teacher/date yet.';
+        emptyState.textContent = 'Could not refresh recent sheets. Please try Refresh.';
     }
 }
 
@@ -3415,7 +3421,7 @@ document.getElementById('copy-from-apply-btn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('copy-from-refresh-btn').addEventListener('click', () => {
+document.getElementById('copy-from-refresh-btn')?.addEventListener('click', () => {
     populateCopyFromDropdown();
 });
 
@@ -3517,7 +3523,7 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
                 body: JSON.stringify(data)
             });
         }
-        await populateCopyFromDropdown(data.date);
+        await populateCopyFromDropdown();
 
         setFormDirty(false);
         clearDraft();
@@ -3530,11 +3536,11 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
     }
 });
 
-document.getElementById('report-teacher').addEventListener('change', () => {
+document.getElementById('report-teacher')?.addEventListener('change', () => {
     populateCopyFromDropdown();
 });
 
-document.getElementById('report-form-date').addEventListener('change', () => {
+document.getElementById('report-form-date')?.addEventListener('change', () => {
     populateCopyFromDropdown();
 });
 
