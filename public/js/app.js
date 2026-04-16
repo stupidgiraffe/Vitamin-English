@@ -3323,29 +3323,43 @@ document.getElementById('attendance-end-date').value = today.toISOString().split
 
 /**
  * Populate the "Copy from previous sheet" dropdown with recent sheets
- * for the currently logged-in teacher and the given date (defaults to today).
+ * for the selected teacher and selected form date.
  */
 async function populateCopyFromDropdown(date) {
-    const toolbar = document.getElementById('copy-from-toolbar');
     const select = document.getElementById('copy-from-select');
-    if (!toolbar || !select) return;
+    const applyBtn = document.getElementById('copy-from-apply-btn');
+    const emptyState = document.getElementById('copy-from-empty');
+    if (!select || !applyBtn || !emptyState) return;
 
-    if (!currentUser) {
-        toolbar.style.display = 'none';
+    const teacherSelect = document.getElementById('report-teacher');
+    const dateInput = document.getElementById('report-form-date');
+    const selectedTeacherId = teacherSelect?.value?.trim();
+    const teacherId = selectedTeacherId || currentUser?.id;
+    const formDateValue = dateInput?.value?.trim();
+    const fallbackDateValue = typeof date === 'string' ? date.trim() : '';
+    const queryDate = (formDateValue ? normalizeToISO(formDateValue) : null)
+        || (fallbackDateValue ? normalizeToISO(fallbackDateValue) : null)
+        || new Date().toISOString().split('T')[0];
+
+    if (!teacherId) {
+        select.innerHTML = '<option value="">— select a recent sheet —</option>';
+        select.disabled = true;
+        applyBtn.disabled = true;
+        emptyState.textContent = 'Select a teacher to load recent sheets.';
         return;
     }
 
-    const queryDate = date || new Date().toISOString().split('T')[0];
+    select.innerHTML = '<option value="">— select a recent sheet —</option>';
 
     try {
         const sheets = await api(
-            `/teacher-comment-sheets/recent-by-teacher?teacher_id=${encodeURIComponent(currentUser.id)}&date=${encodeURIComponent(queryDate)}&limit=5`
+            `/teacher-comment-sheets/recent-by-teacher?teacher_id=${encodeURIComponent(teacherId)}&date=${encodeURIComponent(queryDate)}&limit=5`
         );
 
-        select.innerHTML = '<option value="">— select a recent sheet —</option>';
-
         if (!sheets || sheets.length === 0) {
-            toolbar.style.display = 'none';
+            select.disabled = true;
+            applyBtn.disabled = true;
+            emptyState.textContent = 'No recent sheets found for this teacher/date yet.';
             return;
         }
 
@@ -3357,11 +3371,14 @@ async function populateCopyFromDropdown(date) {
             option.dataset.sheetJson = JSON.stringify(sheet);
             select.appendChild(option);
         });
-
-        toolbar.style.display = 'flex';
+        select.disabled = false;
+        applyBtn.disabled = false;
+        emptyState.textContent = '';
     } catch (err) {
         console.error('Error fetching recent sheets for copy-from toolbar:', err);
-        toolbar.style.display = 'none';
+        select.disabled = true;
+        applyBtn.disabled = true;
+        emptyState.textContent = 'Could not refresh recent sheets. Please try Refresh.';
     }
 }
 
@@ -3404,6 +3421,10 @@ document.getElementById('copy-from-apply-btn').addEventListener('click', () => {
     }
 });
 
+document.getElementById('copy-from-refresh-btn')?.addEventListener('click', () => {
+    populateCopyFromDropdown();
+});
+
 // ──────────────────────────────────────────────────────────────────────────
 
 document.getElementById('new-report-btn').addEventListener('click', () => {
@@ -3413,9 +3434,8 @@ document.getElementById('new-report-btn').addEventListener('click', () => {
     document.getElementById('report-id').value = '';
     document.getElementById('delete-report-btn').style.display = 'none';
     document.getElementById('export-report-pdf-btn').style.display = 'none';
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('report-form-date').value = today;
-    populateCopyFromDropdown(today);
+    document.getElementById('report-form-date').value = new Date().toISOString().split('T')[0];
+    populateCopyFromDropdown();
 });
 
 document.getElementById('cancel-report-btn').addEventListener('click', () => {
@@ -3453,7 +3473,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
             setFormDirty(false);
-            populateCopyFromDropdown(normalizeToISO(report.date) || report.date);
+            populateCopyFromDropdown();
         } else {
             // Create new report with pre-filled data
             document.getElementById('report-form').reset();
@@ -3465,7 +3485,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
             setFormDirty(false);
-            populateCopyFromDropdown(date);
+            populateCopyFromDropdown();
             restoreDraftIfAvailable();
         }
     } catch (error) {
@@ -3503,6 +3523,7 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
                 body: JSON.stringify(data)
             });
         }
+        await populateCopyFromDropdown();
 
         setFormDirty(false);
         clearDraft();
@@ -3513,6 +3534,14 @@ document.getElementById('report-form').addEventListener('submit', async (e) => {
     } catch (error) {
         Toast.error('Error saving report: ' + error.message);
     }
+});
+
+document.getElementById('report-teacher')?.addEventListener('change', () => {
+    populateCopyFromDropdown();
+});
+
+document.getElementById('report-form-date')?.addEventListener('change', () => {
+    populateCopyFromDropdown();
 });
 
 // Track dirty state and auto-save for comment sheet form
@@ -3640,7 +3669,7 @@ async function loadReportById(id) {
         document.getElementById('export-report-pdf-btn').style.display = 'inline-block';
         document.getElementById('report-form-container').style.display = 'block';
         document.getElementById('reports-list-container').style.display = 'none';
-        populateCopyFromDropdown(normalizeToISO(report.date) || report.date);
+        populateCopyFromDropdown();
     } catch (error) {
         Toast.error('Error loading report: ' + error.message);
     }

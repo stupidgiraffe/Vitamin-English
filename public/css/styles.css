@@ -1328,6 +1328,11 @@ body {
     font-size: 0.875rem;
 }
 
+.copy-from-empty {
+    font-size: 0.8rem;
+    color: #5f6e7d;
+}
+
 /* Reports List */
 .reports-list {
     display: grid;
