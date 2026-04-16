@@ -3318,6 +3318,94 @@ document.getElementById('attendance-start-date').value = weekAgo.toISOString().s
 document.getElementById('attendance-end-date').value = today.toISOString().split('T')[0];
 
 // Lesson Reports
+
+// ── Copy from Previous Sheet ───────────────────────────────────────────────
+
+/**
+ * Populate the "Copy from previous sheet" dropdown with recent sheets
+ * for the currently logged-in teacher and the given date (defaults to today).
+ */
+async function populateCopyFromDropdown(date) {
+    const toolbar = document.getElementById('copy-from-toolbar');
+    const select = document.getElementById('copy-from-select');
+    if (!toolbar || !select) return;
+
+    if (!currentUser) {
+        toolbar.style.display = 'none';
+        return;
+    }
+
+    const queryDate = date || new Date().toISOString().split('T')[0];
+
+    try {
+        const sheets = await api(
+            `/teacher-comment-sheets/recent-by-teacher?teacher_id=${encodeURIComponent(currentUser.id)}&date=${encodeURIComponent(queryDate)}&limit=5`
+        );
+
+        select.innerHTML = '<option value="">— select a recent sheet —</option>';
+
+        if (!sheets || sheets.length === 0) {
+            toolbar.style.display = 'none';
+            return;
+        }
+
+        sheets.forEach(sheet => {
+            const option = document.createElement('option');
+            option.value = sheet.id;
+            const label = `${sheet.class_name || 'Unknown class'} — ${sheet.date ? sheet.date.slice(0, 10) : ''}`;
+            option.textContent = label;
+            option.dataset.sheetJson = JSON.stringify(sheet);
+            select.appendChild(option);
+        });
+
+        toolbar.style.display = 'flex';
+    } catch (err) {
+        console.error('Error fetching recent sheets for copy-from toolbar:', err);
+        toolbar.style.display = 'none';
+    }
+}
+
+document.getElementById('copy-from-apply-btn').addEventListener('click', () => {
+    const select = document.getElementById('copy-from-select');
+    const selectedOption = select.options[select.selectedIndex];
+    if (!selectedOption || !selectedOption.dataset.sheetJson) {
+        Toast.warning('Please select a sheet to copy from.');
+        return;
+    }
+
+    const contentFields = [
+        'report-target', 'report-vocabulary', 'report-phrases',
+        'report-mistakes', 'report-strengths', 'report-comments', 'report-others'
+    ];
+    const hasExistingContent = contentFields.some(id => {
+        const el = document.getElementById(id);
+        return el && el.value.trim() !== '';
+    });
+
+    const applySheet = () => {
+        const sheet = JSON.parse(selectedOption.dataset.sheetJson);
+        document.getElementById('report-target').value     = sheet.target_topic || '';
+        document.getElementById('report-vocabulary').value = sheet.vocabulary   || '';
+        document.getElementById('report-phrases').value    = sheet.phrases      || '';
+        document.getElementById('report-mistakes').value   = sheet.mistakes     || '';
+        document.getElementById('report-strengths').value  = sheet.strengths    || '';
+        document.getElementById('report-comments').value   = sheet.comments     || '';
+        document.getElementById('report-others').value     = sheet.others       || '';
+        setFormDirty(true);
+        scheduleDraftSave();
+        Toast.success('Content copied from previous sheet.');
+    };
+
+    if (hasExistingContent) {
+        if (!confirm('This will replace your current entries. Continue?')) return;
+        applySheet();
+    } else {
+        applySheet();
+    }
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+
 document.getElementById('new-report-btn').addEventListener('click', () => {
     document.getElementById('report-form-container').style.display = 'block';
     document.getElementById('reports-list-container').style.display = 'none';
@@ -3325,7 +3413,9 @@ document.getElementById('new-report-btn').addEventListener('click', () => {
     document.getElementById('report-id').value = '';
     document.getElementById('delete-report-btn').style.display = 'none';
     document.getElementById('export-report-pdf-btn').style.display = 'none';
-    document.getElementById('report-form-date').value = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('report-form-date').value = today;
+    populateCopyFromDropdown(today);
 });
 
 document.getElementById('cancel-report-btn').addEventListener('click', () => {
@@ -3363,6 +3453,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
             setFormDirty(false);
+            populateCopyFromDropdown(normalizeToISO(report.date) || report.date);
         } else {
             // Create new report with pre-filled data
             document.getElementById('report-form').reset();
@@ -3374,6 +3465,7 @@ document.getElementById('load-report-btn').addEventListener('click', async () =>
             document.getElementById('report-form-container').style.display = 'block';
             document.getElementById('reports-list-container').style.display = 'none';
             setFormDirty(false);
+            populateCopyFromDropdown(date);
             restoreDraftIfAvailable();
         }
     } catch (error) {
@@ -3548,6 +3640,7 @@ async function loadReportById(id) {
         document.getElementById('export-report-pdf-btn').style.display = 'inline-block';
         document.getElementById('report-form-container').style.display = 'block';
         document.getElementById('reports-list-container').style.display = 'none';
+        populateCopyFromDropdown(normalizeToISO(report.date) || report.date);
     } catch (error) {
         Toast.error('Error loading report: ' + error.message);
     }
