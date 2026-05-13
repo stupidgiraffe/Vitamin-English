@@ -7,8 +7,10 @@
         duplicateGroups: [],
         selectedIds: new Set(),
         importRows: [],
-        importErrors: []
+        importErrors: [],
+        inspectSession: null
     };
+    const TOPIC_PREVIEW_LIMIT = 60;
 
     function isCleanupAdmin() {
         return currentUser && currentUser.role === 'admin';
@@ -64,6 +66,35 @@
         };
     }
 
+    function escapeAttribute(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    function normalizeTopic(topic) {
+        return String(topic == null ? '' : topic).trim();
+    }
+
+    function truncateText(value, limit) {
+        if (value.length <= limit) {
+            return value;
+        }
+        return `${value.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+    }
+
+    function topicCellHtml(topic) {
+        const normalizedTopic = normalizeTopic(topic);
+        if (!normalizedTopic) {
+            return '<span class="cleanup-muted">—</span>';
+        }
+
+        const preview = truncateText(normalizedTopic, TOPIC_PREVIEW_LIMIT);
+        return `<span class="cleanup-topic-text" title="${escapeAttribute(normalizedTopic)}">${escapeHtml(preview)}</span>`;
+    }
+
     function buildQuery(pageOverride) {
         const params = new URLSearchParams();
         const filters = getFilters();
@@ -111,6 +142,16 @@
                 <div class="cleanup-duplicate-title">${escapeHtml(group.class_name || `Class #${group.class_id}`)}</div>
                 <div class="cleanup-duplicate-meta">${escapeHtml(group.normalized_date || 'Unparseable date')} · ${group.count} sheets</div>
                 <div class="cleanup-duplicate-list">IDs: ${group.sheet_ids.map(id => `#${id}`).join(', ')}</div>
+                <div class="cleanup-duplicate-rows">
+                    ${(group.rows || []).map(row => `
+                        <div class="cleanup-duplicate-row-item">
+                            <span>#${row.id}</span>
+                            <span>${escapeHtml(row.teacher_name || `Teacher #${row.teacher_id}`)}</span>
+                            <span>${escapeHtml(row.date || '—')}</span>
+                            <span>${topicCellHtml(row.target_topic)}</span>
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         `).join('');
     }
@@ -150,13 +191,16 @@
         const allSelected = state.rows.length > 0 && state.rows.every(row => state.selectedIds.has(row.id));
 
         container.innerHTML = `
+            <div class="cleanup-scroll-hint">Swipe horizontally to see all columns.</div>
+            <div class="cleanup-table-scroll">
             <table class="table cleanup-table">
                 <thead>
                     <tr>
-                        <th><input type="checkbox" id="cleanup-select-all" ${allSelected ? 'checked' : ''}></th>
+                        <th><input type="checkbox" id="cleanup-select-all" class="cleanup-no-row-open" ${allSelected ? 'checked' : ''}></th>
                         <th>ID</th>
                         <th>Class</th>
                         <th>Teacher</th>
+                        <th>Topic</th>
                         <th>Date (raw)</th>
                         <th>Normalized date</th>
                         <th>Created</th>
@@ -166,11 +210,11 @@
                 </thead>
                 <tbody>
                     ${state.rows.map(row => `
-                        <tr class="${row.duplicate_group_key ? 'cleanup-duplicate-row' : ''}">
+                        <tr class="cleanup-data-row ${row.duplicate_group_key ? 'cleanup-duplicate-row' : ''}" data-id="${row.id}" role="button" tabindex="0" aria-label="Inspect comment sheet ${row.id}">
                             <td>
                                 <input
                                     type="checkbox"
-                                    class="cleanup-row-checkbox"
+                                    class="cleanup-row-checkbox cleanup-no-row-open"
                                     data-id="${row.id}"
                                     ${state.selectedIds.has(row.id) ? 'checked' : ''}
                                 >
@@ -181,21 +225,23 @@
                                 ${row.duplicate_count ? `<span class="cleanup-badge cleanup-badge-warning">Duplicate (${row.duplicate_count})</span>` : ''}
                             </td>
                             <td>${escapeHtml(row.teacher_name || `Teacher #${row.teacher_id}`)}</td>
+                            <td class="cleanup-topic-cell">${topicCellHtml(row.target_topic)}</td>
                             <td>${escapeHtml(row.date || '')}</td>
                             <td>${escapeHtml(row.normalized_date || 'Unparseable')}</td>
                             <td>${escapeHtml(typeof formatSavedTimestamp === 'function' ? formatSavedTimestamp(row.created_at) : row.created_at || '—')}</td>
                             <td>${row.monthly_report_week_refs || 0}</td>
-                            <td>
+                            <td data-no-row-open="true">
                                 <div class="cleanup-row-actions">
-                                    <input type="date" class="form-control cleanup-date-input" data-id="${row.id}" value="${escapeHtml(row.normalized_date || '')}">
-                                    <button class="btn btn-primary btn-small cleanup-save-date-btn" data-id="${row.id}">Save date</button>
-                                    <button class="btn btn-danger btn-small cleanup-delete-row-btn" data-id="${row.id}">Delete</button>
+                                    <input type="date" class="form-control cleanup-date-input cleanup-no-row-open" data-id="${row.id}" value="${escapeHtml(row.normalized_date || '')}">
+                                    <button class="btn btn-primary btn-small cleanup-save-date-btn cleanup-no-row-open" data-id="${row.id}">Save date</button>
+                                    <button class="btn btn-danger btn-small cleanup-delete-row-btn cleanup-no-row-open" data-id="${row.id}">Delete</button>
                                 </div>
                             </td>
                         </tr>
                     `).join('')}
                 </tbody>
             </table>
+            </div>
         `;
 
         const selectAll = document.getElementById('cleanup-select-all');
@@ -222,6 +268,29 @@
                     state.selectedIds.delete(id);
                 }
                 updateBulkBar();
+            });
+        });
+
+        container.querySelectorAll('.cleanup-no-row-open').forEach(element => {
+            element.addEventListener('click', (event) => event.stopPropagation());
+            element.addEventListener('keydown', (event) => event.stopPropagation());
+        });
+
+        container.querySelectorAll('.cleanup-data-row').forEach(tableRow => {
+            const openInspect = () => openInspectModal(Number(tableRow.dataset.id));
+            tableRow.addEventListener('click', (event) => {
+                if (event.target.closest('.cleanup-no-row-open, [data-no-row-open="true"]')) {
+                    return;
+                }
+                openInspect();
+            });
+            tableRow.addEventListener('keydown', (event) => {
+                if ((event.key !== 'Enter' && event.key !== ' ') ||
+                    event.target.closest('.cleanup-no-row-open, [data-no-row-open="true"]')) {
+                    return;
+                }
+                event.preventDefault();
+                openInspect();
             });
         });
 
@@ -258,6 +327,254 @@
 
         updateBulkBar();
         renderPagination();
+    }
+
+    function cleanupInspectSession() {
+        const session = state.inspectSession;
+        if (!session) {
+            return;
+        }
+
+        document.querySelector('#modal .modal-content')?.classList.remove('cleanup-inspect-modal');
+        if (session.originalCloseModal) {
+            window.closeModal = session.originalCloseModal;
+        }
+        state.inspectSession = null;
+    }
+
+    function getInspectValue(id) {
+        return document.getElementById(id)?.value || '';
+    }
+
+    function inspectPayloadFromForm() {
+        return {
+            target_topic: getInspectValue('cleanup-inspect-target-topic'),
+            vocabulary: getInspectValue('cleanup-inspect-vocabulary'),
+            phrases: getInspectValue('cleanup-inspect-phrases'),
+            mistakes: getInspectValue('cleanup-inspect-mistakes'),
+            strengths: getInspectValue('cleanup-inspect-strengths'),
+            comments: getInspectValue('cleanup-inspect-comments'),
+            others: getInspectValue('cleanup-inspect-others'),
+            normalized_date: getInspectValue('cleanup-inspect-date')
+        };
+    }
+
+    function isInspectDirty(payload, session) {
+        if (!session) {
+            return false;
+        }
+        return payload.target_topic !== session.initial.target_topic ||
+            payload.vocabulary !== session.initial.vocabulary ||
+            payload.phrases !== session.initial.phrases ||
+            payload.mistakes !== session.initial.mistakes ||
+            payload.strengths !== session.initial.strengths ||
+            payload.comments !== session.initial.comments ||
+            payload.others !== session.initial.others ||
+            payload.normalized_date !== session.initial.normalized_date;
+    }
+
+    function updateInspectDirtyBadge(session) {
+        const badge = document.getElementById('cleanup-inspect-unsaved');
+        if (!badge || !session) {
+            return;
+        }
+        badge.textContent = session.dirty ? 'Unsaved changes' : 'Saved';
+        badge.className = session.dirty
+            ? 'cleanup-inspect-status cleanup-inspect-status-dirty'
+            : 'cleanup-inspect-status cleanup-inspect-status-clean';
+    }
+
+    function buildInspectFormHtml(row, sheet) {
+        const normalizedDate = row.normalized_date || '';
+        const createdAt = typeof formatSavedTimestamp === 'function'
+            ? formatSavedTimestamp(sheet.created_at || row.created_at)
+            : (sheet.created_at || row.created_at || '—');
+        const updatedAt = typeof formatSavedTimestamp === 'function'
+            ? formatSavedTimestamp(sheet.updated_at || row.updated_at)
+            : (sheet.updated_at || row.updated_at || '—');
+
+        return `
+            <form id="cleanup-inspect-form">
+                <div class="cleanup-inspect-meta">
+                    <div class="cleanup-inspect-grid">
+                        <div><strong>ID:</strong> #${row.id}</div>
+                        <div><strong>Class:</strong> ${escapeHtml(row.class_name || `Class #${row.class_id}`)}</div>
+                        <div><strong>Teacher:</strong> ${escapeHtml(row.teacher_name || `Teacher #${row.teacher_id}`)}</div>
+                        <div><strong>Date (raw):</strong> ${escapeHtml(sheet.date || row.date || '—')}</div>
+                        <div><strong>Normalized date:</strong> ${escapeHtml(normalizedDate || 'Unparseable')}</div>
+                        <div><strong>Created:</strong> ${escapeHtml(createdAt || '—')}</div>
+                        <div><strong>Updated:</strong> ${escapeHtml(updatedAt || '—')}</div>
+                    </div>
+                    <span id="cleanup-inspect-unsaved" class="cleanup-inspect-status cleanup-inspect-status-clean">Saved</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="cleanup-inspect-date">Normalized date</label>
+                    <input type="date" id="cleanup-inspect-date" class="form-control" value="${escapeHtml(normalizedDate)}">
+                </div>
+
+                <div class="form-group">
+                    <label for="cleanup-inspect-target-topic">Topic</label>
+                    <textarea id="cleanup-inspect-target-topic" class="form-control" rows="3">${escapeHtml(sheet.target_topic || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="cleanup-inspect-vocabulary">Vocabulary</label>
+                    <textarea id="cleanup-inspect-vocabulary" class="form-control" rows="3">${escapeHtml(sheet.vocabulary || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="cleanup-inspect-phrases">Phrases</label>
+                    <textarea id="cleanup-inspect-phrases" class="form-control" rows="3">${escapeHtml(sheet.phrases || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="cleanup-inspect-mistakes">Mistakes</label>
+                    <textarea id="cleanup-inspect-mistakes" class="form-control" rows="3">${escapeHtml(sheet.mistakes || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="cleanup-inspect-strengths">Strengths</label>
+                    <textarea id="cleanup-inspect-strengths" class="form-control" rows="3">${escapeHtml(sheet.strengths || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="cleanup-inspect-comments">Comments</label>
+                    <textarea id="cleanup-inspect-comments" class="form-control" rows="3">${escapeHtml(sheet.comments || '')}</textarea>
+                </div>
+                <div class="form-group">
+                    <label for="cleanup-inspect-others">Others</label>
+                    <textarea id="cleanup-inspect-others" class="form-control" rows="3">${escapeHtml(sheet.others || '')}</textarea>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="submit" class="btn btn-primary" id="cleanup-inspect-save-btn">Save</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </form>
+        `;
+    }
+
+    async function openInspectModal(sheetId) {
+        const row = state.rows.find(item => item.id === sheetId);
+        if (!row) {
+            return;
+        }
+
+        try {
+            const sheet = await api(`/teacher-comment-sheets/${sheetId}`);
+            const originalCloseModal = window.closeModal;
+            const session = {
+                id: sheetId,
+                originalCloseModal,
+                dirty: false,
+                saving: false,
+                initial: {
+                    target_topic: sheet.target_topic || '',
+                    vocabulary: sheet.vocabulary || '',
+                    phrases: sheet.phrases || '',
+                    mistakes: sheet.mistakes || '',
+                    strengths: sheet.strengths || '',
+                    comments: sheet.comments || '',
+                    others: sheet.others || '',
+                    normalized_date: row.normalized_date || ''
+                },
+                teacherId: sheet.teacher_id || row.teacher_id
+            };
+            state.inspectSession = session;
+
+            showModal(`Inspect Comment Sheet #${sheetId}`, buildInspectFormHtml(row, sheet));
+            document.querySelector('#modal .modal-content')?.classList.add('cleanup-inspect-modal');
+
+            window.closeModal = function (forceClose) {
+                if (state.inspectSession !== session) {
+                    return originalCloseModal();
+                }
+
+                if (!forceClose) {
+                    if (session.saving) {
+                        if (!confirm('Save is still in progress. Close anyway?')) {
+                            return;
+                        }
+                    } else if (session.dirty && !confirm('Discard unsaved changes?')) {
+                        return;
+                    }
+                }
+
+                cleanupInspectSession();
+                originalCloseModal();
+            };
+
+            const inspectForm = document.getElementById('cleanup-inspect-form');
+            inspectForm?.addEventListener('input', () => {
+                const payload = inspectPayloadFromForm();
+                session.dirty = isInspectDirty(payload, session);
+                updateInspectDirtyBadge(session);
+            });
+
+            inspectForm?.addEventListener('submit', async (event) => {
+                event.preventDefault();
+
+                const payload = inspectPayloadFromForm();
+                const hasTextChanges = payload.target_topic !== session.initial.target_topic ||
+                    payload.vocabulary !== session.initial.vocabulary ||
+                    payload.phrases !== session.initial.phrases ||
+                    payload.mistakes !== session.initial.mistakes ||
+                    payload.strengths !== session.initial.strengths ||
+                    payload.comments !== session.initial.comments ||
+                    payload.others !== session.initial.others;
+                const hasDateChanges = payload.normalized_date !== session.initial.normalized_date;
+
+                if (!hasTextChanges && !hasDateChanges) {
+                    Toast.info('No changes to save.');
+                    return;
+                }
+
+                if (hasDateChanges && !payload.normalized_date) {
+                    Toast.error('Select a valid date before saving.');
+                    return;
+                }
+
+                const saveButton = document.getElementById('cleanup-inspect-save-btn');
+                if (saveButton) saveButton.disabled = true;
+                session.saving = true;
+
+                try {
+                    if (hasTextChanges) {
+                        await api(`/teacher-comment-sheets/${sheetId}`, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                                teacher_id: session.teacherId,
+                                target_topic: payload.target_topic,
+                                vocabulary: payload.vocabulary,
+                                phrases: payload.phrases,
+                                mistakes: payload.mistakes,
+                                strengths: payload.strengths,
+                                comments: payload.comments,
+                                others: payload.others
+                            })
+                        });
+                    }
+
+                    if (hasDateChanges) {
+                        await api(`/teacher-comment-sheets/admin/${sheetId}/date`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ new_date: payload.normalized_date })
+                        });
+                    }
+
+                    Toast.success(`Comment sheet #${sheetId} saved.`);
+                    await refreshCleanupData(state.page);
+                    window.closeModal(true);
+                } catch (error) {
+                    if ((error.message || '').includes('403')) {
+                        Toast.error('Admin access is required to edit this comment sheet.');
+                    }
+                    if (saveButton) saveButton.disabled = false;
+                } finally {
+                    session.saving = false;
+                }
+            });
+        } catch (error) {
+            if ((error.message || '').includes('403')) {
+                Toast.error('Admin access is required to inspect this comment sheet.');
+            }
+        }
     }
 
     async function loadDuplicateGroups() {

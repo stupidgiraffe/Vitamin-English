@@ -283,7 +283,19 @@ function buildDuplicateGroups(rows) {
         const group = groups.get(row.duplicate_group_key);
         group.count += 1;
         group.sheet_ids.push(row.id);
-        group.rows.push(row);
+        group.rows.push({
+            id: row.id,
+            class_id: row.class_id,
+            class_name: row.class_name,
+            teacher_id: row.teacher_id,
+            teacher_name: row.teacher_name,
+            date: row.date,
+            normalized_date: row.normalized_date,
+            target_topic: row.target_topic,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            monthly_report_week_refs: row.monthly_report_week_refs
+        });
     });
 
     return Array.from(groups.values()).sort((a, b) =>
@@ -321,7 +333,10 @@ router.get('/manage', async (req, res) => {
         const pagedRows = filteredRows.slice(startIndex, startIndex + pageSize);
 
         return res.json({
-            rows: pagedRows,
+            rows: pagedRows.map(row => ({
+                ...row,
+                target_topic: row.target_topic ?? null
+            })),
             total: filteredRows.length,
             page,
             page_size: pageSize
@@ -662,7 +677,7 @@ router.get('/export.csv', async (req, res) => {
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
         res.setHeader('Content-Disposition', 'attachment; filename="teacher-comment-sheets-cleanup.csv"');
 
-        res.write('id,class_id,class_name,teacher_id,teacher_name,date,normalized_date,created_at,updated_at\n');
+        res.write('id,class_id,class_name,teacher_id,teacher_name,date,normalized_date,target_topic,created_at,updated_at\n');
         rows.forEach(row => {
             const values = [
                 row.id,
@@ -672,6 +687,7 @@ router.get('/export.csv', async (req, res) => {
                 row.teacher_name,
                 row.date,
                 row.normalized_date,
+                row.target_topic,
                 row.created_at,
                 row.updated_at
             ].map(escapeCsv);
