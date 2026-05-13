@@ -333,10 +333,7 @@ router.get('/manage', async (req, res) => {
         const pagedRows = filteredRows.slice(startIndex, startIndex + pageSize);
 
         return res.json({
-            rows: pagedRows.map(row => ({
-                ...row,
-                target_topic: row.target_topic ?? null
-            })),
+            rows: pagedRows,
             total: filteredRows.length,
             page,
             page_size: pageSize

@@ -414,6 +414,12 @@ body {
     vertical-align: top;
 }
 
+.cleanup-table {
+    --cleanup-sticky-bg: var(--bg-card);
+    --cleanup-duplicate-bg: #fff8db;
+    --cleanup-inspect-modal-max-width: 900px;
+}
+
 .cleanup-data-row {
     cursor: pointer;
 }
@@ -438,7 +444,7 @@ body {
 }
 
 .cleanup-duplicate-row {
-    background: #fff8db;
+    background: var(--cleanup-duplicate-bg);
 }
 
 .cleanup-badge {
@@ -505,7 +511,7 @@ body {
 }
 
 .cleanup-inspect-modal {
-    max-width: 900px;
+    max-width: var(--cleanup-inspect-modal-max-width);
 }
 
 .cleanup-inspect-grid {
@@ -597,6 +603,10 @@ body {
 
     .cleanup-table {
         min-width: 1100px;
+        --cleanup-col-checkbox-width: 48px;
+        --cleanup-col-id-width: 84px;
+        --cleanup-col-id-left: var(--cleanup-col-checkbox-width);
+        --cleanup-col-class-left: calc(var(--cleanup-col-checkbox-width) + var(--cleanup-col-id-width));
     }
 
     .cleanup-table th:first-child,
@@ -604,25 +614,25 @@ body {
         position: sticky;
         left: 0;
         z-index: 4;
-        background: #fff;
-        min-width: 48px;
+        background: var(--cleanup-sticky-bg);
+        min-width: var(--cleanup-col-checkbox-width);
     }
 
     .cleanup-table th:nth-child(2),
     .cleanup-table td:nth-child(2) {
         position: sticky;
-        left: 48px;
+        left: var(--cleanup-col-id-left);
         z-index: 3;
-        background: #fff;
-        min-width: 84px;
+        background: var(--cleanup-sticky-bg);
+        min-width: var(--cleanup-col-id-width);
     }
 
     .cleanup-table th:nth-child(3),
     .cleanup-table td:nth-child(3) {
         position: sticky;
-        left: 132px;
+        left: var(--cleanup-col-class-left);
         z-index: 2;
-        background: #fff;
+        background: var(--cleanup-sticky-bg);
         min-width: 180px;
         box-shadow: 2px 0 0 rgba(0, 0, 0, 0.06);
     }
@@ -630,7 +640,7 @@ body {
     .cleanup-duplicate-row td:first-child,
     .cleanup-duplicate-row td:nth-child(2),
     .cleanup-duplicate-row td:nth-child(3) {
-        background: #fff8db;
+        background: var(--cleanup-duplicate-bg);
     }
 
     .cleanup-scroll-hint {

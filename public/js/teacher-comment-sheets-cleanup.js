@@ -79,10 +79,11 @@
     }
 
     function truncateText(value, limit) {
-        if (value.length <= limit) {
-            return value;
+        const text = String(value == null ? '' : value);
+        if (text.length <= limit) {
+            return text;
         }
-        return `${value.slice(0, Math.max(0, limit - 1)).trimEnd()}…`;
+        return `${text.slice(0, limit - 1).trimEnd()}…`;
     }
 
     function topicCellHtml(topic) {
@@ -93,6 +94,14 @@
 
         const preview = truncateText(normalizedTopic, TOPIC_PREVIEW_LIMIT);
         return `<span class="cleanup-topic-text" title="${escapeAttribute(normalizedTopic)}">${escapeHtml(preview)}</span>`;
+    }
+
+    function isForbiddenError(error) {
+        return /403/.test(String(error?.message || ''));
+    }
+
+    function showAdminAccessError(action) {
+        Toast.error(`Admin access is required to ${action} this comment sheet.`);
     }
 
     function buildQuery(pageOverride) {
@@ -285,11 +294,13 @@
                 openInspect();
             });
             tableRow.addEventListener('keydown', (event) => {
-                if ((event.key !== 'Enter' && event.key !== ' ') ||
-                    event.target.closest('.cleanup-no-row-open, [data-no-row-open="true"]')) {
+                if (event.key !== 'Enter' && event.key !== ' ') {
                     return;
                 }
                 event.preventDefault();
+                if (event.target.closest('.cleanup-no-row-open, [data-no-row-open="true"]')) {
+                    return;
+                }
                 openInspect();
             });
         });
@@ -359,17 +370,21 @@
         };
     }
 
-    function isInspectDirty(payload, session) {
-        if (!session) {
-            return false;
-        }
+    function hasInspectTextChanges(payload, session) {
         return payload.target_topic !== session.initial.target_topic ||
             payload.vocabulary !== session.initial.vocabulary ||
             payload.phrases !== session.initial.phrases ||
             payload.mistakes !== session.initial.mistakes ||
             payload.strengths !== session.initial.strengths ||
             payload.comments !== session.initial.comments ||
-            payload.others !== session.initial.others ||
+            payload.others !== session.initial.others;
+    }
+
+    function isInspectDirty(payload, session) {
+        if (!session) {
+            return false;
+        }
+        return hasInspectTextChanges(payload, session) ||
             payload.normalized_date !== session.initial.normalized_date;
     }
 
@@ -511,13 +526,7 @@
                 event.preventDefault();
 
                 const payload = inspectPayloadFromForm();
-                const hasTextChanges = payload.target_topic !== session.initial.target_topic ||
-                    payload.vocabulary !== session.initial.vocabulary ||
-                    payload.phrases !== session.initial.phrases ||
-                    payload.mistakes !== session.initial.mistakes ||
-                    payload.strengths !== session.initial.strengths ||
-                    payload.comments !== session.initial.comments ||
-                    payload.others !== session.initial.others;
+                const hasTextChanges = hasInspectTextChanges(payload, session);
                 const hasDateChanges = payload.normalized_date !== session.initial.normalized_date;
 
                 if (!hasTextChanges && !hasDateChanges) {
@@ -562,17 +571,19 @@
                     await refreshCleanupData(state.page);
                     window.closeModal(true);
                 } catch (error) {
-                    if ((error.message || '').includes('403')) {
-                        Toast.error('Admin access is required to edit this comment sheet.');
+                    if (isForbiddenError(error)) {
+                        showAdminAccessError('edit');
                     }
-                    if (saveButton) saveButton.disabled = false;
                 } finally {
                     session.saving = false;
+                    if (state.inspectSession === session && saveButton) {
+                        saveButton.disabled = false;
+                    }
                 }
             });
         } catch (error) {
-            if ((error.message || '').includes('403')) {
-                Toast.error('Admin access is required to inspect this comment sheet.');
+            if (isForbiddenError(error)) {
+                showAdminAccessError('inspect');
             }
         }
     }
