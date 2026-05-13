@@ -26,6 +26,8 @@ The new migration is:
 
 - `database/migrations/015_add_teacher_comment_sheet_audit.sql`
 
+Migration rollback for the schema itself is simple because it is additive-only: if absolutely necessary, drop the new audit table and its indexes after confirming the table is not needed for incident review. The recommended production path is still forward-only, because deleting the audit table also deletes the cleanup history you may need during rollback of data changes.
+
 ## Recommended cleanup workflow
 
 1. Open **Comment Sheets Cleanup** as an admin.

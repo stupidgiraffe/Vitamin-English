@@ -26,7 +26,7 @@ function requireSameOriginWrites(req, res, next) {
     }
 
     const secFetchSite = req.get('sec-fetch-site');
-    if (secFetchSite === 'same-origin' || secFetchSite === 'same-site' || secFetchSite === 'none') {
+    if (secFetchSite === 'same-origin' || secFetchSite === 'none') {
         return next();
     }
 
