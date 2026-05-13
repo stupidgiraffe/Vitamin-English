@@ -20,6 +20,31 @@ const SORT_OPTIONS = {
 
 router.use(requireAdmin);
 
+function requireSameOriginWrites(req, res, next) {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+        return next();
+    }
+
+    const secFetchSite = req.get('sec-fetch-site');
+    if (secFetchSite === 'same-origin' || secFetchSite === 'same-site' || secFetchSite === 'none') {
+        return next();
+    }
+
+    const host = req.get('host');
+    const origin = req.get('origin');
+    const referer = req.get('referer');
+    const allowedOrigins = host ? [`https://${host}`, `http://${host}`] : [];
+
+    if ((origin && allowedOrigins.includes(origin)) ||
+        (referer && allowedOrigins.some(allowedOrigin => referer.startsWith(allowedOrigin)))) {
+        return next();
+    }
+
+    return res.status(403).json({ error: 'Cross-site request blocked' });
+}
+
+router.use(requireSameOriginWrites);
+
 function parseInteger(value) {
     const parsed = Number.parseInt(value, 10);
     return Number.isInteger(parsed) ? parsed : null;
@@ -205,8 +230,8 @@ async function countReferences(client, sheetId) {
     ]);
 
     return {
-        monthly_report_weeks: monthlyWeeksResult.rows[0]?.count || 0,
-        pdf_history: pdfHistoryResult.rows[0]?.count || 0
+        monthly_report_weeks: Number(monthlyWeeksResult.rows[0]?.count) || 0,
+        pdf_history: Number(pdfHistoryResult.rows[0]?.count) || 0
     };
 }
 
