@@ -691,6 +691,9 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
         currentUser = user;
         document.getElementById('user-name').textContent = user.fullName;
+        if (typeof updateRoleBasedNavigation === 'function') {
+            updateRoleBasedNavigation();
+        }
         
         // CRITICAL: Load initial data BEFORE showing dashboard
         try {
@@ -723,9 +726,12 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
 
 document.getElementById('logout-btn').addEventListener('click', async () => {
     try {
-        await api('/auth/logout', { method: 'POST' });
-        currentUser = null;
-        document.getElementById('app-screen').classList.remove('active');
+            await api('/auth/logout', { method: 'POST' });
+            currentUser = null;
+            if (typeof updateRoleBasedNavigation === 'function') {
+                updateRoleBasedNavigation();
+            }
+            document.getElementById('app-screen').classList.remove('active');
         document.getElementById('login-screen').classList.add('active');
         document.getElementById('login-form').reset();
     } catch (error) {
@@ -894,7 +900,7 @@ document.querySelectorAll('.nav-item').forEach(item => {
 
 function getPageFromHash() {
     const hash = window.location.hash.replace('#', '');
-    const validPages = ['dashboard', 'attendance', 'reports', 'monthly-reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
+    const validPages = ['dashboard', 'attendance', 'reports', 'comment-sheets-cleanup', 'monthly-reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
     return validPages.includes(hash) ? hash : null;
 }
 
@@ -999,6 +1005,7 @@ function navigateToPage(page, pushState = true) {
     // Load page-specific data
     if (page === 'dashboard') loadDashboard();
     else if (page === 'admin') loadAdminData();
+    else if (page === 'comment-sheets-cleanup' && typeof loadCommentSheetCleanupPage === 'function') loadCommentSheetCleanupPage();
     else if (page === 'attendance') initializeAttendancePage();
     else if (page === 'database') initializeDatabasePage();
     else if (page === 'reports') {
@@ -6822,7 +6829,7 @@ document.addEventListener('keydown', (e) => {
 
 // Get current active page
 function getCurrentPage() {
-    const pages = ['dashboard', 'attendance', 'reports', 'monthly-reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
+    const pages = ['dashboard', 'attendance', 'reports', 'comment-sheets-cleanup', 'monthly-reports', 'students-profile', 'makeup', 'database', 'admin', 'profile'];
     for (const page of pages) {
         const pageElement = document.getElementById(`${page}-page`);
         if (pageElement && pageElement.classList.contains('active')) {
@@ -7159,6 +7166,9 @@ async function restoreSessionIfAvailable() {
             const userData = await user.json();
             currentUser = userData;
             document.getElementById('user-name').textContent = userData.fullName;
+            if (typeof updateRoleBasedNavigation === 'function') {
+                updateRoleBasedNavigation();
+            }
             document.getElementById('splash-screen').classList.remove('active');
             document.getElementById('login-screen').classList.remove('active');
             document.getElementById('app-screen').classList.add('active');

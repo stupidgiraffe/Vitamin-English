@@ -128,6 +128,17 @@ async function checkMigration009Status(client) {
     return { applied, checks };
 }
 
+async function constraintExists(client, tableName, constraintName) {
+    const result = await client.query(
+        `SELECT conname
+         FROM pg_constraint
+         WHERE conrelid = $1::regclass
+           AND conname = $2`,
+        [tableName, constraintName]
+    );
+    return result.rows.length > 0;
+}
+
 /**
  * Comprehensive migration status check
  */
@@ -193,6 +204,69 @@ async function checkAllMigrations(client) {
         name: 'datahub_improvements',
         applied: m009Status.applied,
         checks: m009Status.checks
+    };
+
+    // Migration 010
+    const m010MonthlyConstraint = await constraintExists(client, 'monthly_reports', 'monthly_reports_class_date_range_unique');
+    const m010WeekCheck = await constraintExists(client, 'monthly_report_weeks', 'monthly_report_weeks_week_number_check');
+    status['010'] = {
+        name: 'allow_duplicate_reports',
+        applied: !m010MonthlyConstraint && !m010WeekCheck,
+        checks: {
+            monthly_reports_class_date_range_unique_removed: !m010MonthlyConstraint,
+            monthly_report_weeks_week_number_check_removed: !m010WeekCheck
+        }
+    };
+
+    // Migration 011
+    const m011Phrases = await columnExists(client, 'teacher_comment_sheets', 'phrases');
+    const m011Others = await columnExists(client, 'teacher_comment_sheets', 'others');
+    status['011'] = {
+        name: 'add_phrases_others_to_comment_sheets',
+        applied: m011Phrases && m011Others,
+        checks: { phrases_column: m011Phrases, others_column: m011Others }
+    };
+
+    // Migration 012
+    const m012Constraint = await constraintExists(client, 'teacher_comment_sheets', 'teacher_comment_sheets_class_id_date_key');
+    status['012'] = {
+        name: 'remove_unique_class_date_constraint',
+        applied: !m012Constraint,
+        checks: { teacher_comment_sheets_class_id_date_key_removed: !m012Constraint }
+    };
+
+    // Migration 013
+    const m013StudentsActive = await columnExists(client, 'students', 'active');
+    const m013ClassesActive = await columnExists(client, 'classes', 'active');
+    status['013'] = {
+        name: 'soft_delete_active_columns',
+        applied: m013StudentsActive && m013ClassesActive,
+        checks: { students_active: m013StudentsActive, classes_active: m013ClassesActive }
+    };
+
+    // Migration 014
+    const m014Location = await columnExists(client, 'classes', 'location');
+    const m014LocationIndex = await indexExists(client, 'idx_classes_location');
+    status['014'] = {
+        name: 'add_class_location',
+        applied: m014Location && m014LocationIndex,
+        checks: { location_column: m014Location, location_index: m014LocationIndex }
+    };
+
+    // Migration 015
+    const m015AuditTable = await tableExists(client, 'teacher_comment_sheet_audit');
+    const m015AuditSheetIndex = await indexExists(client, 'idx_tcs_audit_sheet');
+    const m015AuditActionIndex = await indexExists(client, 'idx_tcs_audit_action');
+    const m015AuditCreatedIndex = await indexExists(client, 'idx_tcs_audit_created_at');
+    status['015'] = {
+        name: 'add_teacher_comment_sheet_audit',
+        applied: m015AuditTable && m015AuditSheetIndex && m015AuditActionIndex && m015AuditCreatedIndex,
+        checks: {
+            audit_table: m015AuditTable,
+            audit_sheet_index: m015AuditSheetIndex,
+            audit_action_index: m015AuditActionIndex,
+            audit_created_at_index: m015AuditCreatedIndex
+        }
     };
     
     return status;

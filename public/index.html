@@ -105,6 +105,7 @@
                 <button class="nav-item active" data-page="dashboard" data-i18n="nav.dashboard">Dashboard</button>
                 <button class="nav-item" data-page="attendance" data-i18n="nav.attendance">Attendance</button>
                 <button class="nav-item" data-page="reports" data-i18n="nav.reports">Comment Sheets</button>
+                <button class="nav-item" id="comment-sheets-cleanup-nav" data-page="comment-sheets-cleanup" style="display:none;">Comment Sheets Cleanup</button>
                 <button class="nav-item" data-page="monthly-reports" data-i18n="nav.monthlyReports">Monthly Reports</button>
                 <button class="nav-item" data-page="students-profile" data-i18n="nav.students">Students</button>
                 <button class="nav-item" data-page="makeup" data-i18n="nav.makeup">Make-up Lessons</button>
@@ -393,6 +394,97 @@
                 </div>
             </div>
 
+            <div id="comment-sheets-cleanup-page" class="page">
+                <h2>Comment Sheets Cleanup</h2>
+
+                <div id="comment-sheets-cleanup-access" class="info-text" style="display:none;">
+                    Admin access is required to manage comment sheet cleanup.
+                </div>
+
+                <div id="comment-sheets-cleanup-content">
+                    <div class="cleanup-toolbar">
+                        <div class="controls cleanup-controls">
+                            <div class="control-group">
+                                <label>Teacher</label>
+                                <select id="cleanup-teacher-filter" class="form-control">
+                                    <option value="">All Teachers</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Class</label>
+                                <select id="cleanup-class-filter" class="form-control">
+                                    <option value="">All Classes</option>
+                                </select>
+                            </div>
+                            <div class="control-group">
+                                <label>Start Date</label>
+                                <input type="date" id="cleanup-start-date" class="form-control">
+                            </div>
+                            <div class="control-group">
+                                <label>End Date</label>
+                                <input type="date" id="cleanup-end-date" class="form-control">
+                            </div>
+                            <div class="control-group">
+                                <label>Sort</label>
+                                <select id="cleanup-sort" class="form-control">
+                                    <option value="date_desc">Date ↓</option>
+                                    <option value="date_asc">Date ↑</option>
+                                    <option value="created_desc">Created ↓</option>
+                                    <option value="created_asc">Created ↑</option>
+                                    <option value="teacher_asc">Teacher A→Z</option>
+                                    <option value="class_asc">Class A→Z</option>
+                                </select>
+                            </div>
+                            <label class="schedule-toggle-label cleanup-duplicates-toggle">
+                                <input type="checkbox" id="cleanup-duplicates-only"> Show duplicates only
+                            </label>
+                            <button id="cleanup-apply-btn" class="btn btn-primary">Apply Filters</button>
+                            <button id="cleanup-reset-btn" class="btn btn-secondary">Reset</button>
+                            <button id="cleanup-export-btn" class="btn btn-secondary">Export CSV</button>
+                        </div>
+                    </div>
+
+                    <div id="cleanup-bulk-bar" class="cleanup-bulk-bar" style="display:none;">
+                        <span id="cleanup-selected-count">0 selected</span>
+                        <button id="cleanup-bulk-date-btn" class="btn btn-primary btn-small">Change date</button>
+                        <button id="cleanup-preview-merge-btn" class="btn btn-warning btn-small">Preview merge</button>
+                        <button id="cleanup-delete-btn" class="btn btn-danger btn-small">Delete</button>
+                    </div>
+
+                    <div class="cleanup-panels">
+                        <div class="cleanup-panel">
+                            <h3>Cleanup Table</h3>
+                            <div id="comment-sheets-cleanup-table" class="data-table">
+                                <p class="info-text">Loading comment sheets…</p>
+                            </div>
+                            <div class="cleanup-pagination">
+                                <button id="cleanup-prev-page" class="btn btn-secondary btn-small">← Prev</button>
+                                <span id="cleanup-page-label">Page 1</span>
+                                <button id="cleanup-next-page" class="btn btn-secondary btn-small">Next →</button>
+                            </div>
+                        </div>
+
+                        <div class="cleanup-panel cleanup-side-panel">
+                            <h3>Duplicate Groups</h3>
+                            <div id="comment-sheets-duplicate-groups">
+                                <p class="info-text">Loading duplicates…</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cleanup-panel">
+                        <h3>Import date fixes</h3>
+                        <p class="info-text">Paste CSV (<code>id,new_date</code>) or JSON (<code>{\"rows\":[{\"id\":1,\"new_date\":\"2026-05-01\"}]}</code>).</p>
+                        <textarea id="cleanup-import-input" class="form-control cleanup-import-input" rows="8" placeholder="id,new_date&#10;12,2026-05-01"></textarea>
+                        <div class="cleanup-import-actions">
+                            <button id="cleanup-parse-import-btn" class="btn btn-secondary">Validate Import</button>
+                            <button id="cleanup-submit-import-btn" class="btn btn-primary">Apply Import</button>
+                        </div>
+                        <div id="cleanup-import-preview" class="cleanup-import-preview"></div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Monthly Reports Page -->
             <div id="monthly-reports-page" class="page">
                 <h2>Monthly Reports</h2>
@@ -647,6 +739,7 @@
     <!-- API client module (must load before app.js and monthly-reports.js) -->
     <script src="/js/api.js"></script>
     <script src="/js/app.js"></script>
+    <script src="/js/comment-sheets-cleanup.js"></script>
 
     <!-- PWA Service Worker Registration & Update Notification -->
     <script>

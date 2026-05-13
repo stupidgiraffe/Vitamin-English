@@ -66,6 +66,7 @@ async function checkMigrationStatus(client) {
         const hasLessonReports = await tableExists(client, 'lesson_reports');
         const hasMonthlyReports = await tableExists(client, 'monthly_reports');
         const hasMonthlyReportWeeks = await tableExists(client, 'monthly_report_weeks');
+        const hasTeacherCommentSheetAudit = await tableExists(client, 'teacher_comment_sheet_audit');
         
         let needsMigration = false;
         
@@ -82,6 +83,13 @@ async function checkMigrationStatus(client) {
             console.log('⚠️  WARNING: Migration 005 not applied');
             console.log('   Table "lesson_reports" should be renamed to "teacher_comment_sheets"');
             console.log('   Run: node scripts/apply-migrations.js');
+            needsMigration = true;
+        }
+
+        if (!hasTeacherCommentSheetAudit) {
+            console.log('⚠️  WARNING: Migration 015 not applied');
+            console.log('   Missing table: teacher_comment_sheet_audit');
+            console.log('   Run: node scripts/apply-all-migrations.js');
             needsMigration = true;
         }
         
