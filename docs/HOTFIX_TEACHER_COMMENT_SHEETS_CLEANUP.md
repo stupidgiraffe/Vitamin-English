@@ -47,3 +47,13 @@ Migration rollback for the schema itself is simple because it is additive-only: 
 - Merge/delete rollback: restore from database backup if rows were merged or deleted incorrectly, then replay only the confirmed cleanup actions.
 
 Because merge/delete operations change foreign-key relationships, database backup/restore is the safest rollback path for those actions.
+
+## Follow-up UX improvements (PR #139 additions)
+
+- Cleanup table now includes a **Topic** column sourced from `target_topic`. Long topics are truncated in-table for readability, with full text available via tooltip and full inspect view.
+- Duplicate-group summaries now show each row's topic so admins can compare likely duplicates side-by-side before merge/delete actions.
+- Clicking a cleanup-table row opens an inspect/edit modal (keyboard accessible via Enter/Space on focused rows). The modal includes full sheet metadata plus editable fields:
+  - `target_topic`, `vocabulary`, `phrases`, `mistakes`, `strengths`, `comments`, `others`
+  - Save uses existing `PUT /api/teacher-comment-sheets/:id`
+  - Date save uses existing `PATCH /api/teacher-comment-sheets/admin/:id/date`
+- The inspect modal prompts before close if unsaved edits exist.
